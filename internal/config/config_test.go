@@ -7,8 +7,8 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.KegListenerPort != 1234 {
-		t.Errorf("KegListenerPort = %d, want 1234", cfg.KegListenerPort)
+	if cfg.KegListenerPort != 4545 {
+		t.Errorf("KegListenerPort = %d, want 4545", cfg.KegListenerPort)
 	}
 	if cfg.HTTPListenerPort != 8085 {
 		t.Errorf("HTTPListenerPort = %d, want 8085", cfg.HTTPListenerPort)

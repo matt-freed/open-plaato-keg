@@ -4,7 +4,7 @@ services:
     container_name: open-plaato-keg
     restart: unless-stopped
     ports:
-      # Point your Plaato Keg's "host" and "port" at 1234 on this machine.
+      # Point your Plaato Keg's "host" and "port" at 4545 on this machine.
       - "4545:4545"
       # Web UI and REST API.
       - "8085:8085"

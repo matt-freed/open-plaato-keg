@@ -6,7 +6,7 @@
 // acknowledgement before sending the next segment, so a missing or malformed
 // acknowledgement shows up as a timeout rather than being silently tolerated.
 //
-//	go run ./cmd/kegsim -addr localhost:1234 -capture testdata/capture
+//	go run ./cmd/kegsim -addr localhost:4545 -capture testdata/capture
 package main
 
 import (
@@ -24,7 +24,7 @@ import (
 )
 
 func main() {
-	addr := flag.String("addr", "localhost:1234", "address of the keg listener")
+	addr := flag.String("addr", "localhost:4545", "address of the keg listener")
 	capture := flag.String("capture", "testdata/capture", "directory of recorded segments")
 	pause := flag.Duration("pause", 50*time.Millisecond, "delay between segments")
 	timeout := flag.Duration("timeout", 5*time.Second, "how long to wait for each acknowledgement")

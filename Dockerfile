@@ -34,11 +34,11 @@ RUN mkdir -p /db && adduser -D -H -u 10001 plaato && chown plaato /db
 USER plaato
 
 ENV DATABASE_FILE_PATH=/db/open-plaato-keg.db \
-    KEG_LISTENER_PORT=1234 \
+    KEG_LISTENER_PORT=4545 \
     HTTP_LISTENER_PORT=8085
 
 VOLUME /db
-EXPOSE 1234 8085
+EXPOSE 4545 8085
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD wget -qO- http://127.0.0.1:8085/api/alive || exit 1

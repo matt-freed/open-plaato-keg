@@ -59,7 +59,7 @@ needs to be registered anywhere.
 The same thing without the form:
 
 ```
-http://192.168.4.1/config?ssid=My+Wifi&pass=my_password&blynk=00000000000000000000000000000001&host=192.168.0.123&port=1234
+http://192.168.4.1/config?ssid=My+Wifi&pass=my_password&blynk=00000000000000000000000000000001&host=192.168.0.123&port=4545
 ```
 
 The keg appears in the web UI as soon as it connects and sends its first
@@ -71,7 +71,7 @@ reading.
 
 ```bash
 docker run -d --name open-plaato-keg \
-  -p 1234:1234 -p 8085:8085 \
+  -p 4545:4545 -p 8085:8085 \
   -v "$PWD/data:/db" \
   ghcr.io/matt-freed/open-plaato-keg:latest
 ```
@@ -107,7 +107,7 @@ server at startup rather than being silently ignored.
 
 | Variable | Default | Description |
 |---|---|---|
-| `KEG_LISTENER_PORT` | `1234` | TCP port the keg hardware connects to |
+| `KEG_LISTENER_PORT` | `4545` | TCP port the keg hardware connects to |
 | `HTTP_LISTENER_PORT` | `8085` | Port for the web UI, REST API and WebSocket |
 | `DATABASE_FILE_PATH` | `/db/open-plaato-keg.db` | SQLite database. Uploaded images are stored beside it. |
 | `INCLUDE_UNKNOWN_DATA` | `false` | Keep virtual pins this server does not recognise, under the keg's `extra` field |
@@ -301,7 +301,7 @@ To drive a running server with that same recording:
 
 ```bash
 go run ./cmd/open-plaato-keg &
-go run ./cmd/kegsim -addr localhost:1234
+go run ./cmd/kegsim -addr localhost:4545
 ```
 
 `kegsim` waits for each acknowledgement before sending the next segment, the

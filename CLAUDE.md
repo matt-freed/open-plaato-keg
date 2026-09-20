@@ -20,7 +20,7 @@ go vet ./...
 gofmt -l .             # must print nothing
 
 go run ./cmd/open-plaato-keg        # the server
-go run ./cmd/kegsim -addr localhost:1234   # replay recorded hardware traffic at it
+go run ./cmd/kegsim -addr localhost:4545   # replay recorded hardware traffic at it
 ```
 
 ## Architecture

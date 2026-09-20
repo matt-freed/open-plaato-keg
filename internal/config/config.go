@@ -53,7 +53,7 @@ func Load() (Config, error) {
 		err error
 	)
 
-	if cfg.KegListenerPort, err = envInt("KEG_LISTENER_PORT", 1234); err != nil {
+	if cfg.KegListenerPort, err = envInt("KEG_LISTENER_PORT", 4545); err != nil {
 		return cfg, err
 	}
 	if cfg.HTTPListenerPort, err = envInt("HTTP_LISTENER_PORT", 8085); err != nil {
