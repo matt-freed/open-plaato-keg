@@ -28,8 +28,8 @@ import (
 const MinSendInterval = 30 * time.Second
 
 // GlobalSendLimit and GlobalSendWindow cap the request rate across every
-// monitor combined. BarHelper's limit applies to the API key as a whole rather than to each
-// monitor separately. 
+// monitor combined. BarHelper's limit applies to the API key as a whole
+// rather than to each monitor separately.
 //
 // The window carries a small margin over the nominal minute. Sends are stamped
 // here when the request is dispatched, while the server counts them when it
