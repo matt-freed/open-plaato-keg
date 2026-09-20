@@ -251,8 +251,10 @@ func (s *Server) ingest(state *connState, frames []blynk.Frame) {
 		return
 	}
 
+	// The reading check comes first so an empty row never consumes the
+	// throttle slot that the first real reading needs.
 	now := time.Now()
-	if s.throttle.Allow(k.ID, now) {
+	if k.HasLoggableReading() && s.throttle.Allow(k.ID, now) {
 		if err := s.store.AppendLog(k, now); err != nil {
 			slog.Error("failed to record keg history", "keg", k.ID, "error", err)
 		}

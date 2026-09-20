@@ -307,6 +307,47 @@ func TestMetadataOnlyDeviceCreatesNoKeg(t *testing.T) {
 	}
 }
 
+// A keg announcing itself must not put an empty point at the start of its
+// history; the first row should be the first real reading.
+func TestNoHistoryRowBeforeTheFirstReading(t *testing.T) {
+	h := newHarness(t)
+	c := h.dial()
+
+	sendAndRead(t, c, loginSegment())
+	// Firmware version confirms this is a keg but carries no reading.
+	sendAndRead(t, c, pinWrite(2, "93", "2.0.11b"))
+
+	waitFor(t, "the keg to be stored", func() bool {
+		_, err := h.store.GetKeg(testToken)
+		return err == nil
+	})
+
+	entries, err := h.store.ReadLog(testToken, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ReadLog: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("got %d history rows before any reading arrived, want 0: %+v", len(entries), entries)
+	}
+
+	// The first real reading must still be recorded, not swallowed by a
+	// throttle slot the empty row consumed.
+	sendAndRead(t, c, pinWrite(3, "51", "15.56"))
+
+	waitFor(t, "the first reading to be recorded", func() bool {
+		entries, err := h.store.ReadLog(testToken, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+		return err == nil && len(entries) == 1
+	})
+
+	entries, err = h.store.ReadLog(testToken, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ReadLog: %v", err)
+	}
+	if entries[0].AmountLeft == nil || *entries[0].AmountLeft != 15.56 {
+		t.Errorf("first history row = %+v, want the 15.56 reading", entries[0])
+	}
+}
+
 func TestRegistryTracksConnectedKegs(t *testing.T) {
 	h := newHarness(t)
 	c := h.dial()
