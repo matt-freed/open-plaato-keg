@@ -6,7 +6,7 @@ already uses, so the hardware connects to your own server instead, with no
 firmware changes.
 
 A Go port of the original [Elixir
-implementation](https://github.com/DarkJaeger/open-plaato-keg).
+implementation](https://github.com/DarkJaeger/open-plaato-keg). 
 
 ## How it works
 
@@ -36,8 +36,8 @@ graph LR
 - **History** — per-keg time series with charts and CSV export
 - **REST API and WebSocket** — everything the UI does, available to your own
   tooling
-- **BarHelper** — forwards volume readings to the BarHelper custom keg monitor
-  API
+- **BarHelper** — forwards volume readings to the [BarHelper custom keg
+  monitor](https://docs.barhelper.app/english/settings/custom-keg-monitor) API
 
 ## Pointing a keg at this server
 
@@ -118,6 +118,27 @@ server at startup rather than being silently ignored.
 | `BARHELPER_UNIT` | `l` | Unit sent to BarHelper; `l` is litres |
 | `BARHELPER_KEG_MONITOR_MAPPING` | — | `<auth-token>:<monitor-id>` pairs, comma separated. A keg that is not listed is never forwarded. |
 
+The API key and the monitor ids come from BarHelper's own [custom keg monitor
+settings](https://docs.barhelper.app/english/settings/custom-keg-monitor).
+Create a monitor there for each tap, then map each keg's auth token to the
+monitor id it should update.
+
+## The web UI
+
+Plain HTML and JavaScript with no build step, embedded into the binary. `/`
+redirects to whichever page is set as home — the tap list unless you change it.
+
+| Page | Description |
+|---|---|
+| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A card per tap: handle artwork, beer name, brewery, style, ABV and IBU badges, tasting notes, and how much is left in the linked keg. Live clock, WebSocket updates, and a full reload every minute. |
+| `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
+| `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
+| `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
+| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details, the keg the tap draws from, its handle image and an open-tap display id. Fields can be auto-filled from the beverage library, and the kegged date is written to the device. |
+| `/beverages.html` | **Beverage Library** — reusable beer records, including gravities, SRM and where the recipe came from, to load into a tap later. ABV is worked out from OG and FG when it is not given. |
+| `/tap-handles.html` | **Tap Handles** — upload and delete the artwork used on the tap list. Each image must be a JPEG of exactly 200×200 pixels. |
+| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), a full-page background image with an adjustable dark overlay, which page is home, and a 12- or 24-hour clock. |
+
 ## API
 
 All responses are JSON with real types: numbers are numbers, `is_pouring` is a
@@ -165,14 +186,92 @@ where noted.
 
 Numeric values may be sent as JSON numbers or as strings.
 
-### Taps, beverages and settings
+### Taps
 
-`/api/taps`, `/api/beverages` and `/api/tap-handles` are list/get/save/delete
-collections. `POST` to `/api/taps/new` or `/api/beverages/new` to create one.
-`/api/config` covers the home page, clock format and theme.
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/taps` | Every tap, by tap number, unnumbered ones last |
+| `GET` | `/api/taps/{id}` | One tap |
+| `POST` | `/api/taps/new` | Create one; the response carries the generated id |
+| `POST` | `/api/taps/{id}` | Save one |
+| `POST` | `/api/taps/{id}/delete` | Delete one |
+
+A tap body takes these fields, all optional:
+
+| Field | Type | Notes |
+|---|---|---|
+| `tap_number` | number | Orders the tap list; `null` sorts last |
+| `name`, `brewery`, `style` | string | |
+| `abv`, `ibu` | number | |
+| `color` | string | Accent for the tap card; defaults to `#c9a849` |
+| `description`, `tasting_notes` | string | |
+| `expiration_date` | string | Shown as given; not parsed |
+| `keg_id` | string | The keg this tap draws from, so the card can show what is left |
+| `handle_image` | string | A filename from `/api/tap-handles` |
+| `device_id` | string | Binds an open-tap display; truncated to 6 characters |
+
+### Beverages
+
+Reusable beer records, kept apart from the taps so the same beer can be put
+back on later.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/beverages` | Every saved beverage |
+| `GET` | `/api/beverages/{id}` | One beverage |
+| `POST` | `/api/beverages/new` | Create one |
+| `POST` | `/api/beverages/{id}` | Save one; `created_at` is kept |
+| `POST` | `/api/beverages/{id}/delete` | Delete one |
+
+| Field | Type | Notes |
+|---|---|---|
+| `name`, `brewery`, `style` | string | |
+| `abv`, `ibu` | number | `abv` is estimated from `og` and `fg` when omitted |
+| `color` | string | |
+| `description`, `tasting_notes` | string | |
+| `og`, `fg`, `srm` | number | |
+| `source` | string | Where the recipe came from |
+
+### Tap handles
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/tap-handles` | Uploaded handles, newest first |
+| `POST` | `/api/tap-handles/upload` | Multipart, field `image`. JPEG, exactly 200×200, 10 MB at most |
+| `POST` | `/api/tap-handles/{filename}/delete` | Delete the record and the file |
+| `GET` | `/uploads/tap-handles/{filename}` | The image itself |
+
+The stored filename is generated rather than taken from the upload, so it can
+be used as given in a tap's `handle_image`.
+
+### Settings
+
+| Method | Path | Body | Description |
+|---|---|---|---|
+| `GET` | `/api/config` | — | Home page, clock format and theme together |
+| `GET` `POST` | `/api/config/home-page` | `{"home_page": "taplist"\|"kegs"}` | Where `/` sends the browser |
+| `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | Clock and timestamps |
+| `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
+| `POST` | `/api/uploads/background` | Multipart, field `image` | JPEG, PNG, WebP or GIF. Replaces any existing background |
+| `DELETE` | `/api/uploads/background` | — | Remove it |
+| `GET` | `/uploads/background` | — | The image itself |
+| `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` consumes |
+| `GET` | `/api/alive` | — | Status and server version |
+
+An unrecognised `home_page` or `time_format` falls back to the default rather
+than being rejected. The theme accepts `accent_color`, `bg_color`, `card_bg`,
+`text_color`, `font_family`, `taplist_title_font`, `taplist_body_font`,
+`bg_image` and `bg_opacity` (`0`–`1`); anything else is ignored, and a value
+that could break out of the stylesheet is dropped. A named font is fetched from
+Google Fonts.
+
+### Displays
 
 `GET /get_keg/{device_id}` serves an
-[open-tap](https://github.com/pcurylo/open-tap) ESP32 display.
+[open-tap](https://github.com/pcurylo/open-tap) ESP32 display. It looks up the
+tap bound to that device id and answers with the field names that firmware
+expects, including an absolute URL for the handle image and the total weight on
+the scale.
 
 ### WebSocket
 
@@ -242,7 +341,3 @@ The Elixir original also supported Plaato Airlocks, transfer scales, MQTT,
 Grainfather, Brewfather, OTA firmware serving and container self-updates. None
 of that is here. Airlocks speak the same protocol and will connect, but nothing
 is stored for them.
-
-## License
-
-See [LICENSE](LICENSE).

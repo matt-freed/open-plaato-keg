@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     ports:
       # Point your Plaato Keg's "host" and "port" at 1234 on this machine.
-      - "1234:1234"
+      - "4545:4545"
       # Web UI and REST API.
       - "8085:8085"
     volumes:
@@ -14,8 +14,10 @@ services:
       - ./data:/db
     environment:
       DATABASE_FILE_PATH: /db/open-plaato-keg.db
-      KEG_LISTENER_PORT: "1234"
+      KEG_LISTENER_PORT: "4545"
       HTTP_LISTENER_PORT: "8085"
       # BARHELPER_ENABLED: "true"
-      # BARHELPER_API_KEY: your-barhelper-api-key
+      # BARHELPER_ENDPOINT=https://europe-west1-barhelper-app.cloudfunctions.net/api/customKegMon
+      # BARHELPER_API_KEY: <your-barhelper-api-key>
       # BARHELPER_KEG_MONITOR_MAPPING: "<plaato-auth-token>:<barhelper-monitor-id>"
+      # BARHELPER_UNIT=l
