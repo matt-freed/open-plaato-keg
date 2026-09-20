@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,9 +172,9 @@ func TestKegAmountDoesNotBlock(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		// More readings than the queue can hold, against a server that never
+		// A burst far larger than a pour produces, against a server that never
 		// answers.
-		for i := 0; i < queueSize*4; i++ {
+		for i := 0; i < 10000; i++ {
 			c.KegAmount("keg", float64(i))
 		}
 	}()
@@ -183,4 +184,125 @@ func TestKegAmountDoesNotBlock(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("KegAmount blocked")
 	}
+}
+
+// A burst of readings must collapse into a single request carrying the most
+// recent volume. A keg emits dozens of readings a second during a pour, and
+// BarHelper accepts two a minute.
+func TestBurstCollapsesToOneRequest(t *testing.T) {
+	var (
+		mu     sync.Mutex
+		bodies []map[string]any
+	)
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		bodies = append(bodies, body)
+		mu.Unlock()
+		w.Write([]byte(`{"success":true}`))
+	}, map[string]string{"keg": "monitor-1"})
+
+	for i := 1; i <= 50; i++ {
+		c.KegAmount("keg", float64(i))
+	}
+
+	waitFor(t, "the coalesced reading to be sent", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(bodies) == 1
+	})
+
+	// Nothing further may go out inside the interval.
+	time.Sleep(2 * flushInterval)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 1 {
+		t.Fatalf("sent %d requests for one burst, want 1", len(bodies))
+	}
+	if bodies[0]["volume"] != float64(50) {
+		t.Errorf("volume = %v, want the most recent reading 50", bodies[0]["volume"])
+	}
+}
+
+// Re-reporting the same volume must not produce a second request; a resting
+// keg reports its unchanged weight indefinitely.
+func TestUnchangedVolumeIsNotResent(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		count int
+	)
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		count++
+		mu.Unlock()
+		w.Write([]byte(`{"success":true}`))
+	}, map[string]string{"keg": "monitor-1"})
+
+	c.KegAmount("keg", 15.5)
+	waitFor(t, "the first reading to be sent", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return count == 1
+	})
+
+	// Keep reporting the same value well past the send interval.
+	deadline := time.Now().Add(3 * flushInterval)
+	for time.Now().Before(deadline) {
+		c.KegAmount("keg", 15.5)
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if count != 1 {
+		t.Errorf("sent %d requests for an unchanged volume, want 1", count)
+	}
+}
+
+// A reading that fails to send must be retried rather than silently lost.
+func TestFailedSendIsRetried(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		attempts int
+	)
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		n := attempts
+		mu.Unlock()
+		if n == 1 {
+			// BarHelper rate limited this one.
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte("Too many requests, max 2 per minute."))
+			return
+		}
+		w.Write([]byte(`{"success":true}`))
+	}, map[string]string{"keg": "monitor-1"})
+
+	// A short interval keeps the test quick; the production value is
+	// MinSendInterval.
+	c.minSendInterval = 50 * time.Millisecond
+
+	c.KegAmount("keg", 15.5)
+
+	waitFor(t, "the rejected reading to be retried", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return attempts >= 2
+	})
+}
+
+// waitFor polls until cond holds, so the tests do not depend on tick timing.
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
 }

@@ -50,6 +50,17 @@ func (t *LogThrottle) Allow(id string, now time.Time) bool {
 	return true
 }
 
+// HasLoggableReading reports whether the keg carries any of the values the
+// history records.
+//
+// A keg that has only announced itself and sent its firmware version has
+// nothing worth a row, and recording one would put an empty point at the start
+// of every chart and a blank line in every CSV export.
+func (k *Keg) HasLoggableReading() bool {
+	return k.AmountLeft != nil || k.KegTemperature != nil ||
+		k.PercentOfBeerLeft != nil || k.IsPouring != nil
+}
+
 // AppendLog records the keg's current readings at ts.
 func (s *Store) AppendLog(k *Keg, ts time.Time) error {
 	_, err := s.db.Exec(

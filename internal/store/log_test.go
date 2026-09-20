@@ -26,6 +26,35 @@ func TestLogThrottleAdmitsOnePerInterval(t *testing.T) {
 	}
 }
 
+func TestHasLoggableReading(t *testing.T) {
+	amount, temp, pct := 1.0, 2.0, 3.0
+	pouring := false
+
+	if (&Keg{ID: "keg-1"}).HasLoggableReading() {
+		t.Error("a keg with no readings reported as loggable")
+	}
+	// Announcing a firmware version is not a reading.
+	fw := "2.0.11b"
+	if (&Keg{ID: "keg-1", FirmwareVersion: &fw}).HasLoggableReading() {
+		t.Error("a keg that has only announced its firmware reported as loggable")
+	}
+	// A genuine zero is a reading, not an absence.
+	zero := 0.0
+	if !(&Keg{ID: "keg-1", AmountLeft: &zero}).HasLoggableReading() {
+		t.Error("an empty keg reporting zero was treated as having no reading")
+	}
+	for name, k := range map[string]*Keg{
+		"amount":      {AmountLeft: &amount},
+		"temperature": {KegTemperature: &temp},
+		"percent":     {PercentOfBeerLeft: &pct},
+		"pouring":     {IsPouring: &pouring},
+	} {
+		if !k.HasLoggableReading() {
+			t.Errorf("a keg reporting %s was treated as having no reading", name)
+		}
+	}
+}
+
 func TestAppendAndReadLog(t *testing.T) {
 	s := newTestStore(t)
 	base := time.Unix(1_700_000_000, 0)
