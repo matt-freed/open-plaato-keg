@@ -13,15 +13,21 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/config"
 )
 
-// queueSize bounds how many readings may be waiting to be sent. A keg reports
-// continuously and BarHelper accepts at most two updates a minute, so a
-// backlog means readings are already being superseded.
-const queueSize = 16
+// MinSendInterval is the shortest gap between updates for a single monitor.
+//
+// BarHelper accepts at most two updates a minute per monitor, so sending
+// faster than this only produces rejections. A keg reports continuously — a
+// single scale can emit dozens of volume readings a second during a pour.
+const MinSendInterval = 30 * time.Second
+
+// flushInterval is how often pending readings are examined for sending.
+const flushInterval = time.Second
 
 // requestTimeout caps how long one send may take.
 const requestTimeout = 15 * time.Second
@@ -48,12 +54,33 @@ type reading struct {
 	amount    float64
 }
 
+// monitorState is the latest reading for one monitor and what has been sent.
+type monitorState struct {
+	// latest is the most recent volume the keg reported.
+	latest     float64
+	haveLatest bool
+	// lastSent is the volume BarHelper last accepted.
+	lastSent   float64
+	haveSent   bool
+	lastSendAt time.Time
+}
+
 // Client forwards readings in the background.
+//
+// Readings are coalesced rather than queued: only the most recent volume per
+// monitor is kept, and it is sent at most once per MinSendInterval. That keeps
+// the request rate inside BarHelper's limit while still converging on the
+// keg's resting volume once a pour finishes.
 type Client struct {
 	cfg  config.BarHelperConfig
 	http *http.Client
-	work chan reading
 	done chan struct{}
+	// minSendInterval is MinSendInterval, overridden in tests so they need not
+	// wait out the production interval.
+	minSendInterval time.Duration
+
+	mu    sync.Mutex
+	state map[string]*monitorState
 }
 
 // New returns a client for cfg, or nil if the integration is disabled.
@@ -62,10 +89,11 @@ func New(cfg config.BarHelperConfig) *Client {
 		return nil
 	}
 	return &Client{
-		cfg:  cfg,
-		http: &http.Client{Timeout: requestTimeout},
-		work: make(chan reading, queueSize),
-		done: make(chan struct{}),
+		cfg:             cfg,
+		http:            &http.Client{Timeout: requestTimeout},
+		done:            make(chan struct{}),
+		minSendInterval: MinSendInterval,
+		state:           map[string]*monitorState{},
 	}
 }
 
@@ -76,15 +104,56 @@ func (c *Client) Start(ctx context.Context) {
 	}
 	go func() {
 		defer close(c.done)
+
+		ticker := time.NewTicker(flushInterval)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case r := <-c.work:
-				c.send(ctx, r)
+			case now := <-ticker.C:
+				for _, r := range c.due(now) {
+					c.send(ctx, r)
+				}
 			}
 		}
 	}()
+}
+
+// due returns the readings that should be sent now, marking each monitor as
+// attempted so it is not retried until the interval has passed again.
+func (c *Client) due(now time.Time) []reading {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var out []reading
+	for monitorID, st := range c.state {
+		switch {
+		case !st.haveLatest:
+			continue
+		// Nothing has changed since BarHelper last accepted a value.
+		case st.haveSent && st.lastSent == st.latest:
+			continue
+		case !st.lastSendAt.IsZero() && now.Sub(st.lastSendAt) < c.minSendInterval:
+			continue
+		}
+		st.lastSendAt = now
+		out = append(out, reading{monitorID: monitorID, amount: st.latest})
+	}
+	return out
+}
+
+// recordSent notes that BarHelper accepted a value, so an unchanged reading is
+// not sent again. A failed send is deliberately not recorded, so it is retried
+// once the interval has passed.
+func (c *Client) recordSent(monitorID string, amount float64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if st := c.state[monitorID]; st != nil {
+		st.lastSent = amount
+		st.haveSent = true
+	}
 }
 
 // Wait blocks until the background worker has stopped.
@@ -95,10 +164,12 @@ func (c *Client) Wait() {
 	<-c.done
 }
 
-// KegAmount queues a volume reading for a keg, implementing keg.AmountConsumer.
+// KegAmount records the latest volume for a keg, implementing
+// keg.AmountConsumer.
 //
-// Queueing rather than sending inline keeps a slow or unreachable BarHelper
-// from stalling the TCP ingest path.
+// It only updates in-memory state, so it never blocks the TCP ingest path that
+// calls it, however slow or unreachable BarHelper happens to be. The
+// background worker decides when to send.
 func (c *Client) KegAmount(kegID string, amount float64) {
 	if c == nil {
 		return
@@ -109,11 +180,16 @@ func (c *Client) KegAmount(kegID string, amount float64) {
 		return
 	}
 
-	select {
-	case c.work <- reading{monitorID: monitorID, amount: amount}:
-	default:
-		slog.Warn("dropping a BarHelper update; the queue is full", "monitor", monitorID)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	st := c.state[monitorID]
+	if st == nil {
+		st = &monitorState{}
+		c.state[monitorID] = st
 	}
+	st.latest = amount
+	st.haveLatest = true
 }
 
 // payload is the request body BarHelper expects.
@@ -150,7 +226,11 @@ func (c *Client) send(ctx context.Context, r reading) {
 	defer resp.Body.Close()
 
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	logOutcome(Classify(resp.StatusCode, respBody), r, resp.StatusCode, respBody)
+	outcome := Classify(resp.StatusCode, respBody)
+	if outcome == OutcomeSuccess {
+		c.recordSent(r.monitorID, r.amount)
+	}
+	logOutcome(outcome, r, resp.StatusCode, respBody)
 }
 
 // Classify interprets a BarHelper response.
