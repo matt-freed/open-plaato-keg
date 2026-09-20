@@ -153,11 +153,20 @@ func TestUnmappedKegIsNotSent(t *testing.T) {
 // TCP ingest path.
 func TestKegAmountDoesNotBlock(t *testing.T) {
 	release := make(chan struct{})
-	t.Cleanup(func() { close(release) })
 
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		<-release
+		// Also return when the client goes away. Shutting the test server down
+		// waits for its handlers, so a handler that only watched release would
+		// deadlock against the cleanup that closes it.
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
 	}, map[string]string{"keg": "monitor-1"})
+
+	// Registered after newTestClient so it runs before that helper's cleanups:
+	// the handler is released before anything waits on it.
+	t.Cleanup(func() { close(release) })
 
 	done := make(chan struct{})
 	go func() {

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,12 +32,25 @@ type harness struct {
 }
 
 // recordingConsumer captures the volumes handed to downstream integrations.
+//
+// KegAmount is called from the connection's goroutine while the test reads
+// from its own, so the recording is guarded.
 type recordingConsumer struct {
+	mu   sync.Mutex
 	seen []float64
 }
 
 func (r *recordingConsumer) KegAmount(_ string, amount float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.seen = append(r.seen, amount)
+}
+
+// amounts returns a copy of what has been recorded so far.
+func (r *recordingConsumer) amounts() []float64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]float64(nil), r.seen...)
 }
 
 func newHarness(t *testing.T) *harness {
@@ -469,17 +483,17 @@ func TestAmountConsumerIsNotified(t *testing.T) {
 	sendAndRead(t, c, pinWrite(2, "51", "3.802"))
 
 	waitFor(t, "the consumer to be notified", func() bool {
-		return len(h.amounts.seen) == 1
+		return len(h.amounts.amounts()) == 1
 	})
-	if h.amounts.seen[0] != 3.802 {
-		t.Errorf("consumer saw %v, want 3.802", h.amounts.seen[0])
+	if got := h.amounts.amounts(); got[0] != 3.802 {
+		t.Errorf("consumer saw %v, want 3.802", got[0])
 	}
 
 	// A packet without a volume reading must not notify.
 	sendAndRead(t, c, pinWrite(3, "56", "22.5"))
 	time.Sleep(100 * time.Millisecond)
-	if len(h.amounts.seen) != 1 {
-		t.Errorf("consumer saw %d notifications, want 1", len(h.amounts.seen))
+	if got := h.amounts.amounts(); len(got) != 1 {
+		t.Errorf("consumer saw %d notifications, want 1", len(got))
 	}
 }
 
