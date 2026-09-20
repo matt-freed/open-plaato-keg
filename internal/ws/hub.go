@@ -51,46 +51,120 @@ type Hub struct {
 
 	mu      sync.RWMutex
 	clients map[*client]struct{}
+
+	// pending is the set of kegs with changes not yet broadcast, keyed by id
+	// so repeated changes to one keg collapse. It is bounded by the number of
+	// kegs, however fast they report.
+	pendingMu sync.Mutex
+	pending   map[string]events.Kind
+	// wake signals the flusher that pending is not empty.
+	wake chan struct{}
 }
 
 // NewHub returns a hub that reads records from st.
 func NewHub(st *store.Store) *Hub {
-	return &Hub{store: st, clients: map[*client]struct{}{}}
+	return &Hub{
+		store:   st,
+		clients: map[*client]struct{}{},
+		pending: map[string]events.Kind{},
+		wake:    make(chan struct{}, 1),
+	}
+}
+
+// mark records that a keg has changed and wakes the flusher.
+func (h *Hub) mark(e events.Event) {
+	h.pendingMu.Lock()
+	h.pending[e.KegID] = e.Kind
+	h.pendingMu.Unlock()
+
+	select {
+	case h.wake <- struct{}{}:
+	default: // a flush is already pending
+	}
+}
+
+// takePending returns the changes waiting to be broadcast and clears them.
+func (h *Hub) takePending() map[string]events.Kind {
+	h.pendingMu.Lock()
+	defer h.pendingMu.Unlock()
+
+	if len(h.pending) == 0 {
+		return nil
+	}
+	taken := h.pending
+	h.pending = make(map[string]events.Kind, len(taken))
+	return taken
 }
 
 // Run forwards bus events to connected clients until ctx is cancelled.
+//
+// Events are collapsed by keg before any work is done for them. Only a keg's
+// current state is ever sent, so a burst of twenty updates for one keg costs a
+// single database read and a single broadcast rather than twenty of each. That
+// matters when every keg reconnects at once — the work per event was
+// previously slow enough that the event bus filled and discarded updates.
 func (h *Hub) Run(ctx context.Context, bus *events.Bus) {
 	sub, cancel := bus.Subscribe()
 	defer cancel()
+
+	// Taking events off the bus is kept separate from acting on them. A flush
+	// reads the database, which contends with every connected keg writing to
+	// it, and while the flush ran the bus would fill and start discarding
+	// updates. Recording an event is a map write, so this keeps up regardless.
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case e, ok := <-sub:
+				if !ok {
+					return
+				}
+				h.mark(e)
+			}
+		}
+	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case e, ok := <-sub:
-			if !ok {
-				return
-			}
-			h.handle(e)
+		case <-h.wake:
+			h.flush(h.takePending())
 		}
 	}
 }
 
-func (h *Hub) handle(e events.Event) {
-	switch e.Kind {
-	case events.KegUpdated:
-		// The event carries only an id; the current record is read here so
-		// every client receives the same complete state.
-		k, err := h.store.GetKeg(e.KegID)
-		if err != nil {
-			slog.Debug("skipping broadcast for a keg that is no longer stored",
-				"keg", e.KegID, "error", err)
-			return
-		}
-		h.Broadcast(Message{Type: TypeKeg, Data: k})
-	case events.KegRemoved:
-		h.Broadcast(Message{Type: TypeKegRemoved, ID: e.KegID})
+// flush sends one message per keg that has changes waiting.
+func (h *Hub) flush(pending map[string]events.Kind) {
+	if len(pending) == 0 {
+		return
 	}
+	// With nobody listening there is nothing to deliver, and reading the
+	// database would be pure waste — a client that connects is sent the full
+	// current state anyway.
+	if h.Clients() == 0 {
+		clear(pending)
+		return
+	}
+
+	for kegID, kind := range pending {
+		switch kind {
+		case events.KegRemoved:
+			h.Broadcast(Message{Type: TypeKegRemoved, ID: kegID})
+		case events.KegUpdated:
+			// The event carries only an id; the current record is read here so
+			// every client receives the same complete state.
+			k, err := h.store.GetKeg(kegID)
+			if err != nil {
+				slog.Debug("skipping broadcast for a keg that is no longer stored",
+					"keg", kegID, "error", err)
+				continue
+			}
+			h.Broadcast(Message{Type: TypeKeg, Data: k})
+		}
+	}
+	clear(pending)
 }
 
 // Broadcast sends a message to every connected client.
@@ -102,7 +176,8 @@ func (h *Hub) Broadcast(msg Message) {
 		select {
 		case c.send <- msg:
 		default:
-			// The writer notices the full buffer and closes the connection.
+			// Every keg message carries that keg's full state, so a client
+			// that misses one is corrected by the next.
 			slog.Debug("dropping a message for a client that is not keeping up")
 		}
 	}
