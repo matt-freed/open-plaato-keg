@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,10 +22,23 @@ import (
 
 // MinSendInterval is the shortest gap between updates for a single monitor.
 //
-// BarHelper accepts at most two updates a minute per monitor, so sending
-// faster than this only produces rejections. A keg reports continuously — a
-// single scale can emit dozens of volume readings a second during a pour.
+// A keg reports continuously — a single scale can emit dozens of volume
+// readings a second during a pour — so without this a single keg would
+// consume the whole account's allowance many times over.
 const MinSendInterval = 30 * time.Second
+
+// GlobalSendLimit and GlobalSendWindow cap the request rate across every
+// monitor combined. BarHelper's limit applies to the API key as a whole
+// rather than to each monitor separately.
+//
+// The window carries a small margin over the nominal minute. Sends are stamped
+// here when the request is dispatched, while the server counts them when it
+// receives them, so an exact minute expires fractionally early on this side
+// and the first send of each window is rejected.
+const (
+	GlobalSendLimit  = 2
+	GlobalSendWindow = 63 * time.Second
+)
 
 // flushInterval is how often pending readings are examined for sending.
 const flushInterval = time.Second
@@ -68,19 +82,25 @@ type monitorState struct {
 // Client forwards readings in the background.
 //
 // Readings are coalesced rather than queued: only the most recent volume per
-// monitor is kept, and it is sent at most once per MinSendInterval. That keeps
-// the request rate inside BarHelper's limit while still converging on the
-// keg's resting volume once a pour finishes.
+// monitor is kept, and it is sent at most once per MinSendInterval. A shared
+// budget then caps the total across all monitors, and whichever monitor has
+// waited longest is served first. Together these keep the request rate inside
+// what the account allows while still converging on each keg's resting volume
+// once a pour finishes.
 type Client struct {
 	cfg  config.BarHelperConfig
 	http *http.Client
 	done chan struct{}
-	// minSendInterval is MinSendInterval, overridden in tests so they need not
-	// wait out the production interval.
+	// minSendInterval and globalWindow are MinSendInterval and
+	// GlobalSendWindow, overridden in tests so they need not wait out the
+	// production timings.
 	minSendInterval time.Duration
+	globalWindow    time.Duration
 
 	mu    sync.Mutex
 	state map[string]*monitorState
+	// recentSends holds the send times still inside the shared window.
+	recentSends []time.Time
 }
 
 // New returns a client for cfg, or nil if the integration is disabled.
@@ -93,6 +113,7 @@ func New(cfg config.BarHelperConfig) *Client {
 		http:            &http.Client{Timeout: requestTimeout},
 		done:            make(chan struct{}),
 		minSendInterval: MinSendInterval,
+		globalWindow:    GlobalSendWindow,
 		state:           map[string]*monitorState{},
 	}
 }
@@ -123,11 +144,20 @@ func (c *Client) Start(ctx context.Context) {
 
 // due returns the readings that should be sent now, marking each monitor as
 // attempted so it is not retried until the interval has passed again.
+//
+// Attempts are counted against the shared budget rather than successes: if
+// BarHelper counts rejected requests too, counting only successes here would
+// let the client exceed the allowance and never recover.
 func (c *Client) due(now time.Time) []reading {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	var out []reading
+	budget := GlobalSendLimit - len(c.pruneRecent(now))
+	if budget <= 0 {
+		return nil
+	}
+
+	candidates := make([]string, 0, len(c.state))
 	for monitorID, st := range c.state {
 		switch {
 		case !st.haveLatest:
@@ -138,10 +168,44 @@ func (c *Client) due(now time.Time) []reading {
 		case !st.lastSendAt.IsZero() && now.Sub(st.lastSendAt) < c.minSendInterval:
 			continue
 		}
+		candidates = append(candidates, monitorID)
+	}
+
+	// Serve whichever monitor has waited longest. Without this the shared
+	// budget goes to whichever monitor the map happens to yield first, which
+	// is randomised per iteration and leaves some kegs unreported for minutes.
+	sort.Slice(candidates, func(i, j int) bool {
+		a, b := c.state[candidates[i]], c.state[candidates[j]]
+		if !a.lastSendAt.Equal(b.lastSendAt) {
+			return a.lastSendAt.Before(b.lastSendAt)
+		}
+		return candidates[i] < candidates[j]
+	})
+	if len(candidates) > budget {
+		candidates = candidates[:budget]
+	}
+
+	out := make([]reading, 0, len(candidates))
+	for _, monitorID := range candidates {
+		st := c.state[monitorID]
 		st.lastSendAt = now
+		c.recentSends = append(c.recentSends, now)
 		out = append(out, reading{monitorID: monitorID, amount: st.latest})
 	}
 	return out
+}
+
+// pruneRecent drops send times that have aged out of the shared window and
+// returns what remains. The caller must hold the mutex.
+func (c *Client) pruneRecent(now time.Time) []time.Time {
+	kept := c.recentSends[:0]
+	for _, t := range c.recentSends {
+		if now.Sub(t) < c.globalWindow {
+			kept = append(kept, t)
+		}
+	}
+	c.recentSends = kept
+	return c.recentSends
 }
 
 // recordSent notes that BarHelper accepted a value, so an unchanged reading is

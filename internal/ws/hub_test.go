@@ -159,7 +159,10 @@ func TestEveryMessageIsTagged(t *testing.T) {
 	// Drain the initial state.
 	readMessage(t, conn)
 
-	bus.Publish(events.Event{Kind: events.KegUpdated, KegID: "keg-1"})
+	// Two different kegs, because events for one keg are collapsed to its
+	// latest state.
+	storeKeg(t, st, "keg-2", "vw\x0051\x002.000")
+	bus.Publish(events.Event{Kind: events.KegUpdated, KegID: "keg-2"})
 	bus.Publish(events.Event{Kind: events.KegRemoved, KegID: "keg-1"})
 
 	for i := 0; i < 2; i++ {
@@ -207,6 +210,91 @@ func TestDisconnectRemovesClient(t *testing.T) {
 
 	conn.Close(websocket.StatusNormalClosure, "")
 	waitForClients(t, hub, 0)
+}
+
+// Repeated updates for one keg collapse into a single broadcast carrying its
+// current state, so a reconnect burst costs one database read per keg rather
+// than one per packet.
+func TestUpdatesForOneKegAreCollapsed(t *testing.T) {
+	hub, st, bus, url := newTestHub(t)
+	storeKeg(t, st, "keg-1", "vw\x0051\x001.000")
+
+	conn := dialWS(t, url)
+	waitForClients(t, hub, 1)
+	readMessage(t, conn) // initial state
+
+	for i := 0; i < 20; i++ {
+		bus.Publish(events.Event{Kind: events.KegUpdated, KegID: "keg-1"})
+	}
+	// A second keg, so there is a message to read after the collapsed ones and
+	// the test does not depend on a timeout to prove the absence of extras.
+	storeKeg(t, st, "keg-2", "vw\x0051\x002.000")
+	bus.Publish(events.Event{Kind: events.KegRemoved, KegID: "keg-2"})
+
+	var kegOneMessages int
+	for {
+		msg := readMessage(t, conn)
+		if msg.Type == TypeKegRemoved && msg.ID == "keg-2" {
+			break
+		}
+		kegOneMessages++
+		if kegOneMessages > 20 {
+			t.Fatal("keg-1 updates were not collapsed at all")
+		}
+	}
+	// The burst is published faster than the hub drains it, so it should
+	// collapse to very few messages rather than twenty.
+	if kegOneMessages > 5 {
+		t.Errorf("20 updates for one keg produced %d broadcasts, want them collapsed", kegOneMessages)
+	}
+}
+
+// Recording an event must collapse by keg and must not block, so the intake
+// keeps up with the bus however long a flush takes.
+func TestMarkCoalescesByKeg(t *testing.T) {
+	h := NewHub(nil)
+
+	for i := 0; i < 500; i++ {
+		h.mark(events.Event{Kind: events.KegUpdated, KegID: "keg-1"})
+		h.mark(events.Event{Kind: events.KegUpdated, KegID: "keg-2"})
+	}
+	// The last word on a keg wins: this one has gone away.
+	h.mark(events.Event{Kind: events.KegRemoved, KegID: "keg-2"})
+
+	pending := h.takePending()
+	if len(pending) != 2 {
+		t.Fatalf("pending holds %d kegs after 1001 events, want 2: %v", len(pending), pending)
+	}
+	if pending["keg-1"] != events.KegUpdated {
+		t.Errorf("keg-1 = %v, want an update", pending["keg-1"])
+	}
+	if pending["keg-2"] != events.KegRemoved {
+		t.Errorf("keg-2 = %v, want the removal to win", pending["keg-2"])
+	}
+
+	// Taking the changes clears them.
+	if again := h.takePending(); len(again) != 0 {
+		t.Errorf("takePending returned %v a second time, want nothing", again)
+	}
+}
+
+// With no client connected the hub must not touch the database at all; the
+// browser that connects later is sent the full state anyway.
+//
+// The hub is built with a nil store, so any read would panic — the check
+// cannot pass by accident.
+func TestFlushDoesNothingWithoutClients(t *testing.T) {
+	h := NewHub(nil)
+
+	pending := map[string]events.Kind{
+		"keg-1": events.KegUpdated,
+		"keg-2": events.KegRemoved,
+	}
+	h.flush(pending)
+
+	if len(pending) != 0 {
+		t.Errorf("pending = %v, want it cleared", pending)
+	}
 }
 
 // An update for a keg that has since been deleted must not crash the hub or
