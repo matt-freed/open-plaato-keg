@@ -119,10 +119,18 @@ server at startup rather than being silently ignored.
 | `BARHELPER_KEG_MONITOR_MAPPING` | — | `<auth-token>:<monitor-id>` pairs, comma separated. A keg that is not listed is never forwarded. |
 
 A scale reports continuously — dozens of readings a second during a pour —
-while BarHelper accepts two updates a minute per monitor. Readings are
-therefore coalesced: only the most recent volume is kept, it is sent at most
-once every 30 seconds, and an unchanged volume is not re-sent. Nothing is lost,
-because the value that matters is where the keg settles.
+while BarHelper accepts only two updates a minute, and that limit applies to
+the API key as a whole rather than to each monitor. Sending is therefore
+shaped in three stages:
+
+- Readings are **coalesced**: only the most recent volume per monitor is kept,
+  so nothing queues up and the value that eventually goes out is the one the
+  keg settled on.
+- Each monitor sends **at most once every 30 seconds**, and an unchanged volume
+  is not re-sent.
+- A **shared budget** of two sends per minute covers every monitor together,
+  handed to whichever monitor has waited longest.
+
 
 The API key and the monitor ids come from BarHelper's own [custom keg monitor
 settings](https://docs.barhelper.app/english/settings/custom-keg-monitor).

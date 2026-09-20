@@ -3,6 +3,7 @@ package barhelper
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -291,6 +292,210 @@ func TestFailedSendIsRetried(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return attempts >= 2
+	})
+}
+
+// newOfflineClient builds a client for tests that drive due directly and
+// never send anything.
+func newOfflineClient(t *testing.T, monitors map[string]string) *Client {
+	t.Helper()
+	c := New(config.BarHelperConfig{
+		Enabled:  true,
+		Endpoint: "http://127.0.0.1:1",
+		APIKey:   "test-key",
+		Unit:     "l",
+		Monitors: monitors,
+	})
+	if c == nil {
+		t.Fatal("New returned nil for an enabled integration")
+	}
+	return c
+}
+
+// names lists the monitors in a batch of readings, for failure messages.
+func names(rs []reading) []string {
+	out := make([]string, len(rs))
+	for i, r := range rs {
+		out[i] = r.monitorID
+	}
+	return out
+}
+
+// recorder captures which monitors were sent, in order.
+type recorder struct {
+	mu   sync.Mutex
+	sent []string
+}
+
+func (r *recorder) handler(w http.ResponseWriter, req *http.Request) {
+	var body struct {
+		Name string `json:"name"`
+	}
+	_ = json.NewDecoder(req.Body).Decode(&body)
+
+	r.mu.Lock()
+	r.sent = append(r.sent, body.Name)
+	r.mu.Unlock()
+
+	w.Write([]byte(`{"success":true}`))
+}
+
+func (r *recorder) snapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.sent...)
+}
+
+// monitorsFor builds a keg-to-monitor mapping of the given size.
+func monitorsFor(n int) map[string]string {
+	m := make(map[string]string, n)
+	for i := 1; i <= n; i++ {
+		m[fmt.Sprintf("keg%d", i)] = fmt.Sprintf("monitor%d", i)
+	}
+	return m
+}
+
+// BarHelper's limit applies to the API key as a whole, so the total across
+// every monitor has to stay inside it however many kegs are connected.
+func TestGlobalBudgetCapsTotalRate(t *testing.T) {
+	rec := &recorder{}
+	c := newTestClient(t, rec.handler, monitorsFor(7))
+
+	// Short timings so the test does not wait out the production window.
+	c.globalWindow = 3 * time.Second
+	c.minSendInterval = 10 * time.Millisecond
+
+	// Every keg reports a changing volume throughout, as a bar full of
+	// settling scales does.
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for v := 1.0; ; v++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			for i := 1; i <= 7; i++ {
+				c.KegAmount(fmt.Sprintf("keg%d", i), v+float64(i)/100)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+
+	waitFor(t, "the first window to be spent", func() bool {
+		return len(rec.snapshot()) >= GlobalSendLimit
+	})
+	// Well inside the window, with every keg still reporting changes.
+	time.Sleep(2 * time.Second)
+
+	if got := len(rec.snapshot()); got > GlobalSendLimit {
+		t.Errorf("sent %d requests inside one %v window, want at most %d",
+			got, c.globalWindow, GlobalSendLimit)
+	}
+}
+
+// The shared budget must go to whichever monitors have waited longest.
+//
+// This drives due directly rather than going through the worker, so the
+// ordering is asserted exactly instead of being inferred from timing.
+func TestDueServesTheLongestWaitingMonitors(t *testing.T) {
+	c := newOfflineClient(t, monitorsFor(6))
+	// The per-monitor interval is not what this test is about.
+	c.minSendInterval = 0
+
+	now := time.Now()
+	ages := map[string]time.Duration{
+		"monitor1": 1 * time.Minute,
+		"monitor2": 9 * time.Minute,
+		"monitor3": 3 * time.Minute,
+		"monitor4": 7 * time.Minute,
+		"monitor5": 2 * time.Minute,
+		"monitor6": 5 * time.Minute,
+	}
+	for monitorID, age := range ages {
+		c.state[monitorID] = &monitorState{
+			latest:     1.0,
+			haveLatest: true,
+			lastSendAt: now.Add(-age),
+		}
+	}
+
+	got := c.due(now)
+	if len(got) != GlobalSendLimit {
+		t.Fatalf("due returned %d readings, want %d", len(got), GlobalSendLimit)
+	}
+	// monitor2 has waited 9 minutes and monitor4 seven; the rest are newer.
+	want := []string{"monitor2", "monitor4"}
+	for i, r := range got {
+		if r.monitorID != want[i] {
+			t.Errorf("position %d = %s, want %s (served %v, want %v)",
+				i, r.monitorID, want[i], names(got), want)
+		}
+	}
+}
+
+// Over several windows every monitor must get an equal share. Serving
+// whichever monitor the map happened to yield first left real kegs unreported
+// for minutes while others were served repeatedly.
+func TestBudgetRotatesEvenlyBetweenMonitors(t *testing.T) {
+	const (
+		monitors = 6
+		rounds   = 12
+	)
+	c := newOfflineClient(t, monitorsFor(monitors))
+	c.minSendInterval = 0
+
+	served := map[string]int{}
+	now := time.Now()
+	for round := 0; round < rounds; round++ {
+		// Every keg reports a new volume, as settling scales do.
+		for i := 1; i <= monitors; i++ {
+			c.KegAmount(fmt.Sprintf("keg%d", i), float64(round)+float64(i)/100)
+		}
+		for _, r := range c.due(now) {
+			served[r.monitorID]++
+		}
+		// Step past the shared window so the next round has a full budget.
+		now = now.Add(c.globalWindow)
+	}
+
+	// rounds * GlobalSendLimit sends spread over monitors, exactly even.
+	want := rounds * GlobalSendLimit / monitors
+	for i := 1; i <= monitors; i++ {
+		monitorID := fmt.Sprintf("monitor%d", i)
+		if served[monitorID] != want {
+			t.Errorf("%s served %d times over %d rounds, want %d (all: %v)",
+				monitorID, served[monitorID], rounds, want, served)
+		}
+	}
+}
+
+// A lone keg should still get the full allowance rather than being held to a
+// share of it.
+func TestSingleMonitorUsesTheWholeBudget(t *testing.T) {
+	rec := &recorder{}
+	c := newTestClient(t, rec.handler, monitorsFor(1))
+
+	c.globalWindow = 2 * time.Second
+	c.minSendInterval = 10 * time.Millisecond
+
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for v := 1.0; ; v++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			c.KegAmount("keg1", v)
+			time.Sleep(20 * time.Millisecond)
+		}
+	}()
+
+	waitFor(t, "the single monitor to use the full budget", func() bool {
+		return len(rec.snapshot()) == GlobalSendLimit
 	})
 }
 
