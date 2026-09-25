@@ -67,6 +67,31 @@ func (s *Server) handleSetTimeFormat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "time_format": format})
 }
 
+func (s *Server) handleGetDisplayUnits(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.store.GetAppConfig()
+	if err != nil {
+		writeStoreError(w, err, "configuration")
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg.DisplayUnits)
+}
+
+func (s *Server) handleSetDisplayUnits(w http.ResponseWriter, r *http.Request) {
+	var req store.DisplayUnits
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	units := store.DisplayUnits{
+		System:  store.NormalizeDisplaySystem(req.System),
+		Measure: store.NormalizeDisplayMeasure(req.Measure),
+	}
+	if err := s.store.SetDisplayUnits(units); err != nil {
+		writeStoreError(w, err, "configuration")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "display_units": units})
+}
+
 func (s *Server) handleGetTheme(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.store.GetAppConfig()
 	if err != nil {
@@ -143,12 +168,19 @@ func writeCSSVar(b *strings.Builder, name, value string) {
 	}
 }
 
+// parseOpacity converts the stored overlay strength into a CSS alpha value.
+//
+// The settings slider works in whole percent, and that is what is stored and
+// what the settings page reads back into the slider, so percent is the unit
+// accepted here. A CSS colour needs the 0-1 fraction, so the conversion
+// happens on the way out. Anything outside the range is dropped rather than
+// clamped, so a junk value leaves the declaration out entirely.
 func parseOpacity(value string) string {
-	f, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil || f < 0 || f > 1 {
+	percent, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil || percent < 0 || percent > 100 {
 		return ""
 	}
-	return strconv.FormatFloat(f, 'f', -1, 64)
+	return strconv.FormatFloat(percent/100, 'f', -1, 64)
 }
 
 // googleFontImport builds the @import for whichever fonts the theme names.

@@ -205,22 +205,24 @@
                 column.removeAttribute('data-sort-order');
             }
 
-            const amountLeft = kegData.amount_left ?? 0;
-            const temperature = kegData.keg_temperature ?? NaN;
+            // The server converts into the chosen display units and hands back
+            // the labels to go with them; the raw fields are the fallback for a
+            // page served before that block existed.
+            const display = kegData.display || {};
+            const amountLeft = display.amount_left ?? kegData.amount_left ?? 0;
+            const temperature = display.keg_temperature ?? kegData.keg_temperature ?? NaN;
             const percentLeft = kegData.percent_of_beer_left ?? 0;
             const displayMode = kegData.display_mode === 'percent_primary' ? 'percent_primary' : 'weight_primary';
             const isPercentPrimary = displayMode === 'percent_primary';
-            const rawUnit = kegData.beer_left_unit || 'litre';
+            const rawUnit = display.amount_unit || kegData.beer_left_unit || 'litre';
             const volumeUnit = rawUnit === 'litre' ? 'L' : rawUnit;
-            const tempUnit = kegData.temperature_unit || '°C';
+            const tempUnit = display.temperature_unit || kegData.temperature_unit || '°C';
 
-            const lastPour = kegData.last_pour ?? 0;
             const isPouring = kegData.is_pouring === true;
             const isCO2 = kegData.keg_mode === 2;
 
-            const pourConversions = { lbs: [16, 'oz'], kg: [1000, 'g'], gal: [128, 'oz'], litre: [1000, 'ml'], 'kg CO\u2082': [1000, 'g'], 'lbs CO\u2082': [16, 'oz'] };
-            const [pourMult, pourUnit] = pourConversions[rawUnit] || [1, volumeUnit];
-            const pourValue = lastPour * pourMult;
+            const pourValue = display.last_pour ?? kegData.last_pour ?? 0;
+            const pourUnit = display.last_pour_unit || volumeUnit;
 
             const label = kegData.label?.trim() || '';
             const beerStyle = kegData.beer_style?.trim() || '';
@@ -324,7 +326,7 @@
                         </div>
                     </div>
                     ${primarySection}
-                    ${!isCO2 && lastPour > 0 ? `<div class="keg-footer"><span class="keg-last-pour">Last pour · ${Math.round(pourValue)} ${pourUnit}</span></div>` : ''}
+                    ${!isCO2 && pourValue > 0 ? `<div class="keg-footer"><span class="keg-last-pour">Last pour · ${Math.round(pourValue)} ${pourUnit}</span></div>` : ''}
                 </div>
             `;
             column.innerHTML = card;
@@ -344,16 +346,46 @@
 
 
 
+        // Render one keg, replacing its card if it already has one.
+        //
+        // The initial fetch and the socket's opening snapshot both describe
+        // every keg, and either can arrive first, so both go through here:
+        // appending blindly would render each keg twice.
+        function upsertKegCard(keg, fallbackIndex) {
+            const kegId = keg?.id;
+            if (!kegId) return;
+
+            const existingCard = document.querySelector(`#kegContainer [data-keg-id="${cssEscapeAttrValue(kegId)}"]`);
+            if (!existingCard) {
+                // Drop the "no kegs" placeholder before the first real card.
+                kegContainer.querySelectorAll('.column:not([data-keg-id] .column)').forEach(col => {
+                    if (!col.querySelector('[data-keg-id]')) col.remove();
+                });
+                kegContainer.appendChild(createKegCard(keg, fallbackIndex ?? kegContainer.children.length));
+                return;
+            }
+
+            const col = existingCard.closest('.column');
+            const index = col ? Array.from(kegContainer.children).indexOf(col) : null;
+            existingCard.innerHTML = createKegCard(keg, index).querySelector('.card').innerHTML;
+            if (col) {
+                if (keg.sort_order != null) {
+                    col.setAttribute('data-sort-order', keg.sort_order);
+                } else {
+                    col.removeAttribute('data-sort-order');
+                }
+            }
+        }
+
         // Fetch initial keg data
         fetch('/api/kegs')
             .then(response => response.json())
             .then(kegs => {
-                if (kegs.length === 0) {
+                if (kegs.length === 0 && kegContainer.children.length === 0) {
                     kegContainer.innerHTML = '<div class="column"><p class="has-text-grey">No kegs found. Connect a keg to see data here.</p></div>';
                 } else {
-                    sortKegs(kegs).forEach((keg, index) => {
-                        kegContainer.appendChild(createKegCard(keg, index));
-                    });
+                    sortKegs(kegs).forEach((keg, index) => upsertKegCard(keg, index));
+                    reorderColumnsInDom();
                 }
             })
             .catch(err => {
@@ -378,24 +410,7 @@
                     kegContainer.innerHTML = '<div class="column"><p class="has-text-grey">No kegs found. Connect a keg to see data here.</p></div>';
                 }
             } else if (msg.type === 'keg') {
-                const updatedKeg = msg.data;
-                const kegId = updatedKeg.id;
-                const existingCard = document.querySelector(`#kegContainer [data-keg-id="${cssEscapeAttrValue(kegId)}"]`);
-                if (existingCard) {
-                    const col = existingCard.closest('.column');
-                    const index = col ? Array.from(kegContainer.children).indexOf(col) : null;
-                    const newCard = createKegCard(updatedKeg, index);
-                    existingCard.innerHTML = newCard.querySelector('.card').innerHTML;
-                    if (col) {
-                        if (updatedKeg.sort_order != null) {
-                            col.setAttribute('data-sort-order', updatedKeg.sort_order);
-                        } else {
-                            col.removeAttribute('data-sort-order');
-                        }
-                    }
-                } else if (kegId) {
-                    kegContainer.appendChild(createKegCard(updatedKeg, kegContainer.children.length));
-                }
+                upsertKegCard(msg.data);
                 reorderColumnsInDom();
             }
         });

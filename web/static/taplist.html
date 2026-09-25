@@ -451,11 +451,16 @@
       const color     = tap.color || '#c9a849';
       const pct       = keg ? Math.max(0, Math.min(100, keg.percent_of_beer_left ?? 0)) : null;
       const isPouring = keg?.is_pouring === true;
-      const tempRaw   = keg?.keg_temperature ?? null;
-      const tempStr   = tempRaw != null ? `🌡️ ${tempRaw.toFixed(1)}°` : '';
-      const amount    = keg?.amount_left ?? null;
-      const unit      = keg?.beer_left_unit ?? '';
-      const tempUnit  = keg?.temperature_unit ?? '°C';
+      // Readings arrive already converted into the chosen display units, with
+      // the raw fields as the fallback.
+      const display   = keg?.display ?? {};
+      const tempRaw   = display.keg_temperature ?? keg?.keg_temperature ?? null;
+      // No trailing degree sign here: tempUnit below already carries one.
+      const tempStr   = tempRaw != null ? `🌡️ ${tempRaw.toFixed(1)}` : '';
+      const amount    = display.amount_left ?? keg?.amount_left ?? null;
+      const rawUnit   = display.amount_unit ?? keg?.beer_left_unit ?? '';
+      const unit      = rawUnit === 'litre' ? 'L' : rawUnit;
+      const tempUnit  = display.temperature_unit ?? keg?.temperature_unit ?? '°C';
 
       const card = document.createElement('div');
       card.className = 'tap-card' + (isPouring ? ' is-pouring' : '');

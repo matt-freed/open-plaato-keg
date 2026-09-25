@@ -20,6 +20,7 @@ func (s *Server) handleListKegs(w http.ResponseWriter, r *http.Request) {
 	for _, k := range kegs {
 		k.Connected = s.commander.Connected(k.ID)
 	}
+	store.SetDisplayAll(kegs, s.displayUnits())
 	if kegs == nil {
 		kegs = []*store.Keg{}
 	}
@@ -46,7 +47,20 @@ func (s *Server) handleGetKeg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	k.Connected = s.commander.Connected(k.ID)
+	k.SetDisplay(s.displayUnits())
 	writeJSON(w, http.StatusOK, k)
+}
+
+// displayUnits reads the presentation preference.
+//
+// A failure here must not fail the request: the default follows the device, so
+// the reading is shown exactly as the scale reports it.
+func (s *Server) displayUnits() store.DisplayUnits {
+	cfg, err := s.store.GetAppConfig()
+	if err != nil {
+		return store.DefaultAppConfig().DisplayUnits
+	}
+	return cfg.DisplayUnits
 }
 
 func (s *Server) handleDeleteKeg(w http.ResponseWriter, r *http.Request) {

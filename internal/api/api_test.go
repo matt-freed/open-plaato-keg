@@ -584,7 +584,7 @@ func TestThemeCSS(t *testing.T) {
 	a := newTestAPI(t)
 
 	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
-		"accent_color": "#ff0000", "bg_opacity": "0.5", "font_family": "Inter, sans-serif",
+		"accent_color": "#ff0000", "bg_opacity": "50", "font_family": "Inter, sans-serif",
 	})
 	assertStatus(t, rec, http.StatusOK)
 
@@ -609,7 +609,7 @@ func TestThemeCSSRejectsInjection(t *testing.T) {
 	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
 		"accent_color": "red; } body { display: none; } :root { --x: y",
 		"bg_image":     "url(https://example.com/track.png)",
-		"bg_opacity":   "99",
+		"bg_opacity":   "150",
 	})
 	assertStatus(t, rec, http.StatusOK)
 

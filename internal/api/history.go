@@ -28,16 +28,22 @@ func parseRange(r *http.Request, def string) time.Duration {
 }
 
 func (s *Server) handleKegLog(w http.ResponseWriter, r *http.Request) {
-	entries, ok := s.readLog(w, r, "24h")
+	entries, keg, ok := s.readLog(w, r, "24h")
 	if !ok {
 		return
 	}
+	store.ConvertLogEntries(entries, keg, s.displayUnits())
 	writeJSON(w, http.StatusOK, entries)
 }
 
 func (s *Server) handleKegLogCSV(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	entries, ok := s.readLog(w, r, "30d")
+	// Deliberately not converted. The export is a record of what was stored
+	// and what the device and BarHelper saw, it carries no unit column, and
+	// exported files get archived and re-imported — a display preference
+	// silently rescaling their contents is exactly the inconsistency this
+	// setting exists to avoid.
+	entries, _, ok := s.readLog(w, r, "30d")
 	if !ok {
 		return
 	}
@@ -50,11 +56,14 @@ func (s *Server) handleKegLogCSV(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) readLog(w http.ResponseWriter, r *http.Request, defaultRange string) ([]store.LogEntry, bool) {
+// readLog reads one keg's history, returning the keg alongside it so the
+// caller can decide whether to present the readings in the display units.
+func (s *Server) readLog(w http.ResponseWriter, r *http.Request, defaultRange string) ([]store.LogEntry, *store.Keg, bool) {
 	id := chi.URLParam(r, "id")
-	if _, err := s.store.GetKeg(id); err != nil {
+	keg, err := s.store.GetKeg(id)
+	if err != nil {
 		writeStoreError(w, err, "keg")
-		return nil, false
+		return nil, nil, false
 	}
 
 	to := time.Now()
@@ -63,7 +72,7 @@ func (s *Server) readLog(w http.ResponseWriter, r *http.Request, defaultRange st
 	entries, err := s.store.ReadLog(id, from, to)
 	if err != nil {
 		writeStoreError(w, err, "keg history")
-		return nil, false
+		return nil, nil, false
 	}
-	return entries, true
+	return entries, keg, true
 }
