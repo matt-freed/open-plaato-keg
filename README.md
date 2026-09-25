@@ -262,9 +262,10 @@ be used as given in a tap's `handle_image`.
 
 | Method | Path | Body | Description |
 |---|---|---|---|
-| `GET` | `/api/config` | — | Home page, clock format and theme together |
+| `GET` | `/api/config` | — | Home page, clock format, display units and theme together |
 | `GET` `POST` | `/api/config/home-page` | `{"home_page": "taplist"\|"kegs"}` | Where `/` sends the browser |
 | `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | Clock and timestamps |
+| `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage, BarHelper and `/get_keg` stay in the scale's own units |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
 | `POST` | `/api/uploads/background` | Multipart, field `image` | JPEG, PNG, WebP or GIF. Replaces any existing background |
 | `DELETE` | `/api/uploads/background` | — | Remove it |

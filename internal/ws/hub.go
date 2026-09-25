@@ -148,6 +148,10 @@ func (h *Hub) flush(pending map[string]events.Kind) {
 		return
 	}
 
+	// Read once for the whole drain rather than per keg: this loop is already
+	// a coalesced batch, and it has returned above when nobody is listening.
+	display := h.displayUnits()
+
 	for kegID, kind := range pending {
 		switch kind {
 		case events.KegRemoved:
@@ -161,10 +165,23 @@ func (h *Hub) flush(pending map[string]events.Kind) {
 					"keg", kegID, "error", err)
 				continue
 			}
+			k.SetDisplay(display)
 			h.Broadcast(Message{Type: TypeKeg, Data: k})
 		}
 	}
 	clear(pending)
+}
+
+// displayUnits reads the presentation preference.
+//
+// A failure falls back to following the device, so a broadcast still carries
+// the reading exactly as the scale reported it.
+func (h *Hub) displayUnits() store.DisplayUnits {
+	cfg, err := h.store.GetAppConfig()
+	if err != nil {
+		return store.DefaultAppConfig().DisplayUnits
+	}
+	return cfg.DisplayUnits
 }
 
 // Broadcast sends a message to every connected client.
@@ -236,6 +253,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Send the current state immediately, so a page that connects between
 	// updates is not blank until the next one.
 	if kegs, err := h.store.ListKegs(); err == nil {
+		store.SetDisplayAll(kegs, h.displayUnits())
 		for _, k := range kegs {
 			select {
 			case c.send <- Message{Type: TypeKeg, Data: k}:

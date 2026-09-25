@@ -288,6 +288,56 @@
                 </div>
               </div>
 
+              <!-- Display Units -->
+              <div class="card section-card">
+                <div class="card-header">
+                  <p class="card-header-title">Display Units</p>
+                </div>
+                <div class="card-content">
+                  <div class="field">
+                    <label class="label">Unit system</label>
+                    <div class="control">
+                      <label class="radio" style="margin-right: 1.5rem;">
+                        <input type="radio" name="unitSystem" value="device" id="unitSystemDevice" checked>
+                        Follow scale
+                      </label>
+                      <label class="radio" style="margin-right: 1.5rem;">
+                        <input type="radio" name="unitSystem" value="metric" id="unitSystemMetric">
+                        Metric (L, kg, &deg;C)
+                      </label>
+                      <label class="radio">
+                        <input type="radio" name="unitSystem" value="us" id="unitSystemUS">
+                        US (gal, lbs, &deg;F)
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="field">
+                    <label class="label">Measure</label>
+                    <div class="control">
+                      <label class="radio" style="margin-right: 1.5rem;">
+                        <input type="radio" name="unitMeasure" value="device" id="unitMeasureDevice" checked>
+                        Follow scale
+                      </label>
+                      <label class="radio" style="margin-right: 1.5rem;">
+                        <input type="radio" name="unitMeasure" value="weight" id="unitMeasureWeight">
+                        Weight
+                      </label>
+                      <label class="radio">
+                        <input type="radio" name="unitMeasure" value="volume" id="unitMeasureVolume">
+                        Volume
+                      </label>
+                    </div>
+                    <p class="help">
+                      Display only. The scale keeps reporting, and this server keeps storing
+                      and forwarding, in the scale&rsquo;s own units &mdash; so changing this
+                      cannot skew your history or anything sent to BarHelper. CO&#8322; kegs are
+                      always shown by weight. To change the scale itself, use Scale Setup.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <!-- Background Image -->
               <div class="card section-card">
                 <div class="card-header">
@@ -389,8 +439,8 @@
         font_family:  'Outfit',
         taplist_title_font: '',
         taplist_body_font: '',
-        bg_image:     false,
-        bg_opacity:   15
+        bg_image:     '',
+        bg_opacity:   '15'
       };
 
       let hasBgImage = false;
@@ -507,7 +557,7 @@
         hideBgPreview();
         // Also clear bg_image flag in saved theme
         const theme = currentTheme();
-        theme.bg_image = false;
+        theme.bg_image = '';
         await fetch('/api/config/theme', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(theme) });
         updatePreview();
       });
@@ -559,8 +609,10 @@
           font_family:  document.getElementById('fontFamily').value,
           taplist_title_font: document.getElementById('taplistTitleFont').value,
           taplist_body_font: document.getElementById('taplistBodyFont').value,
-          bg_image:     hasBgImage,
-          bg_opacity:   parseInt(opacitySlider.value)
+          // Every field on the server's theme is a string; sending a
+          // boolean or a number here makes the whole body fail to decode.
+          bg_image:     hasBgImage ? '1' : '',
+          bg_opacity:   String(parseInt(opacitySlider.value))
         };
       }
 
@@ -572,6 +624,8 @@
         try {
           const homePage = document.querySelector('input[name="homePage"]:checked')?.value || 'taplist';
           const timeFormat = document.querySelector('input[name="timeFormat"]:checked')?.value || '12h';
+          const unitSystem = document.querySelector('input[name="unitSystem"]:checked')?.value || 'device';
+          const unitMeasure = document.querySelector('input[name="unitMeasure"]:checked')?.value || 'device';
           await Promise.all([
             fetch('/api/config/home-page', {
               method: 'POST',
@@ -582,6 +636,11 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ time_format: timeFormat })
+            }),
+            fetch('/api/config/display-units', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ system: unitSystem, measure: unitMeasure })
             })
           ]);
           const res = await fetch('/api/config/theme', {
@@ -615,6 +674,14 @@
         try {
           const tf = await fetch('/api/config/time-format').then(r => r.json());
           document.querySelector(`input[name="timeFormat"][value="${tf.time_format || '12h'}"]`).checked = true;
+        } catch (_) {}
+
+        try {
+          const du = await fetch('/api/config/display-units').then(r => r.json());
+          const sys = document.querySelector(`input[name="unitSystem"][value="${du.system || 'device'}"]`);
+          if (sys) sys.checked = true;
+          const meas = document.querySelector(`input[name="unitMeasure"][value="${du.measure || 'device'}"]`);
+          if (meas) meas.checked = true;
         } catch (_) {}
 
         try {

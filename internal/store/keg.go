@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/matt-freed/open-plaato-keg/internal/units"
 )
 
 // ErrNotFound is returned when a record does not exist.
@@ -87,6 +89,27 @@ type Keg struct {
 	BeerLeftUnit string `json:"beer_left_unit"`
 	// Connected is filled in by the API from the live connection registry.
 	Connected bool `json:"connected"`
+	// Display is filled in at the JSON boundaries the browser reads, from the
+	// user's display-unit preference. It is nil everywhere else, which is what
+	// keeps converted values off the device-write and forwarding paths.
+	Display *KegDisplay `json:"display,omitempty"`
+}
+
+// KegDisplay carries a keg's readings converted into the units the user chose
+// for the UI.
+//
+// It is derived per request and never stored: it is deliberately absent from
+// kegColumns, the single list driving both INSERT and SELECT. The canonical
+// fields on Keg always stay in the device's own units.
+type KegDisplay struct {
+	AmountLeft      *float64 `json:"amount_left"`
+	AmountUnit      string   `json:"amount_unit"`
+	KegTemperature  *float64 `json:"keg_temperature"`
+	TemperatureUnit string   `json:"temperature_unit"`
+	// LastPour is already scaled into LastPourUnit, so a half-litre pour
+	// arrives as 500 with a unit of "ml".
+	LastPour     *float64 `json:"last_pour"`
+	LastPourUnit string   `json:"last_pour_unit"`
 }
 
 // kegColumn ties a database column to its Go field, so the column list, the
@@ -366,5 +389,107 @@ func (k *Keg) DeriveBeerLeftUnit() string {
 		return "lbs"
 	default:
 		return "gal"
+	}
+}
+
+// displayConversion is the resolved recipe for presenting one keg's readings:
+// which units its stored values are in, and which they should be shown in.
+type displayConversion struct {
+	fromUnit, toUnit string
+	fromF, toF       bool
+	tempLabel        string
+}
+
+// resolveDisplay works out the conversion for a keg under the chosen units.
+//
+// It is shared by SetDisplay and ConvertLogEntries so a history chart cannot
+// disagree with the card above it.
+func (k *Keg) resolveDisplay(u DisplayUnits) displayConversion {
+	from := k.DeriveBeerLeftUnit()
+	sys, measure, co2, known := units.ParseLabel(from)
+
+	to := from
+	if known {
+		switch u.System {
+		case DisplaySystemMetric:
+			sys = units.Metric
+		case DisplaySystemUS:
+			sys = units.US
+		}
+		// CO2 is weighed whatever the measure says, matching the rule in
+		// DeriveBeerLeftUnit.
+		if !co2 {
+			switch u.Measure {
+			case DisplayMeasureWeight:
+				measure = units.Weight
+			case DisplayMeasureVolume:
+				measure = units.Volume
+			}
+		}
+		to = units.Label(sys, measure, co2)
+	}
+
+	// The device reports its temperature unit as a free-form string, so that
+	// is preferred and the configured unit system is the fallback.
+	device := ""
+	if k.TemperatureUnit != nil {
+		device = *k.TemperatureUnit
+	}
+	fromF, namedTemp := units.ParseTempLabel(device)
+	if !namedTemp {
+		fromF = k.Unit != nil && *k.Unit == 2
+	}
+
+	toF := fromF
+	switch u.System {
+	case DisplaySystemMetric:
+		toF = false
+	case DisplaySystemUS:
+		toF = true
+	}
+
+	label := units.TempLabel(units.Metric)
+	if toF {
+		label = units.TempLabel(units.US)
+	}
+	// Following the device passes its own string through verbatim, which is
+	// the strongest guarantee that nothing on screen moves.
+	if toF == fromF && device != "" {
+		label = device
+	}
+
+	return displayConversion{fromUnit: from, toUnit: to, fromF: fromF, toF: toF, tempLabel: label}
+}
+
+// SetDisplay fills in the derived display block for the chosen units.
+//
+// With both axes left to the device this is a value-for-value passthrough of
+// the canonical fields, so the UI renders exactly as it did before the setting
+// existed. A reading the device never sent stays nil rather than becoming 0.
+func (k *Keg) SetDisplay(u DisplayUnits) {
+	c := k.resolveDisplay(u)
+	d := &KegDisplay{AmountUnit: c.toUnit, TemperatureUnit: c.tempLabel}
+
+	if k.AmountLeft != nil {
+		v := units.ConvertAmount(*k.AmountLeft, c.fromUnit, c.toUnit)
+		d.AmountLeft = &v
+	}
+	if k.LastPour != nil {
+		mult, label := units.PourSubUnit(c.toUnit)
+		v := units.ConvertAmount(*k.LastPour, c.fromUnit, c.toUnit) * mult
+		d.LastPour, d.LastPourUnit = &v, label
+	}
+	if k.KegTemperature != nil {
+		v := units.ConvertTemp(*k.KegTemperature, c.fromF, c.toF)
+		d.KegTemperature = &v
+	}
+
+	k.Display = d
+}
+
+// SetDisplayAll is the list form of SetDisplay.
+func SetDisplayAll(kegs []*Keg, u DisplayUnits) {
+	for _, k := range kegs {
+		k.SetDisplay(u)
 	}
 }

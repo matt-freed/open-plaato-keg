@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/matt-freed/open-plaato-keg/internal/units"
 )
 
 // LogEntry is one recorded keg reading.
@@ -16,6 +18,31 @@ type LogEntry struct {
 	KegTemperature    *float64 `json:"keg_temperature"`
 	PercentOfBeerLeft *float64 `json:"percent_of_beer_left"`
 	IsPouring         *bool    `json:"is_pouring"`
+}
+
+// ConvertLogEntries rewrites the readings in place into the display units.
+//
+// Logged rows record no unit of their own, so they are reinterpreted using the
+// keg's current device unit. A scale switched between litres and gallons
+// part-way through a keg already leaves a discontinuity in its stored data;
+// this neither worsens nor repairs it. Only the two readings that carry a unit
+// are touched, so percent and the pouring flag are left alone.
+func ConvertLogEntries(entries []LogEntry, k *Keg, u DisplayUnits) {
+	if k == nil || u.FollowsDevice() {
+		return
+	}
+	c := k.resolveDisplay(u)
+
+	for i := range entries {
+		if v := entries[i].AmountLeft; v != nil {
+			converted := units.ConvertAmount(*v, c.fromUnit, c.toUnit)
+			entries[i].AmountLeft = &converted
+		}
+		if v := entries[i].KegTemperature; v != nil {
+			converted := units.ConvertTemp(*v, c.fromF, c.toF)
+			entries[i].KegTemperature = &converted
+		}
+	}
 }
 
 // LogInterval is the minimum gap between recorded readings for one keg. A keg

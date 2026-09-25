@@ -114,6 +114,9 @@
     let selectedRange = '24h';
     let chart = null;
     let timeFormat = '12h';
+    // Per-keg unit labels for the axes, filled in from /api/kegs. The readings
+    // themselves arrive already converted.
+    const kegUnits = {};
 
     // ----------------------------------------------------------------
     // Navbar helpers
@@ -213,6 +216,11 @@
           const labelMap = {};
           kegsData.forEach((k, index) => {
             labelMap[k.id] = k.label || `Scale ${index + 1}`;
+            const rawUnit = k.display?.amount_unit || k.beer_left_unit || '';
+            kegUnits[k.id] = {
+              amount: rawUnit === 'litre' ? 'L' : rawUnit,
+              temp: k.display?.temperature_unit || k.temperature_unit || '',
+            };
           });
 
           devices.forEach((id, index) => {
@@ -287,8 +295,9 @@
         const temperature = entries.map(e => e.keg_temperature ?? null);
         const pctLeft     = entries.map(e => e.percent_of_beer_left ?? null);
 
-        // Determine unit label from first non-null value (best effort)
-        const unitLabel = 'Amount Left';
+        const u = kegUnits[selectedDevice] || {};
+        const unitLabel = u.amount ? `Amount Left (${u.amount})` : 'Amount Left';
+        const tempLabel = u.temp ? `Temperature (${u.temp})` : 'Temperature';
 
         datasets = [
           {
@@ -303,7 +312,7 @@
             spanGaps: true,
           },
           {
-            label: 'Temperature',
+            label: tempLabel,
             data: temperature,
             borderColor: '#e05d44',
             backgroundColor: 'transparent',
@@ -329,12 +338,12 @@
           yLeft: {
             type: 'linear',
             position: 'left',
-            title: { display: true, text: 'Amount Left' },
+            title: { display: true, text: unitLabel },
           },
           yRight: {
             type: 'linear',
             position: 'right',
-            title: { display: true, text: 'Temperature' },
+            title: { display: true, text: tempLabel },
             grid: { drawOnChartArea: false },
           },
           yLeft2: {

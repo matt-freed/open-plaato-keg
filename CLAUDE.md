@@ -70,6 +70,12 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   a genuine zero. An uncalibrated scale really does report 0.
 - `beer_left_unit` is always derived from `unit`, `measure_unit` and `keg_mode`,
   never taken from the device's own pin 74.
+- Display units are a presentation preference, applied only where the browser
+  reads a keg: the two `internal/api` keg handlers and the two `internal/ws`
+  send paths, plus the history JSON. Everything else stays in the units the
+  device reported — the stored columns, BarHelper, `/get_keg/{deviceID}`, the
+  log CSV export and every value on the scale setup page. The converted values
+  live in a `display` block that is deliberately absent from `kegColumns`.
 - Every WebSocket frame carries a `type`.
 - `testdata/capture` is a recording of a real keg session. It is the reference
   for protocol work; regenerate expectations from the current pin map rather
