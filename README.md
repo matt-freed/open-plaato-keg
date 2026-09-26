@@ -77,6 +77,13 @@ docker run -d --name open-plaato-keg \
 ```
 
 The `-v` is not optional if you want your data to survive a container update.
+The container runs as uid 10001, so on Linux create the directory and hand it
+to that user first, or the server cannot create its database:
+
+```bash
+mkdir -p data && sudo chown 10001 data
+```
+
 Images are published for `linux/amd64` and `linux/arm64`, so a Raspberry Pi 4/5
 on a 64-bit OS works.
 

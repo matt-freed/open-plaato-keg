@@ -11,13 +11,17 @@ services:
     volumes:
       # The database and uploaded images live here. Without this volume every
       # container update starts from an empty database.
+      #
+      # The container runs as uid 10001, so on Linux the directory must be
+      # writable by that user before the first start:
+      #   mkdir -p data && sudo chown 10001 data
       - ./data:/db
     environment:
       DATABASE_FILE_PATH: /db/open-plaato-keg.db
       KEG_LISTENER_PORT: "4545"
       HTTP_LISTENER_PORT: "8085"
       # BARHELPER_ENABLED: "true"
-      # BARHELPER_ENDPOINT=https://europe-west1-barhelper-app.cloudfunctions.net/api/customKegMon
+      # BARHELPER_ENDPOINT: https://europe-west1-barhelper-app.cloudfunctions.net/api/customKegMon
       # BARHELPER_API_KEY: <your-barhelper-api-key>
       # BARHELPER_KEG_MONITOR_MAPPING: "<plaato-auth-token>:<barhelper-monitor-id>"
-      # BARHELPER_UNIT=l
+      # BARHELPER_UNIT: "l"
