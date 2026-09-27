@@ -80,3 +80,12 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
 - `testdata/capture` is a recording of a real keg session. It is the reference
   for protocol work; regenerate expectations from the current pin map rather
   than trusting older snapshots.
+
+## Documentation
+
+`docs/` describes how the system works: `architecture.md` for the whole server
+and `keg-to-websocket.md` for the path from a keg reading to the browser. Keep
+them accurate as part of any change — update the affected sections in the same
+change as the code, including the known-limitations lists when an issue is
+fixed or found. The docs refer to code by file and function name, not line
+number, so they do not go stale when code moves.
