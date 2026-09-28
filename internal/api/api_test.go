@@ -469,6 +469,32 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
+func TestTapOrder(t *testing.T) {
+	a := newTestAPI(t)
+	for _, id := range []string{"a", "b", "c"} {
+		if err := a.store.SaveTap(&store.Tap{ID: id}); err != nil {
+			t.Fatalf("SaveTap: %v", err)
+		}
+	}
+
+	rec := a.do(http.MethodPost, "/api/taps/order",
+		map[string]any{"ordered_ids": []string{"b", "c", "a"}})
+	assertStatus(t, rec, http.StatusOK)
+
+	taps, _ := a.store.ListTaps()
+	want := []string{"b", "c", "a"}
+	for i, tap := range taps {
+		if tap.ID != want[i] {
+			t.Errorf("position %d = %q, want %q", i, tap.ID, want[i])
+		}
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps/order", map[string]any{"ordered_ids": []string{}})
+	assertStatus(t, rec, http.StatusBadRequest)
+	rec = a.do(http.MethodPost, "/api/taps/order", map[string]any{"ordered_ids": []string{"nope"}})
+	assertStatus(t, rec, http.StatusNotFound)
+}
+
 func TestBeverageDerivesABVFromGravities(t *testing.T) {
 	a := newTestAPI(t)
 

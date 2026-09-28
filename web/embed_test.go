@@ -256,7 +256,8 @@ func TestWebSocketPagesHandleTaggedMessages(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		body := string(data)
-		if !strings.Contains(body, "new WebSocket('/ws')") && !strings.Contains(body, `new WebSocket("/ws")`) {
+		// Pages may pass "/ws" directly or build an absolute ws:// URL from it.
+		if !strings.Contains(body, "new WebSocket(") || !strings.Contains(body, "/ws") {
 			t.Errorf("%s does not open the websocket", name)
 			continue
 		}

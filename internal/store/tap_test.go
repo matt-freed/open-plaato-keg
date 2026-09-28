@@ -75,6 +75,39 @@ func TestListTapsOrdering(t *testing.T) {
 	}
 }
 
+func TestOrderTaps(t *testing.T) {
+	s := newTestStore(t)
+	for _, tap := range []*Tap{
+		{ID: "a", TapNumber: intPtr(1)},
+		{ID: "b", TapNumber: intPtr(2)},
+		{ID: "c"},
+	} {
+		if err := s.SaveTap(tap); err != nil {
+			t.Fatalf("SaveTap: %v", err)
+		}
+	}
+
+	if err := s.OrderTaps([]string{"c", "a", "b"}); err != nil {
+		t.Fatalf("OrderTaps: %v", err)
+	}
+	taps, _ := s.ListTaps()
+	want := []string{"c", "a", "b"}
+	for i, tap := range taps {
+		if tap.ID != want[i] || tap.TapNumber == nil || *tap.TapNumber != i+1 {
+			t.Errorf("position %d = %q (number %v), want %q numbered %d",
+				i, tap.ID, tap.TapNumber, want[i], i+1)
+		}
+	}
+
+	// An unknown id rolls the whole reorder back.
+	if err := s.OrderTaps([]string{"b", "missing"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("OrderTaps with an unknown id = %v, want ErrNotFound", err)
+	}
+	if got, _ := s.GetTap("b"); *got.TapNumber != 3 {
+		t.Errorf("tap b number = %d, want 3 after the failed reorder", *got.TapNumber)
+	}
+}
+
 func TestGetTapByDeviceID(t *testing.T) {
 	s := newTestStore(t)
 	if err := s.SaveTap(&Tap{ID: "a", Name: "Pale Ale", DeviceID: "AB12CD"}); err != nil {

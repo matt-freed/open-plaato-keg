@@ -31,7 +31,8 @@ graph LR
 - **Keg control** — tare, calibrate against a known weight, set the empty keg
   weight and full volume, switch units, choose beer or CO₂ mode, set pour
   sensitivity
-- **Tap list** — a display-ready page for what is on tap, with per-tap artwork
+- **Tap list** — a display-ready page for what is on tap, with a live keg
+  fill gauge per beer
 - **Beverage library** — reusable beer records to attach to taps
 - **History** — per-keg time series with charts and CSV export
 - **REST API and WebSocket** — everything the UI does, available to your own
@@ -151,13 +152,13 @@ redirects to whichever page is set as home — the tap list unless you change it
 
 | Page | Description |
 |---|---|
-| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A card per tap: handle artwork, beer name, brewery, style, ABV and IBU badges, tasting notes, and how much is left in the linked keg. Live clock, WebSocket updates, and a full reload every minute. |
+| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the linked keg's name, what is left and its temperature in the chosen display units, and a keg graphic filled to the percentage remaining. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. Live clock, WebSocket updates, and a full reload every minute. |
 | `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
 | `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details, the keg the tap draws from, its handle image and an open-tap display id. Fields can be auto-filled from the beverage library, and the kegged date is written to the device. |
 | `/beverages.html` | **Beverage Library** — reusable beer records, including gravities, SRM and where the recipe came from, to load into a tap later. ABV is worked out from OG and FG when it is not given. |
-| `/tap-handles.html` | **Tap Handles** — upload and delete the artwork used on the tap list. Each image must be a JPEG of exactly 200×200 pixels. |
+| `/tap-handles.html` | **Tap Handles** — upload and delete the artwork served to open-tap displays. Each image must be a JPEG of exactly 200×200 pixels. |
 | `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), a full-page background image with an adjustable dark overlay, which page is home, and a 12- or 24-hour clock. |
 
 ## API
@@ -214,6 +215,7 @@ Numeric values may be sent as JSON numbers or as strings.
 | `GET` | `/api/taps` | Every tap, by tap number, unnumbered ones last |
 | `GET` | `/api/taps/{id}` | One tap |
 | `POST` | `/api/taps/new` | Create one; the response carries the generated id |
+| `POST` | `/api/taps/order` | `{"ordered_ids": [...]}` — renumber the named taps 1..n in that order; an unknown id changes nothing and is a 404 |
 | `POST` | `/api/taps/{id}` | Save one |
 | `POST` | `/api/taps/{id}/delete` | Delete one |
 
@@ -221,7 +223,7 @@ A tap body takes these fields, all optional:
 
 | Field | Type | Notes |
 |---|---|---|
-| `tap_number` | number | Orders the tap list; `null` sorts last |
+| `tap_number` | number | Orders the tap list; `null` sorts last. Rewritten by `/api/taps/order` |
 | `name`, `brewery`, `style` | string | |
 | `abv`, `ibu` | number | |
 | `color` | string | Accent for the tap card; defaults to `#c9a849` |

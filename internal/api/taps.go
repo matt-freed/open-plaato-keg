@@ -80,6 +80,23 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": tap.ID, "tap": tap})
 }
 
+// handleTapOrder saves the order the tap list was dragged into.
+func (s *Server) handleTapOrder(w http.ResponseWriter, r *http.Request) {
+	var req orderRequest
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.OrderedIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "ordered_ids must be a non-empty array")
+		return
+	}
+	if err := s.store.OrderTaps(req.OrderedIDs); err != nil {
+		writeStoreError(w, err, "tap")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "ordered_ids": req.OrderedIDs})
+}
+
 func (s *Server) handleDeleteTap(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if _, err := s.store.GetTap(id); err != nil {

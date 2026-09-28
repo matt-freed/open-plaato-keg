@@ -74,6 +74,8 @@ func (s *Server) Handler() http.Handler {
 
 		r.Route("/taps", func(r chi.Router) {
 			r.Get("/", s.handleListTaps)
+			// Declared before /{id} so it is not swallowed by it.
+			r.Post("/order", s.handleTapOrder)
 			r.Get("/{id}", s.handleGetTap)
 			r.Post("/{id}", s.handleSaveTap)
 			r.Post("/{id}/delete", s.handleDeleteTap)

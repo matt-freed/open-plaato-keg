@@ -264,7 +264,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs` | List, connected ids, known ids, ordering |
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps`, `/api/beverages`, `/api/tap-handles` | CRUD for the tap list |
+| `/api/taps`, `/api/beverages`, `/api/tap-handles` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
 | `/api/config/…` | Home page, time format, display units, theme |
 | `/api/uploads/background` | Background image upload and removal |
 | `GET /get_keg/{deviceID}` | Keg data for a tap display device, looked up through `taps.device_id` |
@@ -378,3 +378,7 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   configuration pins is acknowledged but not replied to.
 - **UI reconnection.** The dashboard and scale setup pages do not reconnect
   their WebSocket; the tap list does.
+- **Tap order across screens.** A drag-and-drop reorder publishes no event, so
+  other open tap lists pick up the new order only at their next minute reload.
+- **Kegs without a tap.** The tap list shows taps, so a keg that no tap links to
+  appears only on the dashboard.

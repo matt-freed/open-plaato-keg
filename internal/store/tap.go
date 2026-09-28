@@ -111,6 +111,30 @@ func (s *Store) SaveTap(t *Tap) error {
 	return err
 }
 
+// OrderTaps renumbers taps 1..n in the order given, which is how the tap list
+// persists a drag-and-drop rearrangement. Taps not named keep their number.
+// An unknown id fails the whole reorder with ErrNotFound.
+func (s *Store) OrderTaps(ids []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for i, id := range ids {
+		res, err := tx.Exec("UPDATE taps SET tap_number = ? WHERE id = ?", i+1, id)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return ErrNotFound
+		}
+	}
+	return tx.Commit()
+}
+
 // DeleteTap removes a tap.
 func (s *Store) DeleteTap(id string) error {
 	_, err := s.db.Exec("DELETE FROM taps WHERE id = ?", id)
