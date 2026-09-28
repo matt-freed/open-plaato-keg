@@ -1,4 +1,12 @@
 -- Schema for open-plaato-keg. Applied idempotently at startup.
+--
+-- This file is the only place a column is declared. When a database created
+-- by an older version is opened, any column below that its tables lack is
+-- added automatically (store.addMissingColumns). A column added to an existing
+-- table must therefore be one SQLite can add: nullable or with a constant
+-- DEFAULT, not part of the primary key, and without UNIQUE, CHECK or
+-- REFERENCES, which are not carried over. Renames, type changes and backfills
+-- still need a hand-written migration.
 
 CREATE TABLE IF NOT EXISTS kegs (
     id                        TEXT PRIMARY KEY,
@@ -82,8 +90,7 @@ CREATE TABLE IF NOT EXISTS taps (
     style           TEXT NOT NULL DEFAULT '',
     abv             REAL,
     ibu             REAL,
-    -- Beer colour in SRM; the tap list renders the keg in this colour. Added
-    -- after release, so migrate() adds it to older databases.
+    -- Beer colour in SRM; the tap list renders the keg in this colour.
     srm             REAL,
     -- A named colour (see ColorPresets) for drinks SRM cannot describe, such as
     -- sparkling water. At most one of srm and color_preset is set.

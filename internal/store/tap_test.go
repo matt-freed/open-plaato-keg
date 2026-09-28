@@ -115,7 +115,7 @@ func TestMigrateAddsTapSRM(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ { // the second pass must be a no-op
-		if err := applySchema(db); err != nil {
+		if err := applySchema(db, schema); err != nil {
 			t.Fatalf("applySchema pass %d: %v", i+1, err)
 		}
 	}

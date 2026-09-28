@@ -62,8 +62,13 @@ docs/              this documentation
 3. **Database** — `store.Open()` creates the data directory, opens SQLite in WAL
    mode with a single connection, and applies the embedded `schema.sql`
    (`CREATE … IF NOT EXISTS`, so it is idempotent). Because that leaves an
-   existing table untouched, `migrate` then adds any column listed in
-   `addedColumns` (`store.go`) that an older database lacks.
+   existing table untouched, `applySchema` first runs `addMissingColumns`: it
+   builds the schema in a scratch in-memory database, compares each existing
+   table's columns with it, and adds whatever is missing in one transaction.
+   `schema.sql` is therefore the only place a column is declared. This covers
+   additions only; a rename, type change or backfill needs a hand-written
+   migration, and a column SQLite cannot add (NOT NULL without a default, or a
+   primary key) stops startup with an error naming it.
 4. **Shutdown context** — `signal.NotifyContext` cancels `ctx` on SIGINT or
    SIGTERM. The Dockerfile uses an exec-form `ENTRYPOINT`, so the binary is PID 1
    and receives `docker stop`'s SIGTERM directly.
