@@ -152,12 +152,12 @@ redirects to whichever page is set as home — the tap list unless you change it
 
 | Page | Description |
 |---|---|
-| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the linked keg's name, what is left and its temperature in the chosen display units, and a keg graphic filled to the percentage remaining. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. Live clock, WebSocket updates, and a full reload every minute. |
+| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the linked keg's name, what is left and its temperature in the chosen display units, and a keg graphic filled to the percentage remaining in the drink's colour; clear drinks are drawn as a faint tint. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. Live clock, WebSocket updates, and a full reload every minute. |
 | `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
-| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details, the keg the tap draws from, its handle image and an open-tap display id. Fields can be auto-filled from the beverage library, and the kegged date is written to the device. |
-| `/beverages.html` | **Beverage Library** — reusable beer records, including gravities, SRM and where the recipe came from, to load into a tap later. ABV is worked out from OG and FG when it is not given. |
+| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the keg the tap draws from, its handle image and an open-tap display id. Fields can be auto-filled from the beverage library, and the kegged date is written to the device. |
+| `/beverages.html` | **Beverage Library** — reusable beer records, including gravities, colour (SRM or a named colour) and where the recipe came from, to load into a tap later. ABV is worked out from OG and FG when it is not given. |
 | `/tap-handles.html` | **Tap Handles** — upload and delete the artwork served to open-tap displays. Each image must be a JPEG of exactly 200×200 pixels. |
 | `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), a full-page background image with an adjustable dark overlay, which page is home, and a 12- or 24-hour clock. |
 
@@ -226,7 +226,9 @@ A tap body takes these fields, all optional:
 | `tap_number` | number | Orders the tap list; `null` sorts last. Rewritten by `/api/taps/order` |
 | `name`, `brewery`, `style` | string | |
 | `abv`, `ibu` | number | |
-| `color` | string | Accent for the tap card; defaults to `#c9a849` |
+| `srm` | number | Beer colour; the tap list fills the keg graphic in it. Must not be negative |
+| `color_preset` | string | A named colour for drinks SRM cannot describe: `clear`, `pink`, `red`, `purple`, `green` or `blue`. Set this or `srm`, not both |
+| `color` | string | Colour from before `srm` existed, used only when neither `srm` nor `color_preset` is set; defaults to `#c9a849` |
 | `description`, `tasting_notes` | string | |
 | `expiration_date` | string | Shown as given; not parsed |
 | `keg_id` | string | The keg this tap draws from, so the card can show what is left |
@@ -250,9 +252,11 @@ back on later.
 |---|---|---|
 | `name`, `brewery`, `style` | string | |
 | `abv`, `ibu` | number | `abv` is estimated from `og` and `fg` when omitted |
-| `color` | string | |
+| `color` | string | Colour from before `srm` existed, used only when neither `srm` nor `color_preset` is set |
 | `description`, `tasting_notes` | string | |
-| `og`, `fg`, `srm` | number | |
+| `og`, `fg` | number | |
+| `srm` | number | Beer colour, copied to a tap loaded from this beverage. Must not be negative |
+| `color_preset` | string | As for taps; set this or `srm`, not both |
 | `source` | string | Where the recipe came from |
 
 ### Tap handles

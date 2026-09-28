@@ -19,12 +19,6 @@
     .bev-list-left { display: flex; align-items: center; gap: 0.6rem; }
     .bev-list-name { font-weight: 600; }
     .bev-list-meta { font-size: 0.8rem; color: #888; }
-    .color-swatches { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
-    .swatch {
-      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
-      border: 2px solid transparent; transition: border-color 0.15s, transform 0.15s;
-    }
-    .swatch:hover, .swatch.active { border-color: white; transform: scale(1.15); }
     .batch-table tr:hover td { background: rgba(255,255,255,0.04); }
   </style>
 </head>
@@ -137,11 +131,9 @@
           </div>
 
           <div class="field">
-            <label class="label">Beer Color</label>
-            <div class="control">
-              <input class="input" type="text" id="bevColor" placeholder="#f5a623" style="max-width:180px;" />
-            </div>
-            <div class="color-swatches" id="colorSwatches"></div>
+            <label class="label">Colour</label>
+            <div id="colorField"></div>
+            <p class="help">Copied to a tap loaded from this beverage.</p>
           </div>
 
           <div class="field">
@@ -195,6 +187,7 @@
 
   <div id="toast" class="notification toast is-hidden"></div>
 
+  <script src="/beer-color.js"></script>
   <script>
     document.querySelectorAll('.navbar-burger').forEach(el =>
       el.addEventListener('click', () => {
@@ -211,16 +204,6 @@
         document.getElementById('configureDropdown')?.classList.remove('is-open');
     });
 
-    const SWATCHES = [
-      '#f5e642','#f5a623','#e8721a','#c0531a','#8b3a0f',
-      '#e8c96a','#d4a843','#b08a30','#7a5c18','#4a3010',
-      '#6fb8d4','#4a90d9','#2d5fa3','#1a3a6b',
-      '#7bc47b','#4a9e4a','#2d6b2d',
-      '#e87070','#c0404a','#8b1a24',
-      '#3a2a1a','#241810','#0a0808',
-      '#f0f0f0','#c8c8d8',
-    ];
-
     let currentId = null;
     let allBeverages = [];
 
@@ -230,33 +213,6 @@
       t.className = `notification toast is-${type}`;
       setTimeout(() => t.classList.add('is-hidden'), 3000);
     }
-
-    function initSwatches() {
-      const container = document.getElementById('colorSwatches');
-      container.innerHTML = '';
-      SWATCHES.forEach(c => {
-        const s = document.createElement('div');
-        s.className = 'swatch';
-        s.style.background = c;
-        s.title = c;
-        s.onclick = () => {
-          document.getElementById('bevColor').value = c;
-          document.querySelectorAll('.swatch').forEach(x => x.classList.remove('active'));
-          s.classList.add('active');
-        };
-        container.appendChild(s);
-      });
-    }
-
-    function updateActiveSwatch(color) {
-      document.querySelectorAll('.swatch').forEach(s =>
-        s.classList.toggle('active', s.title === color)
-      );
-    }
-
-    document.addEventListener('input', ev => {
-      if (ev.target.id === 'bevColor') updateActiveSwatch(ev.target.value);
-    });
 
     async function loadBeverages() {
       const res = await fetch('/api/beverages');
@@ -290,7 +246,7 @@
         item.onclick = () => editBeverage(bev.id);
         item.innerHTML = `
           <div class="bev-list-left">
-            <div class="bev-color-dot" style="background:${bev.color || '#c9a849'};"></div>
+            <div class="bev-color-dot" style="background:${beerColor(bev)};"></div>
             <div>
               <div class="bev-list-name">${bev.name || 'Unnamed'}</div>
               <div class="bev-list-meta">${bev.style || ''}${bev.abv ? ' · '+bev.abv+'%' : ''}</div>
@@ -304,7 +260,7 @@
       currentId = 'bev_' + Date.now().toString(16);
       openForm({
         id: currentId, name: '', brewery: '', style: '', abv: '', ibu: '',
-        color: '#c9a849', description: '', tasting_notes: '', og: '', fg: '', source: 'manual'
+        srm: null, color_preset: '', description: '', tasting_notes: '', og: '', fg: '', source: 'manual'
       });
     }
 
@@ -325,13 +281,12 @@
       document.getElementById('bevStyle').value        = bev.style || '';
       document.getElementById('bevAbv').value          = bev.abv || '';
       document.getElementById('bevIbu').value          = bev.ibu || '';
-      document.getElementById('bevColor').value        = bev.color || '#c9a849';
       document.getElementById('bevDescription').value  = bev.description || '';
       document.getElementById('bevTastingNotes').value = bev.tasting_notes || '';
       document.getElementById('bevOg').value           = bev.og || '';
       document.getElementById('bevFg').value           = bev.fg || '';
 
-      updateActiveSwatch(bev.color || '#c9a849');
+      color.set(bev);
 
       // If ABV is empty, compute it from OG+FG automatically.
       if (!document.getElementById('bevAbv').value.trim()) {
@@ -384,7 +339,10 @@
         style:         document.getElementById('bevStyle').value.trim(),
         abv:           document.getElementById('bevAbv').value.trim(),
         ibu:           document.getElementById('bevIbu').value.trim(),
-        color:         document.getElementById('bevColor').value.trim() || '#c9a849',
+        ...color.value(),
+        // Kept so a beverage saved before SRM existed keeps its colour until
+        // an SRM is entered.
+        color:         allBeverages.find(b => b.id === currentId)?.color || '',
         description:   document.getElementById('bevDescription').value.trim(),
         tasting_notes: document.getElementById('bevTastingNotes').value.trim(),
         og:            document.getElementById('bevOg').value.trim(),
@@ -424,8 +382,7 @@
       }
     }
 
-
-    initSwatches();
+    const color = colorPicker(document.getElementById('colorField'));
     loadBeverages();
   </script>
 </body>

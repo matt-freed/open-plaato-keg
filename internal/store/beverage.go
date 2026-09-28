@@ -20,17 +20,20 @@ type Beverage struct {
 	OG           *float64 `json:"og"`
 	FG           *float64 `json:"fg"`
 	SRM          *float64 `json:"srm"`
-	Source       string   `json:"source"`
-	CreatedAt    int64    `json:"created_at"`
+	// ColorPreset names a colour for drinks SRM cannot describe; at most one
+	// of SRM and ColorPreset is set.
+	ColorPreset string `json:"color_preset"`
+	Source      string `json:"source"`
+	CreatedAt   int64  `json:"created_at"`
 }
 
 const beverageColumns = `id, name, brewery, style, abv, ibu, color, description,
-	tasting_notes, og, fg, srm, source, created_at`
+	tasting_notes, og, fg, srm, color_preset, source, created_at`
 
 func scanBeverage(row interface{ Scan(...any) error }) (*Beverage, error) {
 	b := &Beverage{}
 	err := row.Scan(&b.ID, &b.Name, &b.Brewery, &b.Style, &b.ABV, &b.IBU, &b.Color,
-		&b.Description, &b.TastingNotes, &b.OG, &b.FG, &b.SRM, &b.Source, &b.CreatedAt)
+		&b.Description, &b.TastingNotes, &b.OG, &b.FG, &b.SRM, &b.ColorPreset, &b.Source, &b.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -71,9 +74,9 @@ func (s *Store) SaveBeverage(b *Beverage) error {
 		b.Source = "manual"
 	}
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO beverages (`+beverageColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		b.ID, b.Name, b.Brewery, b.Style, b.ABV, b.IBU, b.Color, b.Description,
-		b.TastingNotes, b.OG, b.FG, b.SRM, b.Source, b.CreatedAt)
+		b.TastingNotes, b.OG, b.FG, b.SRM, b.ColorPreset, b.Source, b.CreatedAt)
 	return err
 }
 

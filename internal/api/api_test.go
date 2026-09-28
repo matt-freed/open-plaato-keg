@@ -469,6 +469,68 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
+func TestTapSRM(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Stout", "srm": "38"})
+	assertStatus(t, rec, http.StatusOK)
+	var created struct {
+		Tap store.Tap `json:"tap"`
+	}
+	a.decode(rec, &created)
+	if created.Tap.SRM == nil || *created.Tap.SRM != 38 {
+		t.Errorf("SRM = %v, want 38", created.Tap.SRM)
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Oops", "srm": -1})
+	assertStatus(t, rec, http.StatusBadRequest)
+}
+
+// A drink's colour is an SRM or a named preset, never both.
+func TestColorPresetValidation(t *testing.T) {
+	a := newTestAPI(t)
+	for _, path := range []string{"/api/taps/new", "/api/beverages/new"} {
+		rec := a.do(http.MethodPost, path, map[string]any{"name": "Water", "color_preset": "clear"})
+		assertStatus(t, rec, http.StatusOK)
+		var created struct {
+			Tap, Beverage *struct {
+				SRM         *float64 `json:"srm"`
+				ColorPreset string   `json:"color_preset"`
+			}
+		}
+		a.decode(rec, &created)
+		saved := created.Tap
+		if saved == nil {
+			saved = created.Beverage
+		}
+		if saved == nil || saved.ColorPreset != "clear" || saved.SRM != nil {
+			t.Errorf("%s: saved %+v", path, saved)
+		}
+
+		rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "chartreuse"})
+		assertStatus(t, rec, http.StatusBadRequest)
+		rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "pink", "srm": 4})
+		assertStatus(t, rec, http.StatusBadRequest)
+	}
+}
+
+func TestBeverageSRM(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/beverages/new", map[string]any{"name": "Dunkel", "srm": "20"})
+	assertStatus(t, rec, http.StatusOK)
+	var created struct {
+		Beverage store.Beverage `json:"beverage"`
+	}
+	a.decode(rec, &created)
+	if created.Beverage.SRM == nil || *created.Beverage.SRM != 20 {
+		t.Errorf("SRM = %v, want 20", created.Beverage.SRM)
+	}
+
+	rec = a.do(http.MethodPost, "/api/beverages/new", map[string]any{"name": "Oops", "srm": -3})
+	assertStatus(t, rec, http.StatusBadRequest)
+}
+
 func TestTapOrder(t *testing.T) {
 	a := newTestAPI(t)
 	for _, id := range []string{"a", "b", "c"} {

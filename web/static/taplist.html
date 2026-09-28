@@ -256,6 +256,10 @@
     }
     .tile-keg svg { display: block; width: 100%; height: auto; overflow: visible; }
     .liquid { transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+    /* A clear drink such as sparkling water is a faint tint, so the level
+       shows as its surface line rather than as a block of colour. */
+    .tile.is-clear .liquid-fill { opacity: 0.2; }
+    .tile.is-clear .liquid-surface { fill-opacity: 0.85; }
     .pct {
       min-height: 1.1em;
       font-size: 0.85rem;
@@ -310,6 +314,7 @@
     <div class="grid" id="grid"></div>
   </main>
 
+  <script src="/beer-color.js"></script>
   <script>
     'use strict';
 
@@ -378,8 +383,8 @@
 
   <g clip-path="url(#kb${n})">
     <g class="liquid" style="transform: translateY(${BODY_H}px)">
-      <rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" fill="url(#kl${n})"/>
-      <rect x="19" y="${BODY_TOP}" width="82" height="3" fill="#fff" fill-opacity="0.55"/>
+      <rect class="liquid-fill" x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" fill="url(#kl${n})"/>
+      <rect class="liquid-surface" x="19" y="${BODY_TOP}" width="82" height="3" fill="#fff" fill-opacity="0.55"/>
     </g>
     <rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" fill="url(#ks${n})"/>
   </g>
@@ -442,7 +447,8 @@
     // updateTile rewrites a tile in place, so the liquid level animates and
     // a tile being dragged is not replaced under the pointer.
     function updateTile(tile, tap, keg) {
-      tile.style.setProperty('--accent', tap.color || '#c9a849');
+      tile.style.setProperty('--accent', beerColor(tap));
+      tile.classList.toggle('is-clear', isClear(tap));
 
       // Readings arrive converted into the chosen display units; the raw
       // fields are only a fallback for a keg that has no display block.
@@ -722,7 +728,7 @@
     // Clearing the inline style drops the per-tap colour; put it back.
     function updateTileAccent(tile) {
       const tap = taps.find(t => t.id === tile.dataset.tapId);
-      if (tap) tile.style.setProperty('--accent', tap.color || '#c9a849');
+      if (tap) tile.style.setProperty('--accent', beerColor(tap));
     }
 
     async function saveOrder(order) {

@@ -16,16 +16,23 @@ const DeviceIDMaxLen = 6
 type Tap struct {
 	ID string `json:"id"`
 	// TapNumber orders the tap list; nil sorts last.
-	TapNumber      *int     `json:"tap_number"`
-	Name           string   `json:"name"`
-	Brewery        string   `json:"brewery"`
-	Style          string   `json:"style"`
-	ABV            *float64 `json:"abv"`
-	IBU            *float64 `json:"ibu"`
-	Color          string   `json:"color"`
-	Description    string   `json:"description"`
-	TastingNotes   string   `json:"tasting_notes"`
-	ExpirationDate string   `json:"expiration_date"`
+	TapNumber *int     `json:"tap_number"`
+	Name      string   `json:"name"`
+	Brewery   string   `json:"brewery"`
+	Style     string   `json:"style"`
+	ABV       *float64 `json:"abv"`
+	IBU       *float64 `json:"ibu"`
+	// SRM is the beer's colour; the tap list draws the keg in it.
+	SRM *float64 `json:"srm"`
+	// ColorPreset names a colour for drinks SRM cannot describe. At most one of
+	// SRM and ColorPreset is set.
+	ColorPreset string `json:"color_preset"`
+	// Color is the hand-picked accent from before SRM existed, used only when
+	// neither SRM nor ColorPreset is set.
+	Color          string `json:"color"`
+	Description    string `json:"description"`
+	TastingNotes   string `json:"tasting_notes"`
+	ExpirationDate string `json:"expiration_date"`
 	// KegID links the tap to a keg, so the tap list can show what is left.
 	KegID string `json:"keg_id"`
 	// HandleImage is the filename of an uploaded tap handle image.
@@ -34,16 +41,31 @@ type Tap struct {
 	DeviceID string `json:"device_id"`
 }
 
+// ColorPresets are the named colours offered beside SRM, for drinks the SRM
+// scale cannot describe. The UI decides how each is drawn.
+var ColorPresets = []string{"clear", "pink", "red", "purple", "green", "blue"}
+
+// IsColorPreset reports whether name is one of ColorPresets. The empty string
+// means no preset and is not one.
+func IsColorPreset(name string) bool {
+	for _, p := range ColorPresets {
+		if p == name {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultTapColor is the accent used when a tap has no colour set.
 const DefaultTapColor = "#c9a849"
 
-const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, color,
+const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, srm, color_preset, color,
 	description, tasting_notes, expiration_date, keg_id, handle_image, device_id`
 
 func scanTap(row interface{ Scan(...any) error }) (*Tap, error) {
 	t := &Tap{}
 	err := row.Scan(&t.ID, &t.TapNumber, &t.Name, &t.Brewery, &t.Style, &t.ABV, &t.IBU,
-		&t.Color, &t.Description, &t.TastingNotes, &t.ExpirationDate, &t.KegID,
+		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.ExpirationDate, &t.KegID,
 		&t.HandleImage, &t.DeviceID)
 	if err != nil {
 		return nil, err
@@ -105,8 +127,8 @@ func (s *Store) SaveTap(t *Tap) error {
 		t.DeviceID = t.DeviceID[:DeviceIDMaxLen]
 	}
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.Color,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
 		t.Description, t.TastingNotes, t.ExpirationDate, t.KegID, t.HandleImage, t.DeviceID)
 	return err
 }

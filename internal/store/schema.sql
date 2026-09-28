@@ -82,6 +82,14 @@ CREATE TABLE IF NOT EXISTS taps (
     style           TEXT NOT NULL DEFAULT '',
     abv             REAL,
     ibu             REAL,
+    -- Beer colour in SRM; the tap list renders the keg in this colour. Added
+    -- after release, so migrate() adds it to older databases.
+    srm             REAL,
+    -- A named colour (see ColorPresets) for drinks SRM cannot describe, such as
+    -- sparkling water. At most one of srm and color_preset is set.
+    color_preset    TEXT NOT NULL DEFAULT '',
+    -- Superseded by srm and color_preset; still the fallback for taps saved
+    -- before they existed.
     color           TEXT NOT NULL DEFAULT '#c9a849',
     description     TEXT NOT NULL DEFAULT '',
     tasting_notes   TEXT NOT NULL DEFAULT '',
@@ -107,6 +115,7 @@ CREATE TABLE IF NOT EXISTS beverages (
     og            REAL,
     fg            REAL,
     srm           REAL,
+    color_preset  TEXT    NOT NULL DEFAULT '',
     source        TEXT    NOT NULL DEFAULT 'manual',
     created_at    INTEGER NOT NULL DEFAULT 0
 );

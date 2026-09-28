@@ -61,7 +61,9 @@ docs/              this documentation
    silently defaulted, as is enabling BarHelper without an API key.
 3. **Database** — `store.Open()` creates the data directory, opens SQLite in WAL
    mode with a single connection, and applies the embedded `schema.sql`
-   (`CREATE … IF NOT EXISTS`, so it is idempotent).
+   (`CREATE … IF NOT EXISTS`, so it is idempotent). Because that leaves an
+   existing table untouched, `migrate` then adds any column listed in
+   `addedColumns` (`store.go`) that an older database lacks.
 4. **Shutdown context** — `signal.NotifyContext` cancels `ctx` on SIGINT or
    SIGTERM. The Dockerfile uses an exec-form `ENTRYPOINT`, so the binary is PID 1
    and receives `docker stop`'s SIGTERM directly.
@@ -278,6 +280,12 @@ browsers update.
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the dashboard (`index.html`), tap list,
 scale setup, history, beverages, tap handles and their setup pages.
+`beer-color.js` is the one shared script. A drink's colour is either an SRM or
+one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
+green, blue) for drinks the SRM scale cannot describe; the API rejects both at
+once. The script turns either into a colour for the tap list, which draws
+`clear` as a faint tint, and builds the colour picker used by the tap editor and
+the beverage library.
 
 ### Display units
 
