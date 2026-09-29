@@ -116,10 +116,22 @@
             </div>
           </div>
 
-          <div class="field">
-            <label class="label">Brewery</label>
-            <div class="control">
-              <input class="input" type="text" id="breweryName" placeholder="e.g. Home Brew Co." />
+          <div class="columns">
+            <div class="column">
+              <div class="field">
+                <label class="label">Brewery</label>
+                <div class="control">
+                  <input class="input" type="text" id="breweryName" placeholder="e.g. Home Brew Co." />
+                </div>
+              </div>
+            </div>
+            <div class="column is-4">
+              <div class="field">
+                <label class="label">Date Kegged</label>
+                <div class="control">
+                  <input class="input" type="date" id="kegDate" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -183,27 +195,6 @@
                 <select id="linkedKeg">
                   <option value="">No sensor linked</option>
                 </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="columns">
-            <div class="column">
-              <div class="field">
-                <label class="label">Date Kegged</label>
-                <p class="help" id="kegDateHelp">Link a keg sensor to load and save this using the existing keg date setting.</p>
-                <div class="control">
-                  <input class="input" type="text" id="kegDate" placeholder="e.g. 25.03.2025" />
-                </div>
-              </div>
-            </div>
-            <div class="column">
-              <div class="field">
-                <label class="label">Expiration Date</label>
-                <p class="help">Stored with this tap configuration.</p>
-                <div class="control">
-                  <input class="input" type="text" id="expirationDate" placeholder="e.g. 25.05.2025" />
-                </div>
               </div>
             </div>
           </div>
@@ -304,12 +295,6 @@
       if (ev.target.id === 'deviceId') updateDeviceIdCallout(ev.target.value);
     });
 
-    document.addEventListener('change', ev => {
-      if (ev.target.id === 'linkedKeg') {
-        loadLinkedKegDate(ev.target.value);
-      }
-    });
-
     // ── Handle image preview ──────────────────────
     document.addEventListener('change', ev => {
       if (ev.target.id === 'handleImage') {
@@ -374,50 +359,6 @@
       showToast('Loaded from beverage library', 'success');
     }
 
-    function updateKegDateFieldState(kegId) {
-      const input = document.getElementById('kegDate');
-      const help = document.getElementById('kegDateHelp');
-      if (!input || !help) return;
-
-      if (kegId) {
-        input.disabled = false;
-        help.textContent = 'Saved to the linked keg using the existing keg date endpoint.';
-      } else {
-        input.disabled = true;
-        input.value = '';
-        help.textContent = 'Link a keg sensor to load and save this using the existing keg date setting.';
-      }
-    }
-
-    async function loadLinkedKegDate(kegId) {
-      updateKegDateFieldState(kegId);
-      if (!kegId) return;
-
-      try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(kegId)}`);
-        if (!res.ok) throw new Error(await res.text());
-        const keg = await res.json();
-        document.getElementById('kegDate').value = (keg.keg_date || '').trim();
-      } catch (e) {
-        showToast('Failed to load keg date: ' + e.message, 'danger');
-      }
-    }
-
-    async function saveLinkedKegDate(kegId, value) {
-      if (!kegId) return;
-
-      const res = await fetch(`/api/kegs/${encodeURIComponent(kegId)}/date`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ value }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text);
-      }
-    }
-
     function renderTapList() {
       const container = document.getElementById('tapListContainer');
       if (!allTaps.length) {
@@ -478,7 +419,7 @@
         tap_number: maxNum + 1,
         name: '', brewery: '', style: '', abv: '', ibu: '',
         srm: null, color_preset: '', description: '', tasting_notes: '',
-        keg_id: '', handle_image: '', device_id: '', expiration_date: ''
+        keg_id: '', handle_image: '', device_id: '', kegged_date: ''
       });
     }
 
@@ -506,11 +447,10 @@
       document.getElementById('beerDescription').value = tap.description || '';
       document.getElementById('tastingNotes').value = tap.tasting_notes || '';
       document.getElementById('linkedKeg').value    = tap.keg_id || '';
-      document.getElementById('expirationDate').value = tap.expiration_date || '';
+      document.getElementById('kegDate').value      = tap.kegged_date || '';
       document.getElementById('handleImage').value  = tap.handle_image || '';
       document.getElementById('deviceId').value     = tap.device_id || '';
       updateDeviceIdCallout(tap.device_id || '');
-      loadLinkedKegDate(tap.keg_id || '');
 
       color.set(tap);
 
@@ -550,16 +490,13 @@
         color:         allTaps.find(t => t.id === currentTapId)?.color || '',
         description:   document.getElementById('beerDescription').value.trim(),
         tasting_notes: document.getElementById('tastingNotes').value.trim(),
-        expiration_date: document.getElementById('expirationDate').value.trim(),
+        kegged_date:   document.getElementById('kegDate').value,
         keg_id:        document.getElementById('linkedKeg').value || null,
         handle_image:  document.getElementById('handleImage').value || null,
         device_id:     document.getElementById('deviceId').value.trim().slice(0, 6) || null,
       };
 
       try {
-        if (body.keg_id) {
-          await saveLinkedKegDate(body.keg_id, document.getElementById('kegDate').value.trim());
-        }
         const res = await fetch(`/api/taps/${currentTapId}`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -594,7 +531,6 @@
     }
 
     const color = colorPicker(document.getElementById('colorField'));
-    updateKegDateFieldState('');
     loadAll();
   </script>
 </body>

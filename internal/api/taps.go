@@ -12,21 +12,21 @@ import (
 )
 
 type tapRequest struct {
-	TapNumber      *int           `json:"tap_number"`
-	Name           string         `json:"name"`
-	Brewery        string         `json:"brewery"`
-	Style          string         `json:"style"`
-	ABV            numberOrString `json:"abv"`
-	IBU            numberOrString `json:"ibu"`
-	SRM            numberOrString `json:"srm"`
-	ColorPreset    string         `json:"color_preset"`
-	Color          string         `json:"color"`
-	Description    string         `json:"description"`
-	TastingNotes   string         `json:"tasting_notes"`
-	ExpirationDate string         `json:"expiration_date"`
-	KegID          string         `json:"keg_id"`
-	HandleImage    string         `json:"handle_image"`
-	DeviceID       string         `json:"device_id"`
+	TapNumber    *int           `json:"tap_number"`
+	Name         string         `json:"name"`
+	Brewery      string         `json:"brewery"`
+	Style        string         `json:"style"`
+	ABV          numberOrString `json:"abv"`
+	IBU          numberOrString `json:"ibu"`
+	SRM          numberOrString `json:"srm"`
+	ColorPreset  string         `json:"color_preset"`
+	Color        string         `json:"color"`
+	Description  string         `json:"description"`
+	TastingNotes string         `json:"tasting_notes"`
+	KeggedDate   string         `json:"kegged_date"`
+	KegID        string         `json:"keg_id"`
+	HandleImage  string         `json:"handle_image"`
+	DeviceID     string         `json:"device_id"`
 }
 
 func (s *Server) handleListTaps(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +57,11 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 	if !validBeerColor(w, req.SRM, preset) {
 		return
 	}
+	keggedDate, err := store.NormalizeDate(req.KeggedDate, store.DateLayout)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_value", "kegged_date: "+err.Error())
+		return
+	}
 
 	id := chi.URLParam(r, "id")
 	// The UI posts "new" for a tap that does not exist yet.
@@ -65,22 +70,22 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tap := &store.Tap{
-		ID:             id,
-		TapNumber:      req.TapNumber,
-		Name:           strings.TrimSpace(req.Name),
-		Brewery:        strings.TrimSpace(req.Brewery),
-		Style:          strings.TrimSpace(req.Style),
-		ABV:            req.ABV.Ptr(),
-		IBU:            req.IBU.Ptr(),
-		SRM:            req.SRM.Ptr(),
-		ColorPreset:    preset,
-		Color:          strings.TrimSpace(req.Color),
-		Description:    strings.TrimSpace(req.Description),
-		TastingNotes:   strings.TrimSpace(req.TastingNotes),
-		ExpirationDate: strings.TrimSpace(req.ExpirationDate),
-		KegID:          strings.TrimSpace(req.KegID),
-		HandleImage:    strings.TrimSpace(req.HandleImage),
-		DeviceID:       strings.TrimSpace(req.DeviceID),
+		ID:           id,
+		TapNumber:    req.TapNumber,
+		Name:         strings.TrimSpace(req.Name),
+		Brewery:      strings.TrimSpace(req.Brewery),
+		Style:        strings.TrimSpace(req.Style),
+		ABV:          req.ABV.Ptr(),
+		IBU:          req.IBU.Ptr(),
+		SRM:          req.SRM.Ptr(),
+		ColorPreset:  preset,
+		Color:        strings.TrimSpace(req.Color),
+		Description:  strings.TrimSpace(req.Description),
+		TastingNotes: strings.TrimSpace(req.TastingNotes),
+		KeggedDate:   keggedDate,
+		KegID:        strings.TrimSpace(req.KegID),
+		HandleImage:  strings.TrimSpace(req.HandleImage),
+		DeviceID:     strings.TrimSpace(req.DeviceID),
 	}
 	if err := s.store.SaveTap(tap); err != nil {
 		writeStoreError(w, err, "tap")

@@ -214,8 +214,9 @@
 
     .readings {
       display: flex;
+      flex-wrap: wrap;
       align-items: flex-end;
-      gap: 1.75rem;
+      gap: 0.9rem 1.6rem;
       margin-top: auto;
       padding-top: 1.1rem;
     }
@@ -235,7 +236,9 @@
       color: var(--muted);
       letter-spacing: 0;
     }
-    .reading.temp .reading-value { font-size: 1.35rem; }
+    .reading.temp .reading-value,
+    .reading.age .reading-value { font-size: 1.35rem; }
+    .reading.age .reading-value { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
     .reading-label {
       font-size: 0.7rem;
       font-weight: 600;
@@ -416,6 +419,43 @@
       return Number.isFinite(v) ? v.toFixed(digits) : null;
     }
 
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    // parseIsoDate reads a tap's kegged date, which the server always stores
+    // as YYYY-MM-DD, as local midnight. new Date('2026-09-03') would read it
+    // as UTC, a day early anywhere west of Greenwich.
+    function parseIsoDate(text) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text || '');
+      return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+    }
+
+    // kegAge describes how long ago a tap was kegged, as the reading's value
+    // and label, or null when it has no kegged date.
+    function kegAge(text) {
+      const date = parseIsoDate(text);
+      if (!date) return null;
+
+      const now = new Date();
+      // Counted in calendar days, via UTC so a daylight-saving change cannot
+      // make a day 23 or 25 hours long.
+      const days = Math.round(
+        (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+         Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) / DAY_MS);
+
+      // The year only matters for a date long enough ago to be ambiguous; left
+      // off otherwise, it keeps a December keg read in January to "Dec 20"
+      // and the label short enough to share the row.
+      const opts = { month: 'short', day: 'numeric' };
+      if (Math.abs(days) > 180) opts.year = 'numeric';
+      const label = 'Kegged ' + date.toLocaleDateString([], opts);
+
+      let value;
+      if (days === 0) value = 'Today';
+      else if (days > 0) value = days === 1 ? '1 day' : `${days} days`;
+      else value = days === -1 ? 'in 1 day' : `in ${-days} days`;
+      return { value, label };
+    }
+
     function trimNum(v) {
       // ABV and IBU are entered by hand; show them as typed, without a
       // trailing ".0".
@@ -474,7 +514,7 @@
       ].filter(Boolean).join('');
       tile.querySelector('.specs').innerHTML = specs;
 
-      let readings;
+      let readings = '';
       if (!tap.keg_id) {
         readings = '<span class="no-keg">No keg linked</span>';
       } else if (!keg) {
@@ -488,6 +528,15 @@
           <div class="reading temp">
             <span class="reading-value">${num(temp, 1) ?? '—'}<small>${esc(tempUnit)}</small></span>
             <span class="reading-label">Temp</span>
+          </div>`;
+      }
+      // The kegged date belongs to the tap, so it shows with or without a keg.
+      const age = kegAge(tap.kegged_date);
+      if (age) {
+        readings += `
+          <div class="reading age">
+            <span class="reading-value">${esc(age.value)}</span>
+            <span class="reading-label">${esc(age.label)}</span>
           </div>`;
       }
       tile.querySelector('.readings').innerHTML = readings;

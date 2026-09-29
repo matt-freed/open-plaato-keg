@@ -5,8 +5,8 @@
 -- added automatically (store.addMissingColumns). A column added to an existing
 -- table must therefore be one SQLite can add: nullable or with a constant
 -- DEFAULT, not part of the primary key, and without UNIQUE, CHECK or
--- REFERENCES, which are not carried over. Renames, type changes and backfills
--- still need a hand-written migration.
+-- REFERENCES, which are not carried over. Renames, type changes, drops and
+-- backfills still need a hand-written migration.
 
 CREATE TABLE IF NOT EXISTS kegs (
     id                        TEXT PRIMARY KEY,
@@ -100,7 +100,9 @@ CREATE TABLE IF NOT EXISTS taps (
     color           TEXT NOT NULL DEFAULT '#c9a849',
     description     TEXT NOT NULL DEFAULT '',
     tasting_notes   TEXT NOT NULL DEFAULT '',
-    expiration_date TEXT NOT NULL DEFAULT '',
+    -- When the beer was kegged, as YYYY-MM-DD, or ''. Held on the tap; the
+    -- keg's own keg_date is not used for it.
+    kegged_date     TEXT NOT NULL DEFAULT '',
     keg_id          TEXT NOT NULL DEFAULT '',
     handle_image    TEXT NOT NULL DEFAULT '',
     -- Identifier reported by an open-tap ESP32 display; at most 6 characters.

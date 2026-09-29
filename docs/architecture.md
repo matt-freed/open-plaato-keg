@@ -66,7 +66,7 @@ docs/              this documentation
    builds the schema in a scratch in-memory database, compares each existing
    table's columns with it, and adds whatever is missing in one transaction.
    `schema.sql` is therefore the only place a column is declared. This covers
-   additions only; a rename, type change or backfill needs a hand-written
+   additions only; a rename, type change, drop or backfill needs a hand-written
    migration, and a column SQLite cannot add (NOT NULL without a default, or a
    primary key) stops startup with an error naming it.
 4. **Shutdown context** — `signal.NotifyContext` cancels `ctx` on SIGINT or

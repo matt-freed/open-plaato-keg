@@ -29,10 +29,11 @@ type Tap struct {
 	ColorPreset string `json:"color_preset"`
 	// Color is the hand-picked accent from before SRM existed, used only when
 	// neither SRM nor ColorPreset is set.
-	Color          string `json:"color"`
-	Description    string `json:"description"`
-	TastingNotes   string `json:"tasting_notes"`
-	ExpirationDate string `json:"expiration_date"`
+	Color        string `json:"color"`
+	Description  string `json:"description"`
+	TastingNotes string `json:"tasting_notes"`
+	// KeggedDate is when the beer was kegged, as DateLayout, or "".
+	KeggedDate string `json:"kegged_date"`
 	// KegID links the tap to a keg, so the tap list can show what is left.
 	KegID string `json:"keg_id"`
 	// HandleImage is the filename of an uploaded tap handle image.
@@ -60,12 +61,12 @@ func IsColorPreset(name string) bool {
 const DefaultTapColor = "#c9a849"
 
 const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, srm, color_preset, color,
-	description, tasting_notes, expiration_date, keg_id, handle_image, device_id`
+	description, tasting_notes, kegged_date, keg_id, handle_image, device_id`
 
 func scanTap(row interface{ Scan(...any) error }) (*Tap, error) {
 	t := &Tap{}
 	err := row.Scan(&t.ID, &t.TapNumber, &t.Name, &t.Brewery, &t.Style, &t.ABV, &t.IBU,
-		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.ExpirationDate, &t.KegID,
+		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID,
 		&t.HandleImage, &t.DeviceID)
 	if err != nil {
 		return nil, err
@@ -129,7 +130,7 @@ func (s *Store) SaveTap(t *Tap) error {
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
-		t.Description, t.TastingNotes, t.ExpirationDate, t.KegID, t.HandleImage, t.DeviceID)
+		t.Description, t.TastingNotes, t.KeggedDate, t.KegID, t.HandleImage, t.DeviceID)
 	return err
 }
 
