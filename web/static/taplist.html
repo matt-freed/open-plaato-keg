@@ -216,7 +216,7 @@
     }
     .reading { display: flex; flex-direction: column; gap: 0.15rem; }
     .reading-value {
-      font-size: 1.9rem;
+      font-size: 1.5rem;
       font-weight: 650;
       line-height: 1;
       letter-spacing: -0.02em;
@@ -230,8 +230,6 @@
       color: var(--muted);
       letter-spacing: 0;
     }
-    .reading.temp .reading-value,
-    .reading.age .reading-value { font-size: 1.35rem; }
     .reading.age .reading-value { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
     .reading-label {
       font-size: 0.7rem;
@@ -257,19 +255,30 @@
        shows as its surface line rather than as a block of colour. */
     .tile.is-clear .liquid-fill { opacity: 0.2; }
     .tile.is-clear .liquid-surface { fill-opacity: 0.85; }
-    .pct {
-      min-height: 1.1em;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--muted);
+    /* What is left sits under the keg it describes. */
+    .keg-amount {
+      /* Held open with no keg linked, so kegs in a row stay level. */
+      min-height: 1.2em;
+      font-size: 1.1rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .keg-amount small {
+      margin-left: 0.15rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
     }
 
     @media (max-width: 640px) {
       .bar { flex-wrap: wrap; }
       .tile { padding: 1.2rem 1rem 1.1rem 1.2rem; min-height: 190px; }
       .tile-keg { width: 68px; }
-      .reading-value { font-size: 1.6rem; }
+      .reading-value { font-size: 1.35rem; }
+      .keg-amount { font-size: 1rem; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -460,7 +469,7 @@
         </div>
         <div class="tile-keg">
           ${kegSvg()}
-          <span class="pct"></span>
+          <span class="keg-amount"></span>
         </div>`;
       return tile;
     }
@@ -502,10 +511,6 @@
         readings = '<span class="no-keg">Waiting for the scale…</span>';
       } else {
         readings = `
-          <div class="reading amount">
-            <span class="reading-value">${num(amount, 1) ?? '—'}<small>${esc(unit)}</small></span>
-            <span class="reading-label">Remaining</span>
-          </div>
           <div class="reading temp">
             <span class="reading-value">${num(temp, 1) ?? '—'}<small>${esc(tempUnit)}</small></span>
             <span class="reading-label">Temp</span>
@@ -522,7 +527,8 @@
       }
       tile.querySelector('.readings').innerHTML = readings;
 
-      tile.querySelector('.pct').textContent = pct !== null ? Math.round(pct) + '%' : '';
+      tile.querySelector('.keg-amount').innerHTML =
+        keg ? `${num(amount, 1) ?? '—'}<small>${esc(unit)}</small>` : '';
       tile.querySelector('.liquid').style.transform =
         `translateY(${BODY_H * (1 - (pct ?? 0) / 100)}px)`;
     }
