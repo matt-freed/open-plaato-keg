@@ -194,6 +194,20 @@
       color: var(--muted);
     }
     .specs:empty { display: none; }
+    /* Kept to two lines so one long description cannot stretch its whole row;
+       the full text is in the tooltip. */
+    .desc {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      overflow: hidden;
+      margin-top: 0.45rem;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .desc:empty { display: none; }
     .specs .style { color: var(--text); opacity: 0.85; }
     .specs span + span::before {
       content: "";
@@ -465,6 +479,7 @@
           </div>
           <h2 class="beer"></h2>
           <div class="specs"></div>
+          <p class="desc"></p>
           <div class="readings"></div>
         </div>
         <div class="tile-keg">
@@ -503,6 +518,10 @@
         trimNum(tap.ibu) && `<span>${trimNum(tap.ibu)} IBU</span>`,
       ].filter(Boolean).join('');
       tile.querySelector('.specs').innerHTML = specs;
+
+      const desc = tile.querySelector('.desc');
+      desc.textContent = tap.description || '';
+      desc.title = tap.description || '';
 
       let readings = '';
       if (!tap.keg_id) {
