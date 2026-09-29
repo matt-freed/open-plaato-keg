@@ -46,12 +46,6 @@
     }
     .bar-count { color: var(--muted); font-size: 0.95rem; }
     .bar-right { display: flex; align-items: center; gap: 1.25rem; }
-    .clock {
-      font-size: 1.15rem;
-      font-weight: 500;
-      font-variant-numeric: tabular-nums;
-      color: var(--muted);
-    }
 
     .nav { display: flex; gap: 0.25rem; align-items: center; }
     .nav a, .nav button {
@@ -273,7 +267,6 @@
 
     @media (max-width: 640px) {
       .bar { flex-wrap: wrap; }
-      .clock { display: none; }
       .tile { padding: 1.2rem 1rem 1.1rem 1.2rem; min-height: 190px; }
       .tile-keg { width: 68px; }
       .reading-value { font-size: 1.6rem; }
@@ -294,7 +287,6 @@
       <span class="bar-count" id="tapCount"></span>
     </div>
     <div class="bar-right">
-      <div class="clock" id="clock"></div>
       <nav class="nav">
         <a href="/index.html">Kegs</a>
         <a href="/history.html">History</a>
@@ -339,19 +331,6 @@
       configMenu.classList.remove('is-open');
       configToggle.setAttribute('aria-expanded', 'false');
     });
-
-    // ── Clock ──────────────────────────────────────
-    let hour12 = true;
-    function tick() {
-      document.getElementById('clock').textContent =
-        new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12 });
-    }
-    fetch('/api/config/time-format')
-      .then(r => r.json())
-      .then(d => { hour12 = d.time_format !== '24h'; tick(); })
-      .catch(() => {});
-    tick();
-    setInterval(tick, 10000);
 
     // ── Keg graphic ────────────────────────────────
     // A side view of a 5 gallon corny keg: rubber top with two hand holes,

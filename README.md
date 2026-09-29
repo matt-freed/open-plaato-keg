@@ -152,14 +152,14 @@ redirects to whichever page is set as home — the tap list unless you change it
 
 | Page | Description |
 |---|---|
-| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the linked keg's name, what is left and its temperature in the chosen display units, the tap's kegged date and how many days ago that was, and a keg graphic filled to the percentage remaining in the drink's colour; clear drinks are drawn as a faint tint. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. Live clock, WebSocket updates, and a full reload every minute. |
+| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the linked keg's name, what is left and its temperature in the chosen display units, the tap's kegged date and how many days ago that was, and a keg graphic filled to the percentage remaining in the drink's colour; clear drinks are drawn as a faint tint. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. WebSocket updates and a full reload every minute. |
 | `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
 | `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), the keg the tap draws from, its handle image and an open-tap display id. Fields can be auto-filled from the beverage library. |
 | `/beverages.html` | **Beverage Library** — reusable beer records, including gravities, colour (SRM or a named colour) and where the recipe came from, to load into a tap later. ABV is worked out from OG and FG when it is not given. |
 | `/tap-handles.html` | **Tap Handles** — upload and delete the artwork served to open-tap displays. Each image must be a JPEG of exactly 200×200 pixels. |
-| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), a full-page background image with an adjustable dark overlay, which page is home, and a 12- or 24-hour clock. |
+| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), a full-page background image with an adjustable dark overlay, which page is home, and 12- or 24-hour times. |
 
 ## API
 
@@ -277,7 +277,7 @@ be used as given in a tap's `handle_image`.
 |---|---|---|---|
 | `GET` | `/api/config` | — | Home page, clock format, display units and theme together |
 | `GET` `POST` | `/api/config/home-page` | `{"home_page": "taplist"\|"kegs"}` | Where `/` sends the browser |
-| `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | Clock and timestamps |
+| `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | How times are shown, such as on the history page |
 | `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage, BarHelper and `/get_keg` stay in the scale's own units |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
 | `POST` | `/api/uploads/background` | Multipart, field `image` | JPEG, PNG, WebP or GIF. Replaces any existing background |
