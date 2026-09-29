@@ -296,7 +296,11 @@ func (s *Server) handleSetKegDate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	date := strings.TrimSpace(req.Value)
+	date, err := store.NormalizeDate(req.Value, store.KegDateLayout)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_value", err.Error())
+		return
+	}
 
 	if _, ok := s.updateKeg(w, id, func(k *store.Keg) { k.KegDate = date }); !ok {
 		return

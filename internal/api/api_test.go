@@ -317,6 +317,32 @@ func TestEnumCommandValidation(t *testing.T) {
 }
 
 // Beer style is kept locally because the device never reports the pin back.
+// The kegged date must be a real date, and is stored day first whichever
+// accepted form it arrives in.
+func TestKegDateIsValidated(t *testing.T) {
+	a := newTestAPI(t)
+	const id = "00000000000000000000000000000001"
+	a.storeKeg(id, "vw\x0051\x001.000")
+
+	rec := a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": "2026-09-03"})
+	assertStatus(t, rec, http.StatusOK)
+	if k, _ := a.store.GetKeg(id); k.KegDate != "03.09.2026" {
+		t.Errorf("keg_date = %q, want 03.09.2026", k.KegDate)
+	}
+
+	rec = a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": "Labor Day"})
+	assertStatus(t, rec, http.StatusBadRequest)
+	if k, _ := a.store.GetKeg(id); k.KegDate != "03.09.2026" {
+		t.Errorf("keg_date = %q after a rejected value, want it unchanged", k.KegDate)
+	}
+
+	rec = a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": ""})
+	assertStatus(t, rec, http.StatusOK)
+	if k, _ := a.store.GetKeg(id); k.KegDate != "" {
+		t.Errorf("keg_date = %q, want it cleared", k.KegDate)
+	}
+}
+
 func TestBeerStyleIsStoredEvenWhenOffline(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
@@ -466,6 +492,111 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 	rec = a.do(http.MethodPost, "/api/taps/"+id+"/delete", nil)
 	assertStatus(t, rec, http.StatusOK)
 	rec = a.do(http.MethodGet, "/api/taps/"+id, nil)
+	assertStatus(t, rec, http.StatusNotFound)
+}
+
+func TestTapSRM(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Stout", "srm": "38"})
+	assertStatus(t, rec, http.StatusOK)
+	var created struct {
+		Tap store.Tap `json:"tap"`
+	}
+	a.decode(rec, &created)
+	if created.Tap.SRM == nil || *created.Tap.SRM != 38 {
+		t.Errorf("SRM = %v, want 38", created.Tap.SRM)
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Oops", "srm": -1})
+	assertStatus(t, rec, http.StatusBadRequest)
+}
+
+// A drink's colour is an SRM or a named preset, never both.
+func TestColorPresetValidation(t *testing.T) {
+	a := newTestAPI(t)
+	for _, path := range []string{"/api/taps/new", "/api/beverages/new"} {
+		rec := a.do(http.MethodPost, path, map[string]any{"name": "Water", "color_preset": "clear"})
+		assertStatus(t, rec, http.StatusOK)
+		var created struct {
+			Tap, Beverage *struct {
+				SRM         *float64 `json:"srm"`
+				ColorPreset string   `json:"color_preset"`
+			}
+		}
+		a.decode(rec, &created)
+		saved := created.Tap
+		if saved == nil {
+			saved = created.Beverage
+		}
+		if saved == nil || saved.ColorPreset != "clear" || saved.SRM != nil {
+			t.Errorf("%s: saved %+v", path, saved)
+		}
+
+		rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "chartreuse"})
+		assertStatus(t, rec, http.StatusBadRequest)
+		rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "pink", "srm": 4})
+		assertStatus(t, rec, http.StatusBadRequest)
+	}
+}
+
+func TestBeverageSRM(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/beverages/new", map[string]any{"name": "Dunkel", "srm": "20"})
+	assertStatus(t, rec, http.StatusOK)
+	var created struct {
+		Beverage store.Beverage `json:"beverage"`
+	}
+	a.decode(rec, &created)
+	if created.Beverage.SRM == nil || *created.Beverage.SRM != 20 {
+		t.Errorf("SRM = %v, want 20", created.Beverage.SRM)
+	}
+
+	rec = a.do(http.MethodPost, "/api/beverages/new", map[string]any{"name": "Oops", "srm": -3})
+	assertStatus(t, rec, http.StatusBadRequest)
+}
+
+func TestTapKeggedDate(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Stout", "kegged_date": "03.09.2026"})
+	assertStatus(t, rec, http.StatusOK)
+	var created struct {
+		Tap store.Tap `json:"tap"`
+	}
+	a.decode(rec, &created)
+	if created.Tap.KeggedDate != "2026-09-03" {
+		t.Errorf("kegged_date = %q, want it stored as 2026-09-03", created.Tap.KeggedDate)
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Oops", "kegged_date": "next Friday"})
+	assertStatus(t, rec, http.StatusBadRequest)
+}
+
+func TestTapOrder(t *testing.T) {
+	a := newTestAPI(t)
+	for _, id := range []string{"a", "b", "c"} {
+		if err := a.store.SaveTap(&store.Tap{ID: id}); err != nil {
+			t.Fatalf("SaveTap: %v", err)
+		}
+	}
+
+	rec := a.do(http.MethodPost, "/api/taps/order",
+		map[string]any{"ordered_ids": []string{"b", "c", "a"}})
+	assertStatus(t, rec, http.StatusOK)
+
+	taps, _ := a.store.ListTaps()
+	want := []string{"b", "c", "a"}
+	for i, tap := range taps {
+		if tap.ID != want[i] {
+			t.Errorf("position %d = %q, want %q", i, tap.ID, want[i])
+		}
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps/order", map[string]any{"ordered_ids": []string{}})
+	assertStatus(t, rec, http.StatusBadRequest)
+	rec = a.do(http.MethodPost, "/api/taps/order", map[string]any{"ordered_ids": []string{"nope"}})
 	assertStatus(t, rec, http.StatusNotFound)
 }
 

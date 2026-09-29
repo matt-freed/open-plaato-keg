@@ -1,4 +1,12 @@
 -- Schema for open-plaato-keg. Applied idempotently at startup.
+--
+-- This file is the only place a column is declared. When a database created
+-- by an older version is opened, any column below that its tables lack is
+-- added automatically (store.addMissingColumns). A column added to an existing
+-- table must therefore be one SQLite can add: nullable or with a constant
+-- DEFAULT, not part of the primary key, and without UNIQUE, CHECK or
+-- REFERENCES, which are not carried over. Renames, type changes, drops and
+-- backfills still need a hand-written migration.
 
 CREATE TABLE IF NOT EXISTS kegs (
     id                        TEXT PRIMARY KEY,
@@ -82,10 +90,19 @@ CREATE TABLE IF NOT EXISTS taps (
     style           TEXT NOT NULL DEFAULT '',
     abv             REAL,
     ibu             REAL,
+    -- Beer colour in SRM; the tap list renders the keg in this colour.
+    srm             REAL,
+    -- A named colour (see ColorPresets) for drinks SRM cannot describe, such as
+    -- sparkling water. At most one of srm and color_preset is set.
+    color_preset    TEXT NOT NULL DEFAULT '',
+    -- Superseded by srm and color_preset; still the fallback for taps saved
+    -- before they existed.
     color           TEXT NOT NULL DEFAULT '#c9a849',
     description     TEXT NOT NULL DEFAULT '',
     tasting_notes   TEXT NOT NULL DEFAULT '',
-    expiration_date TEXT NOT NULL DEFAULT '',
+    -- When the beer was kegged, as YYYY-MM-DD, or ''. Held on the tap; the
+    -- keg's own keg_date is not used for it.
+    kegged_date     TEXT NOT NULL DEFAULT '',
     keg_id          TEXT NOT NULL DEFAULT '',
     handle_image    TEXT NOT NULL DEFAULT '',
     -- Identifier reported by an open-tap ESP32 display; at most 6 characters.
@@ -107,6 +124,7 @@ CREATE TABLE IF NOT EXISTS beverages (
     og            REAL,
     fg            REAL,
     srm           REAL,
+    color_preset  TEXT    NOT NULL DEFAULT '',
     source        TEXT    NOT NULL DEFAULT 'manual',
     created_at    INTEGER NOT NULL DEFAULT 0
 );

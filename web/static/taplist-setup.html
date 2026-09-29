@@ -7,12 +7,6 @@
   <style>@import url("style.css");</style>
   <link rel="stylesheet" href="/theme.css">
   <style>
-    .color-swatches { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
-    .swatch {
-      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
-      border: 2px solid transparent; transition: border-color 0.15s, transform 0.15s;
-    }
-    .swatch:hover, .swatch.active { border-color: white; transform: scale(1.15); }
     .tap-list-item {
       display: flex; align-items: center; justify-content: space-between;
       padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 0.4rem;
@@ -122,10 +116,22 @@
             </div>
           </div>
 
-          <div class="field">
-            <label class="label">Brewery</label>
-            <div class="control">
-              <input class="input" type="text" id="breweryName" placeholder="e.g. Home Brew Co." />
+          <div class="columns">
+            <div class="column">
+              <div class="field">
+                <label class="label">Brewery</label>
+                <div class="control">
+                  <input class="input" type="text" id="breweryName" placeholder="e.g. Home Brew Co." />
+                </div>
+              </div>
+            </div>
+            <div class="column is-4">
+              <div class="field">
+                <label class="label">Date Kegged</label>
+                <div class="control">
+                  <input class="input" type="date" id="kegDate" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -157,11 +163,9 @@
           </div>
 
           <div class="field">
-            <label class="label">Beer Color</label>
-            <div class="control">
-              <input class="input" type="text" id="beerColor" placeholder="#f5a623" style="max-width:180px;" />
-            </div>
-            <div class="color-swatches" id="colorSwatches"></div>
+            <label class="label">Colour</label>
+            <div id="colorField"></div>
+            <p class="help">The tap list fills the keg in this colour.</p>
           </div>
 
           <div class="field">
@@ -191,27 +195,6 @@
                 <select id="linkedKeg">
                   <option value="">No sensor linked</option>
                 </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="columns">
-            <div class="column">
-              <div class="field">
-                <label class="label">Date Kegged</label>
-                <p class="help" id="kegDateHelp">Link a keg sensor to load and save this using the existing keg date setting.</p>
-                <div class="control">
-                  <input class="input" type="text" id="kegDate" placeholder="e.g. 25.03.2025" />
-                </div>
-              </div>
-            </div>
-            <div class="column">
-              <div class="field">
-                <label class="label">Expiration Date</label>
-                <p class="help">Stored with this tap configuration.</p>
-                <div class="control">
-                  <input class="input" type="text" id="expirationDate" placeholder="e.g. 25.05.2025" />
-                </div>
               </div>
             </div>
           </div>
@@ -265,6 +248,7 @@
 
   <div id="toast" class="notification toast is-hidden"></div>
 
+  <script src="/beer-color.js"></script>
   <script>
     // navbar burger
     document.querySelectorAll('.navbar-burger').forEach(el =>
@@ -282,16 +266,6 @@
         document.getElementById('configureDropdown')?.classList.remove('is-open');
     });
 
-    const SWATCHES = [
-      '#f5e642','#f5a623','#e8721a','#c0531a','#8b3a0f', // golds / ambers / browns
-      '#e8c96a','#d4a843','#b08a30','#7a5c18','#4a3010', // more beer tones
-      '#6fb8d4','#4a90d9','#2d5fa3','#1a3a6b',           // blues (sour/wheat)
-      '#7bc47b','#4a9e4a','#2d6b2d',                     // green (hops / session)
-      '#e87070','#c0404a','#8b1a24',                     // reds / rosé
-      '#3a2a1a','#241810','#0a0808',                     // dark / stout
-      '#f0f0f0','#c8c8d8',                               // pale / light
-    ];
-
     let currentTapId = null;
     let allTaps = [];
     let allKegs = [];
@@ -304,34 +278,6 @@
       t.className = `notification toast is-${type}`;
       setTimeout(() => t.classList.add('is-hidden'), 3000);
     }
-
-    // ── Color swatches ────────────────────────────
-    function initSwatches() {
-      const container = document.getElementById('colorSwatches');
-      container.innerHTML = '';
-      SWATCHES.forEach(c => {
-        const s = document.createElement('div');
-        s.className = 'swatch';
-        s.style.background = c;
-        s.title = c;
-        s.onclick = () => {
-          document.getElementById('beerColor').value = c;
-          document.querySelectorAll('.swatch').forEach(x => x.classList.remove('active'));
-          s.classList.add('active');
-        };
-        container.appendChild(s);
-      });
-    }
-
-    function updateActiveSwatch(color) {
-      document.querySelectorAll('.swatch').forEach(s => {
-        s.classList.toggle('active', s.style.background === color || s.title === color);
-      });
-    }
-
-    document.addEventListener('input', ev => {
-      if (ev.target.id === 'beerColor') updateActiveSwatch(ev.target.value);
-    });
 
     // ── open-tap device ID callout ────────────────
     function updateDeviceIdCallout(val) {
@@ -347,12 +293,6 @@
 
     document.addEventListener('input', ev => {
       if (ev.target.id === 'deviceId') updateDeviceIdCallout(ev.target.value);
-    });
-
-    document.addEventListener('change', ev => {
-      if (ev.target.id === 'linkedKeg') {
-        loadLinkedKegDate(ev.target.value);
-      }
     });
 
     // ── Handle image preview ──────────────────────
@@ -413,55 +353,10 @@
       if (b.style)         document.getElementById('beerStyle').value       = b.style;
       if (b.abv)           document.getElementById('beerAbv').value         = b.abv;
       if (b.ibu)           document.getElementById('beerIbu').value         = b.ibu;
-      if (b.color)         document.getElementById('beerColor').value       = b.color;
       if (b.description)   document.getElementById('beerDescription').value = b.description;
       if (b.tasting_notes) document.getElementById('tastingNotes').value    = b.tasting_notes;
-      updateActiveSwatch(b.color || '#c9a849');
+      if (hasColor(b))     color.set(b);
       showToast('Loaded from beverage library', 'success');
-    }
-
-    function updateKegDateFieldState(kegId) {
-      const input = document.getElementById('kegDate');
-      const help = document.getElementById('kegDateHelp');
-      if (!input || !help) return;
-
-      if (kegId) {
-        input.disabled = false;
-        help.textContent = 'Saved to the linked keg using the existing keg date endpoint.';
-      } else {
-        input.disabled = true;
-        input.value = '';
-        help.textContent = 'Link a keg sensor to load and save this using the existing keg date setting.';
-      }
-    }
-
-    async function loadLinkedKegDate(kegId) {
-      updateKegDateFieldState(kegId);
-      if (!kegId) return;
-
-      try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(kegId)}`);
-        if (!res.ok) throw new Error(await res.text());
-        const keg = await res.json();
-        document.getElementById('kegDate').value = (keg.keg_date || '').trim();
-      } catch (e) {
-        showToast('Failed to load keg date: ' + e.message, 'danger');
-      }
-    }
-
-    async function saveLinkedKegDate(kegId, value) {
-      if (!kegId) return;
-
-      const res = await fetch(`/api/kegs/${encodeURIComponent(kegId)}/date`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ value }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text);
-      }
     }
 
     function renderTapList() {
@@ -477,7 +372,7 @@
         item.onclick = () => editTap(tap.id);
         item.innerHTML = `
           <div class="tap-list-left">
-            <div class="tap-color-dot" style="background:${tap.color || '#c9a849'};"></div>
+            <div class="tap-color-dot" style="background:${beerColor(tap)};"></div>
             <div>
               <div class="tap-list-name">Tap ${tap.tap_number || '?'} — ${tap.name || 'Unnamed'}</div>
               <div class="tap-list-meta">${tap.style || ''}${tap.abv ? ' · '+tap.abv+'%' : ''}</div>
@@ -523,8 +418,8 @@
         id: currentTapId,
         tap_number: maxNum + 1,
         name: '', brewery: '', style: '', abv: '', ibu: '',
-        color: '#c9a849', description: '', tasting_notes: '',
-        keg_id: '', handle_image: '', device_id: '', expiration_date: ''
+        srm: null, color_preset: '', description: '', tasting_notes: '',
+        keg_id: '', handle_image: '', device_id: '', kegged_date: ''
       });
     }
 
@@ -549,17 +444,15 @@
       document.getElementById('beerStyle').value    = tap.style || '';
       document.getElementById('beerAbv').value      = tap.abv || '';
       document.getElementById('beerIbu').value      = tap.ibu || '';
-      document.getElementById('beerColor').value    = tap.color || '#c9a849';
       document.getElementById('beerDescription').value = tap.description || '';
       document.getElementById('tastingNotes').value = tap.tasting_notes || '';
       document.getElementById('linkedKeg').value    = tap.keg_id || '';
-      document.getElementById('expirationDate').value = tap.expiration_date || '';
+      document.getElementById('kegDate').value      = tap.kegged_date || '';
       document.getElementById('handleImage').value  = tap.handle_image || '';
       document.getElementById('deviceId').value     = tap.device_id || '';
       updateDeviceIdCallout(tap.device_id || '');
-      loadLinkedKegDate(tap.keg_id || '');
 
-      updateActiveSwatch(tap.color || '#c9a849');
+      color.set(tap);
 
       // handle preview
       const preview = document.getElementById('handlePreview');
@@ -591,19 +484,19 @@
         style:         document.getElementById('beerStyle').value.trim(),
         abv:           document.getElementById('beerAbv').value.trim(),
         ibu:           document.getElementById('beerIbu').value.trim(),
-        color:         document.getElementById('beerColor').value.trim() || '#c9a849',
+        ...color.value(),
+        // Kept so a tap saved before SRM existed keeps its colour until an
+        // SRM is entered.
+        color:         allTaps.find(t => t.id === currentTapId)?.color || '',
         description:   document.getElementById('beerDescription').value.trim(),
         tasting_notes: document.getElementById('tastingNotes').value.trim(),
-        expiration_date: document.getElementById('expirationDate').value.trim(),
+        kegged_date:   document.getElementById('kegDate').value,
         keg_id:        document.getElementById('linkedKeg').value || null,
         handle_image:  document.getElementById('handleImage').value || null,
         device_id:     document.getElementById('deviceId').value.trim().slice(0, 6) || null,
       };
 
       try {
-        if (body.keg_id) {
-          await saveLinkedKegDate(body.keg_id, document.getElementById('kegDate').value.trim());
-        }
         const res = await fetch(`/api/taps/${currentTapId}`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -637,8 +530,7 @@
       }
     }
 
-    initSwatches();
-    updateKegDateFieldState('');
+    const color = colorPicker(document.getElementById('colorField'));
     loadAll();
   </script>
 </body>

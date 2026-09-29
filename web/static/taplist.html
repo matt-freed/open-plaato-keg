@@ -8,578 +8,837 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:         #09090e;
-      --surface:    #111118;
-      --surface-2:  #1a1a24;
-      --gold:       #c9a849;
-      --gold-light: #e8c96a;
-      --text:       #f0e8d8;
-      --text-muted: #8a8a9a;
-      --text-dim:   #3a3a4a;
-      --green:      #4caf70;
-      --border:     rgba(255,255,255,0.07);
-      --font-serif: Georgia, 'Times New Roman', serif;
-      --font-sans:  system-ui, -apple-system, sans-serif;
+      --bg:        #0c0d11;
+      --tile:      #16181f;
+      --tile-2:    #1d2029;
+      --line:      rgba(255, 255, 255, 0.07);
+      --text:      #eef0f5;
+      --soft:      #c3c8d3;
+      --muted:     #9097a8;
+      --faint:     #5b6172;
+      --pour:      #5fd08a;
+      --radius:    18px;
+      --sans:      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
 
-    html, body {
-      min-height: 100%;
-      color: var(--text);
-      font-family: var(--font-sans);
-    }
-
-    html {
-      background: var(--bg);
-      background-size: cover;
-      background-position: center;
-      background-attachment: fixed;
-    }
-
+    html { background: var(--bg); }
     body {
-      background: transparent;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--taplist-body-font, var(--sans));
+      -webkit-font-smoothing: antialiased;
     }
 
-    main {
-      min-height: calc(100vh - 88px);
-    }
-
-    /* ─── HEADER ───────────────────────────────────── */
-    .taplist-header {
-      background: var(--surface);
-      border-bottom: 2px solid var(--gold);
-      padding: 0.9rem 2rem;
+    /* ─── Header ─────────────────────────────────── */
+    .bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 1rem;
-      flex-shrink: 0;
+      padding: 1.25rem clamp(1rem, 3vw, 2.5rem);
     }
-
-    .header-brand { display: flex; align-items: center; gap: 0.75rem; }
-    .header-icon  { font-size: 1.6rem; }
-
-    .header-title {
-      font-family: var(--taplist-title-font, var(--font-serif));
-      font-size: 1.5rem;
-      font-weight: bold;
-      color: var(--gold-light);
-      letter-spacing: 0.06em;
+    .bar-title { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
+    .bar-title h1 {
+      font-family: var(--taplist-title-font, var(--sans));
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
     }
+    .bar-count { color: var(--muted); font-size: 0.95rem; }
+    .bar-right { display: flex; align-items: center; gap: 1.25rem; }
 
-    .header-subtitle {
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-    }
-
-    #live-clock {
-      font-size: 1.1rem;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-
-    #tap-count { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.1rem; text-align: right; }
-
-    .header-nav { display: flex; gap: 0.4rem; align-items: center; }
-    .header-nav a, .header-nav .nav-dropdown-toggle {
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      text-decoration: none;
-      padding: 0.25rem 0.6rem;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      transition: color 0.2s, border-color 0.2s;
+    .nav { display: flex; gap: 0.25rem; align-items: center; }
+    .nav a, .nav button {
+      font: inherit;
+      font-size: 0.8rem;
+      color: var(--muted);
       background: none;
+      border: 0;
+      border-radius: 8px;
+      padding: 0.4rem 0.65rem;
+      text-decoration: none;
       cursor: pointer;
-      font-family: inherit;
+      transition: background 0.15s, color 0.15s;
     }
-    .header-nav a:hover, .header-nav .nav-dropdown-toggle:hover { color: var(--gold); border-color: var(--gold); }
-    .nav-dropdown { position: relative; }
-    .nav-dropdown-menu {
+    .nav a:hover, .nav button:hover { background: var(--tile-2); color: var(--text); }
+    .menu { position: relative; }
+    .menu-list {
       display: none;
       position: absolute;
       right: 0;
-      top: calc(100% + 0.35rem);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      min-width: 160px;
-      z-index: 100;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      overflow: hidden;
+      top: calc(100% + 0.4rem);
+      min-width: 170px;
+      padding: 0.35rem;
+      background: var(--tile-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+      z-index: 50;
     }
-    .nav-dropdown.is-open .nav-dropdown-menu { display: block; }
-    .nav-dropdown-menu a {
-      display: block;
-      padding: 0.45rem 0.9rem;
-      color: var(--text-muted);
-      font-size: 0.75rem;
-      text-decoration: none;
-      border: none;
-      border-radius: 0;
-      transition: background 0.15s, color 0.15s;
-    }
-    .nav-dropdown-menu a:hover { background: rgba(255,255,255,0.06); color: var(--gold); border-color: transparent; }
+    .menu.is-open .menu-list { display: block; }
+    .menu-list a { display: block; }
 
-    /* ─── TAP LIST ──────────────────────────────────── */
-    .tap-list {
-      display: flex;
-      flex-direction: column;
+    /* ─── Grid ───────────────────────────────────── */
+    main { padding: 0.25rem clamp(1rem, 3vw, 2.5rem) 2.5rem; }
+
+    .grid {
+      position: relative;
+      display: grid;
+      --gap: clamp(0.9rem, 1.6vw, 1.4rem);
+      /* Never more than three across: each column is at least a third of the
+         row, and narrower screens drop to two and then one. */
+      grid-template-columns: repeat(auto-fill,
+        minmax(max(min(100%, 340px), calc((100% - 2 * var(--gap)) / 3)), 1fr));
+      gap: var(--gap);
     }
 
-    .no-taps {
+    .status {
       text-align: center;
       padding: 5rem 1rem;
-      color: var(--text-muted);
-      font-size: 1.2rem;
+      color: var(--muted);
+      font-size: 1.1rem;
     }
-    .no-taps a { color: var(--gold); }
+    .status a { color: var(--text); }
+    .status:empty { display: none; }
 
-    /* ─── CARD ──────────────────────────────────────── */
-    .tap-card {
-      display: flex;
-      flex-direction: row;
+    /* ─── Tile ───────────────────────────────────── */
+    .tile {
+      --accent: #c9a849;
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1.25rem;
       min-height: 220px;
-      border-bottom: 1px solid var(--border);
-      position: relative;
-      transition: background 0.3s;
+      padding: 1.4rem 1.25rem 1.3rem 1.5rem;
+      background: var(--tile);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      transition: box-shadow 0.25s, border-color 0.25s;
     }
-
-    .tap-card.is-pouring {
-      box-shadow: inset 0 0 0 2px var(--green);
+    .tile:hover { border-color: rgba(255, 255, 255, 0.13); }
+    .tile.is-pouring {
+      border-color: color-mix(in srgb, var(--pour) 55%, transparent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--pour) 35%, transparent),
+                  0 0 32px -8px color-mix(in srgb, var(--pour) 45%, transparent);
     }
-
-    /* Left color accent bar */
-    .card-accent {
-      width: 8px;
-      flex-shrink: 0;
-      background: var(--gold);
+    .tile.dragging {
+      cursor: grabbing;
+      pointer-events: none;
+      z-index: 1000;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      border-color: rgba(255, 255, 255, 0.18);
     }
-
-    /* ── Handle column ── */
-    .card-handle {
-      width: 240px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1.5rem;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      position: relative;
+    .tile-placeholder {
+      border: 2px dashed rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius);
     }
+    body.is-dragging { cursor: grabbing; }
 
-    .handle-img {
-      width: 200px;
-      height: 200px;
-      object-fit: contain;
-      display: block;
-    }
-
-    .handle-placeholder {
-      font-size: 5rem;
-      opacity: 0.25;
-    }
-
-    /* ── Info column ── */
-    .card-info {
-      flex: 1;
-      padding: 1.5rem 2.5rem;
+    .tile-info {
       display: flex;
       flex-direction: column;
-      gap: 0.7rem;
       min-width: 0;
     }
 
-    .tap-label-row {
+    .tile-meta {
       display: flex;
       align-items: center;
-      gap: 1rem;
-    }
-
-    .tap-label {
-      font-size: 0.8rem;
-      font-weight: 700;
-      letter-spacing: 0.25em;
+      gap: 0.6rem;
+      min-height: 1.2rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--gold);
+      color: var(--faint);
+    }
+    .keg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pouring {
+      display: none;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--pour);
+      flex-shrink: 0;
+    }
+    .pouring::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .tile.is-pouring .pouring { display: inline-flex; }
+    @keyframes pulse { 50% { opacity: 0.25; } }
+
+    .beer {
+      margin-top: 0.35rem;
+      font-family: var(--taplist-title-font, var(--sans));
+      font-size: clamp(1.5rem, 2.2vw, 1.95rem);
+      font-weight: 700;
+      line-height: 1.12;
+      letter-spacing: -0.015em;
+      overflow-wrap: anywhere;
     }
 
-    .pouring-badge {
-      font-size: 0.75rem;
-      font-weight: bold;
-      color: var(--green);
-      letter-spacing: 0.08em;
-      animation: pulse-text 1.2s ease-in-out infinite;
-    }
-
-    @keyframes pulse-text {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
-    }
-
-    .beer-name {
-      font-family: var(--taplist-title-font, var(--font-serif));
-      font-size: 2.4rem;
-      font-weight: bold;
-      color: var(--text);
-      line-height: 1.15;
-    }
-
-    .brewery-name {
-      font-family: var(--taplist-body-font, var(--font-sans));
-      font-size: 1.1rem;
-      color: var(--text-muted);
-      margin-top: -0.3rem;
-    }
-
-    .badges-row {
+    .specs {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.4rem;
+      align-items: center;
+      gap: 0.35rem 0.5rem;
+      margin-top: 0.6rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+    .specs:empty { display: none; }
+    /* Kept to two lines so one long description cannot stretch its whole row;
+       the full text is in the tooltip. */
+    .desc {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      overflow: hidden;
+      margin-top: 0.45rem;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+    .desc:empty { display: none; }
+    .specs .style { color: var(--text); opacity: 0.85; }
+    .specs span + span::before {
+      content: "";
+      display: inline-block;
+      width: 3px;
+      height: 3px;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+      border-radius: 50%;
+      background: var(--faint);
     }
 
-    .badge {
-      font-size: 0.75rem;
+    .readings {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 0.7rem 1.4rem;
+      margin-top: auto;
+      padding-top: 1.1rem;
+    }
+    .reading { display: flex; flex-direction: column; gap: 0.15rem; }
+    /* Secondary to the beer and the amount left, so kept small and soft. */
+    .reading-value {
+      font-size: 1.05rem;
       font-weight: 600;
-      letter-spacing: 0.06em;
+      line-height: 1.1;
+      color: var(--soft);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .reading-value small {
+      margin-left: 0.15rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+    .reading.age .reading-value { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
+    .reading-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      padding: 0.25rem 0.65rem;
-      border-radius: 20px;
-      background: var(--surface-2);
-      color: var(--text-muted);
-      border: 1px solid var(--border);
+      color: var(--faint);
     }
+    .no-keg { color: var(--faint); font-size: 0.9rem; }
 
-    .beer-desc {
-      font-family: var(--taplist-body-font, var(--font-sans));
-      font-size: 1rem;
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    .tasting-notes {
-      font-family: var(--taplist-body-font, var(--font-sans));
-      font-size: 1rem;
-      color: var(--text-muted);
-      font-style: italic;
-      line-height: 1.6;
-    }
-
-    /* ── Keg gauge column ── */
-    .card-keg {
-      width: 190px;
-      flex-shrink: 0;
+    /* ─── Keg graphic ────────────────────────────── */
+    .tile-keg {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 1rem 1.2rem;
-      background: var(--surface);
-      border-left: 1px solid var(--border);
-      gap: 0.4rem;
+      gap: 0.45rem;
+      width: 92px;
+    }
+    .tile-keg svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .liquid { transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+    /* A clear drink such as sparkling water is a faint tint, so the level
+       shows as its surface line rather than as a block of colour. */
+    .tile.is-clear .liquid-fill { opacity: 0.2; }
+    .tile.is-clear .liquid-surface { fill-opacity: 0.85; }
+    /* What is left sits under the keg it describes. */
+    .keg-amount {
+      /* Held open with no keg linked, so kegs in a row stay level. */
+      min-height: 1.2em;
+      font-size: 1.1rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .keg-amount small {
+      margin-left: 0.15rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
     }
 
-    .keg-svg-wrap svg { display: block; }
-
-    .keg-temp {
-      font-size: 1rem;
-      color: var(--text-muted);
-      text-align: center;
+    @media (max-width: 640px) {
+      .bar { flex-wrap: wrap; }
+      .tile { padding: 1.2rem 1rem 1.1rem 1.2rem; min-height: 190px; }
+      .tile-keg { width: 68px; }
+      .reading-value { font-size: 1rem; }
+      .keg-amount { font-size: 1rem; }
     }
 
-    .keg-offline {
-      font-size: 0.85rem;
-      color: var(--text-dim);
-      font-style: italic;
-      text-align: center;
+    @media (prefers-reduced-motion: reduce) {
+      .liquid, .tile { transition: none; }
+      .pouring::before { animation: none; }
     }
-
-    /* ─── LOADING ───────────────────────────────────── */
-    .loading-state {
-      text-align: center;
-      padding: 5rem 1rem;
-      color: var(--text-muted);
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 2.5rem;
-      height: 2.5rem;
-      border: 3px solid var(--border);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-bottom: 1rem;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
   <link rel="stylesheet" href="/theme.css">
 </head>
 <body>
 
-  <header class="taplist-header">
-    <div class="header-brand">
-      <span class="header-icon">🍺</span>
-      <div>
-        <div class="header-title">TAP ROOM</div>
-        <div class="header-subtitle">Open Plaato <span id="appVersion" style="opacity:0.45;"></span></div>
-      </div>
+  <header class="bar">
+    <div class="bar-title">
+      <h1>On Tap</h1>
+      <span class="bar-count" id="tapCount"></span>
     </div>
-    <div style="text-align:right;">
-      <div id="live-clock"></div>
-      <div id="tap-count"></div>
-    </div>
-    <nav class="header-nav">
-      <a href="/index.html">Kegs</a>
-      <a href="/history.html">History</a>
-      <div class="nav-dropdown" id="configDropdown">
-        <button class="nav-dropdown-toggle" onclick="toggleConfigMenu(event)">Configure ▾</button>
-        <div class="nav-dropdown-menu">
-          <a href="/taplist-setup.html">Tap Setup</a>
-          <a href="/tap-handles.html">Tap Handles</a>
-          <a href="/setup.html">Scale Setup</a>
-          <a href="/dashboard-setup.html">Dashboard Setup</a>
-          <a href="/beverages.html">Beverages</a>
+    <div class="bar-right">
+      <nav class="nav">
+        <a href="/index.html">Kegs</a>
+        <a href="/history.html">History</a>
+        <div class="menu" id="configMenu">
+          <button type="button" id="configToggle" aria-haspopup="true" aria-expanded="false">Configure ▾</button>
+          <div class="menu-list">
+            <a href="/taplist-setup.html">Tap Setup</a>
+            <a href="/tap-handles.html">Tap Handles</a>
+            <a href="/setup.html">Scale Setup</a>
+            <a href="/dashboard-setup.html">Dashboard Setup</a>
+            <a href="/beverages.html">Beverages</a>
+          </div>
         </div>
-      </div>
-    </nav>
+      </nav>
+    </div>
   </header>
 
   <main>
-    <div class="tap-list" id="tapList">
-      <div class="loading-state">
-        <div class="spinner"></div>
-        <p>Loading taps…</p>
-      </div>
-    </div>
+    <p class="status" id="status">Loading taps…</p>
+    <div class="grid" id="grid"></div>
   </main>
 
+  <script src="/beer-color.js"></script>
   <script>
-    // ── Version ────────────────────────────────────
-    fetch('/api/alive').then(r => r.json()).then(d => {
-      if (d.version) document.getElementById('appVersion').textContent = 'v' + d.version;
-    }).catch(() => {});
+    'use strict';
 
-    // ── Configure dropdown ─────────────────────────
-    function toggleConfigMenu(e) {
+    const grid = document.getElementById('grid');
+    const statusEl = document.getElementById('status');
+
+    let taps = [];
+    const kegs = {};
+
+    // ── Configure menu ─────────────────────────────
+    const configMenu = document.getElementById('configMenu');
+    const configToggle = document.getElementById('configToggle');
+    configToggle.addEventListener('click', e => {
       e.stopPropagation();
-      document.getElementById('configDropdown').classList.toggle('is-open');
-    }
+      const open = configMenu.classList.toggle('is-open');
+      configToggle.setAttribute('aria-expanded', String(open));
+    });
     document.addEventListener('click', () => {
-      document.getElementById('configDropdown').classList.remove('is-open');
+      configMenu.classList.remove('is-open');
+      configToggle.setAttribute('aria-expanded', 'false');
     });
 
-    // ── Clock ──────────────────────────────────────
-    let clockHour12 = true;
-    function updateClock() {
-      document.getElementById('live-clock').textContent =
-        new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: clockHour12 });
-    }
-    fetch('/api/config/time-format')
-      .then(r => r.json())
-      .then(d => { clockHour12 = (d.time_format || '12h') !== '24h'; updateClock(); })
-      .catch(() => {});
-    updateClock();
-    setInterval(updateClock, 10000);
+    // ── Keg graphic ────────────────────────────────
+    // A side view of a 5 gallon corny keg: rubber top with two hand holes,
+    // a steel body and a rubber foot ring. The beer is a rectangle clipped to
+    // the body and slid down as the keg empties. The body is left plain, since
+    // any horizontal line on it would read as a level mark.
+    const BODY_TOP = 50, BODY_BOTTOM = 198, BODY_H = BODY_BOTTOM - BODY_TOP;
+    let kegSeq = 0;
 
-    // ── State ──────────────────────────────────────
-    let tapsData = [];
-    let kegsData = {};
-
-    function escHtml(s) {
-      return String(s)
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    // ── Keg SVG graphic ────────────────────────────
-    function buildKegSvg(pct, color, amount, unit) {
-      const uid   = Math.random().toString(36).slice(2, 8);
-      const bTop  = 42;   // body top y
-      const bBot  = 178;  // body bottom y
-      const bH    = bBot - bTop;
-      const fillH = Math.max(0, bH * (pct / 100));
-      const fillY = bBot - fillH;
-      const fc    = color || '#c9a849';
-
-      return `<svg viewBox="0 0 150 210" width="150" height="210" xmlns="http://www.w3.org/2000/svg">
+    function kegSvg() {
+      const n = ++kegSeq;
+      return `
+<svg viewBox="0 0 120 214" aria-hidden="true">
   <defs>
-    <clipPath id="kc${uid}">
-      <rect x="18" y="${bTop}" width="114" height="${bH}" rx="6"/>
-    </clipPath>
-    <linearGradient id="kg${uid}" x1="0" y1="1" x2="0" y2="0">
-      <stop offset="0%" stop-color="${fc}" stop-opacity="0.55"/>
-      <stop offset="100%" stop-color="${fc}" stop-opacity="0.25"/>
+    <clipPath id="kb${n}"><rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" rx="9"/></clipPath>
+    <linearGradient id="ks${n}" x1="0" x2="1">
+      <stop offset="0"    stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="0.3"  stop-color="#fff" stop-opacity="0.03"/>
+      <stop offset="0.8"  stop-color="#000" stop-opacity="0"/>
+      <stop offset="1"    stop-color="#000" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="kl${n}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color: var(--accent)" stop-opacity="0.95"/>
+      <stop offset="1" style="stop-color: var(--accent)" stop-opacity="0.72"/>
     </linearGradient>
   </defs>
 
-  <!-- body bg -->
-  <rect x="18" y="${bTop}" width="114" height="${bH}" rx="6" fill="#0d0d16" stroke="#252535" stroke-width="2"/>
+  <!-- steel shell with rounded shoulders -->
+  <rect x="16" y="${BODY_TOP - 8}" width="88" height="${BODY_H + 10}" rx="13" fill="#434957"/>
+  <!-- The empty headspace is a mid grey rather than near-black, so a black
+       stout still reads as liquid against it. -->
+  <rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" rx="9" fill="#2a2e38"/>
 
-  <!-- fill -->
-  <g clip-path="url(#kc${uid})">
-    <rect x="18" y="${fillY}" width="114" height="${fillH}" fill="url(#kg${uid})"/>
-    ${fillH > 2 ? `<rect x="18" y="${fillY}" width="114" height="3" fill="${fc}" opacity="0.7"/>` : ''}
+  <g clip-path="url(#kb${n})">
+    <g class="liquid" style="transform: translateY(${BODY_H}px)">
+      <rect class="liquid-fill" x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" fill="url(#kl${n})"/>
+      <rect class="liquid-surface" x="19" y="${BODY_TOP}" width="82" height="3" fill="#fff" fill-opacity="0.55"/>
+    </g>
+    <rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" fill="url(#ks${n})"/>
   </g>
 
-  <!-- bands -->
-  <rect x="16" y="78"  width="118" height="7" rx="3.5" fill="#151522" stroke="#252535" stroke-width="1.5"/>
-  <rect x="16" y="135" width="118" height="7" rx="3.5" fill="#151522" stroke="#252535" stroke-width="1.5"/>
+  <!-- posts between the handles -->
+  <rect x="55" y="22" width="10" height="16" rx="2" fill="#5a6070"/>
+  <rect x="53" y="18" width="14" height="6" rx="2" fill="#6b7282"/>
 
-  <!-- top cap -->
-  <ellipse cx="75" cy="${bTop}" rx="57" ry="11" fill="#111120" stroke="#252535" stroke-width="2"/>
-  <!-- valve stem -->
-  <rect x="58" y="20" width="34" height="22" rx="5" fill="#1a1a28" stroke="#252535" stroke-width="1.5"/>
-  <ellipse cx="75" cy="20" rx="12" ry="5" fill="#222234" stroke="#252535" stroke-width="1.5"/>
+  <!-- rubber top ring: two hand grips with a gap for the lid -->
+  <path fill="#2b2e37" fill-rule="evenodd" d="
+    M20 50 V16 Q20 6 30 6 H44 Q52 6 52 14 V30 H68 V14 Q68 6 76 6 H90 Q100 6 100 16 V50 Z
+    M31 13 H42 Q46 13 46 17 V21 Q46 25 42 25 H31 Q26 25 26 21 V17 Q26 13 31 13 Z
+    M78 13 H89 Q94 13 94 17 V21 Q94 25 89 25 H78 Q74 25 74 21 V17 Q74 13 78 13 Z"/>
 
-  <!-- bottom cap -->
-  <ellipse cx="75" cy="${bBot}" rx="57" ry="11" fill="#111120" stroke="#252535" stroke-width="2"/>
-
-  <!-- pct text -->
-  <text x="75" y="118" text-anchor="middle" fill="white" font-size="28" font-weight="bold" font-family="system-ui,sans-serif">${Math.round(pct)}%</text>
-  ${amount != null
-    ? `<text x="75" y="138" text-anchor="middle" fill="#8a8a9a" font-size="12" font-family="system-ui,sans-serif">${amount.toFixed(1)} ${unit || ''}</text>`
-    : ''}
+  <!-- rubber foot -->
+  <rect x="13" y="${BODY_BOTTOM - 2}" width="94" height="16" rx="6" fill="#2b2e37"/>
 </svg>`;
     }
 
-    // ── Build card ─────────────────────────────────
-    function buildCard(tap, keg) {
-      const color     = tap.color || '#c9a849';
-      const pct       = keg ? Math.max(0, Math.min(100, keg.percent_of_beer_left ?? 0)) : null;
-      const isPouring = keg?.is_pouring === true;
-      // Readings arrive already converted into the chosen display units, with
-      // the raw fields as the fallback.
-      const display   = keg?.display ?? {};
-      const tempRaw   = display.keg_temperature ?? keg?.keg_temperature ?? null;
-      // No trailing degree sign here: tempUnit below already carries one.
-      const tempStr   = tempRaw != null ? `🌡️ ${tempRaw.toFixed(1)}` : '';
-      const amount    = display.amount_left ?? keg?.amount_left ?? null;
-      const rawUnit   = display.amount_unit ?? keg?.beer_left_unit ?? '';
-      const unit      = rawUnit === 'litre' ? 'L' : rawUnit;
-      const tempUnit  = display.temperature_unit ?? keg?.temperature_unit ?? '°C';
+    // ── Formatting ─────────────────────────────────
+    const UNIT_LABELS = { litre: 'L' };
 
-      const card = document.createElement('div');
-      card.className = 'tap-card' + (isPouring ? ' is-pouring' : '');
-      card.dataset.tapId = tap.id;
-      card.dataset.kegId = tap.keg_id || '';
-
-      // badges
-      const badges = [
-        tap.style && `<span class="badge">${escHtml(tap.style)}</span>`,
-        tap.abv   && `<span class="badge">${escHtml(tap.abv)}% ABV</span>`,
-        tap.ibu   && `<span class="badge">${escHtml(tap.ibu)} IBU</span>`,
-      ].filter(Boolean).join('');
-
-      // handle
-      const handleSrc = tap.handle_image
-        ? `/uploads/tap-handles/${encodeURIComponent(tap.handle_image)}`
-        : '';
-      const handleHtml = handleSrc
-        ? `<img class="handle-img" src="${handleSrc}" alt="tap handle"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='block';"/>`
-        : '';
-
-      // keg gauge
-      let kegHtml = '';
-      if (pct !== null) {
-        kegHtml = buildKegSvg(pct, color, amount, unit);
-        if (tempStr) kegHtml += `<div class="keg-temp">${escHtml(tempStr)}${escHtml(tempUnit)}</div>`;
-        if (isPouring) kegHtml += `<div class="pouring-badge">● POURING</div>`;
-      } else if (tap.keg_id) {
-        kegHtml = '<p class="keg-offline">Sensor offline</p>';
-      } else {
-        kegHtml = '<p class="keg-offline">No sensor linked</p>';
-      }
-
-      card.innerHTML = `
-        <div class="card-accent" style="background:${color};"></div>
-        <div class="card-handle">
-          ${handleHtml}
-          <span class="handle-placeholder" style="display:${handleSrc ? 'none' : 'block'}">🍺</span>
-        </div>
-        <div class="card-info">
-          <div class="tap-label-row">
-            <span class="tap-label">TAP ${escHtml(String(tap.tap_number || '?'))}</span>
-            ${isPouring ? '<span class="pouring-badge">● NOW POURING</span>' : ''}
-          </div>
-          <h2 class="beer-name">${escHtml(tap.name || 'Unnamed Beer')}</h2>
-          ${tap.brewery ? `<p class="brewery-name">${escHtml(tap.brewery)}</p>` : ''}
-          ${badges ? `<div class="badges-row">${badges}</div>` : ''}
-          ${tap.description ? `<p class="beer-desc">${escHtml(tap.description)}</p>` : ''}
-          ${tap.tasting_notes ? `<p class="tasting-notes">"${escHtml(tap.tasting_notes)}"</p>` : ''}
-        </div>
-        <div class="card-keg">${kegHtml}</div>`;
-
-      return card;
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     }
 
-    // ── Render ─────────────────────────────────────
-    function render() {
-      const list = document.getElementById('tapList');
-      document.getElementById('tap-count').textContent =
-        tapsData.length ? `${tapsData.length} on tap` : '';
+    function num(v, digits) {
+      return Number.isFinite(v) ? v.toFixed(digits) : null;
+    }
 
-      if (!tapsData.length) {
-        list.innerHTML = `<p class="no-taps">No taps configured yet. Visit <a href="/taplist-setup.html">Tap Setup</a> to add taps.</p>`;
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    // parseIsoDate reads a tap's kegged date, which the server always stores
+    // as YYYY-MM-DD, as local midnight. new Date('2026-09-03') would read it
+    // as UTC, a day early anywhere west of Greenwich.
+    function parseIsoDate(text) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text || '');
+      return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+    }
+
+    // kegAge describes how long ago a tap was kegged, as the reading's value
+    // and label, or null when it has no kegged date.
+    function kegAge(text) {
+      const date = parseIsoDate(text);
+      if (!date) return null;
+
+      const now = new Date();
+      // Counted in calendar days, via UTC so a daylight-saving change cannot
+      // make a day 23 or 25 hours long.
+      const days = Math.round(
+        (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+         Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())) / DAY_MS);
+
+      // The year only matters for a date long enough ago to be ambiguous; left
+      // off otherwise, it keeps a December keg read in January to "Dec 20"
+      // and the label short enough to share the row.
+      const opts = { month: 'short', day: 'numeric' };
+      if (Math.abs(days) > 180) opts.year = 'numeric';
+      const label = 'Kegged ' + date.toLocaleDateString([], opts);
+
+      let value;
+      if (days === 0) value = 'Today';
+      else if (days > 0) value = days === 1 ? '1 day' : `${days} days`;
+      else value = days === -1 ? 'in 1 day' : `in ${-days} days`;
+      return { value, label };
+    }
+
+    function trimNum(v) {
+      // ABV and IBU are entered by hand; show them as typed, without a
+      // trailing ".0".
+      return Number.isFinite(v) ? String(Math.round(v * 10) / 10) : null;
+    }
+
+    // ── Tiles ──────────────────────────────────────
+    function createTile(tap) {
+      const tile = document.createElement('article');
+      tile.className = 'tile';
+      tile.dataset.tapId = tap.id;
+      tile.innerHTML = `
+        <div class="tile-info">
+          <div class="tile-meta">
+            <span class="keg-name"></span>
+            <span class="pouring">Pouring</span>
+          </div>
+          <h2 class="beer"></h2>
+          <div class="specs"></div>
+          <p class="desc"></p>
+          <div class="readings"></div>
+        </div>
+        <div class="tile-keg">
+          ${kegSvg()}
+          <span class="keg-amount"></span>
+        </div>`;
+      return tile;
+    }
+
+    // updateTile rewrites a tile in place, so the liquid level animates and
+    // a tile being dragged is not replaced under the pointer.
+    function updateTile(tile, tap, keg) {
+      tile.style.setProperty('--accent', beerColor(tap));
+      tile.classList.toggle('is-clear', isClear(tap));
+
+      // Readings arrive converted into the chosen display units; the raw
+      // fields are only a fallback for a keg that has no display block.
+      const d = keg?.display ?? {};
+      const amount = d.amount_left ?? keg?.amount_left ?? null;
+      const rawUnit = d.amount_unit ?? keg?.beer_left_unit ?? '';
+      const unit = UNIT_LABELS[rawUnit] ?? rawUnit;
+      const temp = d.keg_temperature ?? keg?.keg_temperature ?? null;
+      const tempUnit = d.temperature_unit ?? keg?.temperature_unit ?? '';
+      const rawPct = keg?.percent_of_beer_left;
+      const pct = Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : null;
+
+      tile.classList.toggle('is-pouring', keg?.is_pouring === true);
+
+      tile.querySelector('.keg-name').textContent =
+        keg ? (keg.label || 'Keg ' + keg.id.slice(0, 6)) : '';
+      tile.querySelector('.beer').textContent = tap.name || 'Unnamed beer';
+
+      const specs = [
+        tap.style && `<span class="style">${esc(tap.style)}</span>`,
+        trimNum(tap.abv) && `<span>${trimNum(tap.abv)}% ABV</span>`,
+        trimNum(tap.ibu) && `<span>${trimNum(tap.ibu)} IBU</span>`,
+      ].filter(Boolean).join('');
+      tile.querySelector('.specs').innerHTML = specs;
+
+      const desc = tile.querySelector('.desc');
+      desc.textContent = tap.description || '';
+      desc.title = tap.description || '';
+
+      let readings = '';
+      if (!tap.keg_id) {
+        readings = '<span class="no-keg">No keg linked</span>';
+      } else if (!keg) {
+        readings = '<span class="no-keg">Waiting for the scale…</span>';
+      } else {
+        readings = `
+          <div class="reading temp">
+            <span class="reading-value">${num(temp, 1) ?? '—'}<small>${esc(tempUnit)}</small></span>
+            <span class="reading-label">Temp</span>
+          </div>`;
+      }
+      // The kegged date belongs to the tap, so it shows with or without a keg.
+      const age = kegAge(tap.kegged_date);
+      if (age) {
+        readings += `
+          <div class="reading age">
+            <span class="reading-value">${esc(age.value)}</span>
+            <span class="reading-label">${esc(age.label)}</span>
+          </div>`;
+      }
+      tile.querySelector('.readings').innerHTML = readings;
+
+      tile.querySelector('.keg-amount').innerHTML =
+        keg ? `${num(amount, 1) ?? '—'}<small>${esc(unit)}</small>` : '';
+      tile.querySelector('.liquid').style.transform =
+        `translateY(${BODY_H * (1 - (pct ?? 0) / 100)}px)`;
+    }
+
+    function render() {
+      // Rebuilding mid-drag would pull the tile out from under the pointer;
+      // the drop renders instead.
+      if (drag) { renderPending = true; return; }
+
+      document.getElementById('tapCount').textContent =
+        taps.length ? `${taps.length} ${taps.length === 1 ? 'beer' : 'beers'}` : '';
+
+      if (!taps.length) {
+        grid.replaceChildren();
+        statusEl.innerHTML =
+          'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
         return;
       }
+      statusEl.textContent = '';
 
-      list.innerHTML = '';
-      tapsData.forEach(tap => list.appendChild(buildCard(tap, kegsData[tap.keg_id])));
+      const existing = new Map([...grid.children].map(t => [t.dataset.tapId, t]));
+      const ordered = taps.map(tap => {
+        const tile = existing.get(tap.id) ?? createTile(tap);
+        existing.delete(tap.id);
+        updateTile(tile, tap, kegs[tap.keg_id]);
+        return tile;
+      });
+      existing.forEach(t => t.remove());
+
+      // Only move nodes whose position changed; appending every tile would
+      // restart their transitions.
+      ordered.forEach((tile, i) => {
+        if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i] ?? null);
+      });
     }
 
-    // ── Partial keg update ─────────────────────────
-    function updateCard(kegId) {
-      const tap = tapsData.find(t => t.keg_id === kegId);
-      if (!tap) return;
-      const existing = document.querySelector(`.tap-card[data-keg-id="${CSS.escape(kegId)}"]`);
-      if (existing) existing.replaceWith(buildCard(tap, kegsData[kegId]));
+    function updateKegTiles(kegId) {
+      if (drag) { renderPending = true; return; }
+      for (const tap of taps) {
+        if (tap.keg_id !== kegId) continue;
+        const tile = grid.querySelector(`.tile[data-tap-id="${CSS.escape(tap.id)}"]`);
+        if (tile) updateTile(tile, tap, kegs[kegId]);
+      }
     }
 
-    // ── Load ───────────────────────────────────────
+    // ── Drag to rearrange ──────────────────────────
+    // Pointer events rather than HTML5 drag and drop, which does not work on
+    // touch screens. A mouse drags as soon as it moves; a finger has to press
+    // and hold first, so the page can still be scrolled.
+    const DRAG_THRESHOLD = 6;
+    const LONG_PRESS_MS = 350;
+
+    let press = null;
+    let drag = null;
+    let renderPending = false;
+
+    grid.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || drag) return;
+      const tile = e.target.closest('.tile');
+      if (!tile) return;
+      press = { tile, id: e.pointerId, type: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
+      if (e.pointerType === 'touch') {
+        press.timer = setTimeout(() => {
+          if (!press) return;
+          navigator.vibrate?.(10);
+          startDrag(press);
+        }, LONG_PRESS_MS);
+      }
+    });
+
+    window.addEventListener('pointermove', e => {
+      if (drag) {
+        if (e.pointerId === drag.id) moveDrag(e.clientX, e.clientY);
+        return;
+      }
+      if (!press || e.pointerId !== press.id) return;
+      press.x = e.clientX;
+      press.y = e.clientY;
+      if (Math.hypot(press.x - press.x0, press.y - press.y0) < DRAG_THRESHOLD) return;
+      if (press.type === 'touch') { clearPress(); return; } // the user is scrolling
+      startDrag(press);
+    });
+
+    window.addEventListener('pointerup', e => {
+      if (drag && e.pointerId === drag.id) endDrag(true);
+      clearPress();
+    });
+    window.addEventListener('pointercancel', e => {
+      if (drag && e.pointerId === drag.id) endDrag(true);
+      clearPress();
+    });
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && drag) endDrag(false);
+    });
+    // Once a touch drag has started, stop the browser from scrolling with it.
+    document.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
+    grid.addEventListener('contextmenu', e => { if (press || drag) e.preventDefault(); });
+
+    function clearPress() {
+      if (press?.timer) clearTimeout(press.timer);
+      press = null;
+    }
+
+    function startDrag(p) {
+      const { tile } = p;
+      clearPress();
+      const rect = tile.getBoundingClientRect();
+
+      const placeholder = document.createElement('div');
+      placeholder.className = 'tile-placeholder';
+      tile.before(placeholder);
+
+      drag = {
+        tile, placeholder, id: p.id,
+        x0: p.x0, y0: p.y0,
+        startOrder: [...grid.children].filter(el => el !== placeholder).map(el => el.dataset.tapId),
+        lastX: p.x, lastY: p.y,
+        scrollSpeed: 0,
+      };
+
+      tile.getAnimations().forEach(a => a.cancel());
+      tile.classList.add('dragging');
+      document.body.classList.add('is-dragging');
+      Object.assign(tile.style, {
+        position: 'fixed',
+        left: rect.left + 'px',
+        top: rect.top + 'px',
+        width: rect.width + 'px',
+        height: rect.height + 'px',
+      });
+      moveDrag(p.x, p.y);
+    }
+
+    function moveDrag(x, y) {
+      drag.lastX = x;
+      drag.lastY = y;
+      drag.tile.style.transform =
+        `translate(${x - drag.x0}px, ${y - drag.y0}px) rotate(1.2deg) scale(1.03)`;
+
+      // Scroll when the pointer nears the top or bottom edge.
+      const edge = 70;
+      drag.scrollSpeed = y < edge ? -(edge - y) / 4 : y > innerHeight - edge ? (y - innerHeight + edge) / 4 : 0;
+      if (drag.scrollSpeed && !drag.scrolling) {
+        drag.scrolling = true;
+        requestAnimationFrame(autoScroll);
+      }
+
+      reposition(x, y);
+    }
+
+    function autoScroll() {
+      if (!drag || !drag.scrollSpeed) { if (drag) drag.scrolling = false; return; }
+      window.scrollBy(0, drag.scrollSpeed);
+      reposition(drag.lastX, drag.lastY);
+      requestAnimationFrame(autoScroll);
+    }
+
+    // reposition moves the placeholder to the slot under the pointer. It hit
+    // tests against layout boxes rather than on-screen ones, so tiles that are
+    // still sliding into place cannot be hit twice and make the order flicker.
+    function reposition(x, y) {
+      const g = grid.getBoundingClientRect();
+      const tiles = [...grid.querySelectorAll('.tile:not(.dragging)')];
+      const over = tiles.find(t => {
+        const left = g.left + t.offsetLeft, top = g.top + t.offsetTop;
+        return x >= left && x < left + t.offsetWidth && y >= top && y < top + t.offsetHeight;
+      });
+      if (!over) return;
+
+      const items = [...grid.children];
+      const from = items.indexOf(drag.placeholder);
+      const to = items.indexOf(over);
+      animateLayout(() => {
+        if (to > from) over.after(drag.placeholder);
+        else over.before(drag.placeholder);
+      });
+    }
+
+    // animateLayout runs a DOM change and slides every tile from where it was
+    // to where it ended up.
+    function animateLayout(change) {
+      const tiles = [...grid.querySelectorAll('.tile:not(.dragging)')];
+      const before = new Map(tiles.map(t => [t, t.getBoundingClientRect()]));
+      change();
+      for (const t of tiles) {
+        t.getAnimations().forEach(a => a.cancel());
+        const a = before.get(t), b = t.getBoundingClientRect();
+        const dx = a.left - b.left, dy = a.top - b.top;
+        if (dx || dy) {
+          t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+            { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+        }
+      }
+    }
+
+    function endDrag(commit) {
+      const { tile, placeholder, startOrder } = drag;
+
+      if (!commit) {
+        // Put the placeholder back where the tile started.
+        animateLayout(() => {
+          const rest = startOrder.filter(id => id !== tile.dataset.tapId);
+          const i = startOrder.indexOf(tile.dataset.tapId);
+          const next = rest[i] && grid.querySelector(`.tile[data-tap-id="${CSS.escape(rest[i])}"]`);
+          grid.insertBefore(placeholder, next || null);
+        });
+      }
+
+      // Settle the lifted tile into its slot.
+      const from = tile.getBoundingClientRect();
+      placeholder.replaceWith(tile);
+      tile.classList.remove('dragging');
+      document.body.classList.remove('is-dragging');
+      tile.removeAttribute('style');
+      updateTileAccent(tile);
+      const to = tile.getBoundingClientRect();
+      tile.animate(
+        [{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) rotate(1.2deg) scale(1.03)` },
+         { transform: 'none' }],
+        { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+
+      drag = null;
+
+      const order = [...grid.children].map(t => t.dataset.tapId);
+      if (commit && order.join() !== startOrder.join()) saveOrder(order);
+
+      if (renderPending) {
+        renderPending = false;
+        render();
+      }
+    }
+
+    // Clearing the inline style drops the per-tap colour; put it back.
+    function updateTileAccent(tile) {
+      const tap = taps.find(t => t.id === tile.dataset.tapId);
+      if (tap) tile.style.setProperty('--accent', beerColor(tap));
+    }
+
+    async function saveOrder(order) {
+      const byId = new Map(taps.map(t => [t.id, t]));
+      taps = order.map(id => byId.get(id)).filter(Boolean);
+      try {
+        const res = await fetch('/api/taps/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ordered_ids: order }),
+        });
+        if (!res.ok) throw new Error(res.status);
+      } catch (_) {
+        // Fall back to whatever the server has.
+        loadAll();
+      }
+    }
+
+    // ── Data ───────────────────────────────────────
     async function loadAll() {
       try {
         const [tapsRes, kegsRes] = await Promise.all([fetch('/api/taps'), fetch('/api/kegs')]);
-        tapsData = await tapsRes.json();
-        const kegs = await kegsRes.json();
-        kegsData = {};
-        for (const k of kegs) kegsData[k.id] = k;
+        if (!tapsRes.ok || !kegsRes.ok) throw new Error('bad response');
+        const [nextTaps, kegList] = await Promise.all([tapsRes.json(), kegsRes.json()]);
+        taps = nextTaps;
+        for (const id in kegs) delete kegs[id];
+        for (const k of kegList) kegs[k.id] = k;
         render();
-      } catch (e) {
-        document.getElementById('tapList').innerHTML =
-          '<p class="no-taps">Could not load tap data. Is the server running?</p>';
+      } catch (_) {
+        if (!taps.length) statusEl.textContent = 'Could not load the tap list. Is the server running?';
       }
     }
 
-    // ── WebSocket ──────────────────────────────────
-    function connectWS() {
-      const ws = new WebSocket('/ws');
+    function connect() {
+      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
       ws.addEventListener('message', ev => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.type === 'keg_removed') {
-            delete kegsData[msg.id];
-            return;
-          }
-          if (msg.type !== 'keg') return;
-          const keg = msg.data;
-          if (keg.id && kegsData[keg.id] !== undefined) {
-            kegsData[keg.id] = keg;
-            updateCard(keg.id);
-          }
-        } catch (_) {}
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (_) { return; }
+        if (msg.type === 'keg_removed') {
+          delete kegs[msg.id];
+          updateKegTiles(msg.id);
+        } else if (msg.type === 'keg' && msg.data?.id) {
+          kegs[msg.data.id] = msg.data;
+          updateKegTiles(msg.data.id);
+        }
       });
-      ws.addEventListener('close', () => setTimeout(connectWS, 5000));
+      ws.addEventListener('close', () => setTimeout(connect, 5000));
       ws.addEventListener('error', () => ws.close());
     }
 
     loadAll();
-    setInterval(loadAll, 60000);
-    connectWS();
+    setInterval(() => { if (!drag) loadAll(); }, 60000);
+    connect();
   </script>
 </body>
 </html>
