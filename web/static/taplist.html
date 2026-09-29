@@ -382,7 +382,9 @@
 
   <!-- steel shell with rounded shoulders -->
   <rect x="16" y="${BODY_TOP - 8}" width="88" height="${BODY_H + 10}" rx="13" fill="#434957"/>
-  <rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" rx="9" fill="#0f1116"/>
+  <!-- The empty headspace is a mid grey rather than near-black, so a black
+       stout still reads as liquid against it. -->
+  <rect x="19" y="${BODY_TOP}" width="82" height="${BODY_H}" rx="9" fill="#2a2e38"/>
 
   <g clip-path="url(#kb${n})">
     <g class="liquid" style="transform: translateY(${BODY_H}px)">

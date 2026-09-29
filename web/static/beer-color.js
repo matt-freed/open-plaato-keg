@@ -8,8 +8,9 @@
   'use strict';
 
   // The widely used SRM 1-40 reference palette. Values between whole numbers
-  // are interpolated; anything outside the table is clamped to its ends, since
-  // beer darker than 40 SRM already looks black.
+  // are interpolated. Its last entry is still a dark red-brown, but beer past
+  // 40 SRM, such as an imperial stout, looks black: above the table the colour
+  // darkens to SRM_BLACK by SRM_BLACK_AT and stays there.
   const SRM_HEX = [
     '#FFE699', '#FFD878', '#FFCA5A', '#FFBF42', '#FBB123', '#F8A600', '#F39C00', '#EA8F00',
     '#E58500', '#DE7C00', '#D77200', '#CF6900', '#CB6200', '#C35900', '#BB5100', '#B54C00',
@@ -33,16 +34,27 @@
   const DEFAULT_COLOR = '#c9a849';
 
   const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const SRM_BLACK = '#0b0606';
+  const SRM_BLACK_AT = 50;
+
   const hex2 = n => Math.round(n).toString(16).padStart(2, '0');
+  const mix = (from, to, f) => {
+    const a = rgb(from), b = rgb(to);
+    return '#' + a.map((c, i) => hex2(c + (b[i] - c) * f)).join('');
+  };
 
   // srmToHex returns a #rrggbb colour, or null when srm is not a number.
   function srmToHex(srm) {
     const v = typeof srm === 'string' && srm.trim() !== '' ? Number(srm) : srm;
     if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-    const x = Math.min(Math.max(v, 1), SRM_HEX.length);
-    const lo = Math.floor(x), hi = Math.ceil(x), f = x - lo;
-    const a = rgb(SRM_HEX[lo - 1]), b = rgb(SRM_HEX[hi - 1]);
-    return '#' + a.map((c, i) => hex2(c + (b[i] - c) * f)).join('');
+    const x = Math.max(v, 1);
+    const last = SRM_HEX.length;
+    if (x > last) {
+      const f = Math.min((x - last) / (SRM_BLACK_AT - last), 1);
+      return mix(SRM_HEX[last - 1], SRM_BLACK, f);
+    }
+    const lo = Math.floor(x), hi = Math.ceil(x);
+    return mix(SRM_HEX[lo - 1], SRM_HEX[hi - 1], x - lo);
   }
 
   // beerColor is the colour a tap or beverage is drawn in: its preset or SRM,
@@ -56,7 +68,8 @@
     return drink.color_preset === 'clear';
   }
 
-  const SCALE_MAX = 40;
+  // The picker's bar runs to where the colour stops changing.
+  const SCALE_MAX = SRM_BLACK_AT;
   const scalePos = v => (Math.min(Math.max(v, 1), SCALE_MAX) - 1) / (SCALE_MAX - 1) * 100;
   let pickerSeq = 0;
 
@@ -81,7 +94,7 @@
           <div class="srm-swatch"></div>
         </div>
         <div class="srm-scale" title="Click to pick an SRM"><div class="srm-marker"></div></div>
-        <p class="help">Pilsner 2–4 · pale ale 5–10 · amber 11–18 · brown 19–25 · stout 30+.
+        <p class="help">Pilsner 2–4 · pale ale 5–10 · amber 11–18 · brown 19–25 · stout 30–40 · black 50+.
           Also suits cider, kombucha and coffee.</p>
       </div>
       <div class="bc-panel" data-panel="preset">
