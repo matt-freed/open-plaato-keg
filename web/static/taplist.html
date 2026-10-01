@@ -425,6 +425,13 @@
       return Number.isFinite(v) ? v.toFixed(digits) : null;
     }
 
+    // roundTemp rounds a temperature to a whole degree. Adding 0 turns the -0
+    // that Math.round gives for readings just below zero into 0, so it does not
+    // display as "-0".
+    function roundTemp(v) {
+      return Number.isFinite(v) ? Math.round(v) + 0 : v;
+    }
+
     const DAY_MS = 24 * 60 * 60 * 1000;
 
     // parseIsoDate reads a tap's kegged date, which the server always stores
@@ -536,7 +543,7 @@
       } else {
         readings = `
           <div class="reading temp">
-            <span class="reading-value">${num(temp, 1) ?? '—'}<small>${esc(tempUnit)}</small></span>
+            <span class="reading-value">${num(roundTemp(temp), 0) ?? '—'}<small>${esc(tempUnit)}</small></span>
             <span class="reading-label">Temp</span>
           </div>`;
       }
