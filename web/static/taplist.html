@@ -506,7 +506,10 @@
       const temp = d.keg_temperature ?? keg?.keg_temperature ?? null;
       const tempUnit = d.temperature_unit ?? keg?.temperature_unit ?? '';
       const rawPct = keg?.percent_of_beer_left;
-      const pct = Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : null;
+      // A tap with no keg linked has no level to show, so it is drawn full,
+      // which shows off the beer's colour.
+      const pct = !tap.keg_id ? 100
+        : Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : null;
 
       tile.classList.toggle('is-pouring', keg?.is_pouring === true);
 
