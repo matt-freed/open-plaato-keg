@@ -535,12 +535,12 @@
       desc.textContent = tap.description || '';
       desc.title = tap.description || '';
 
+      // A tap with no keg linked shows no temperature at all, so the kegged
+      // date moves into its place.
       let readings = '';
-      if (!tap.keg_id) {
-        readings = '<span class="no-keg">No keg linked</span>';
-      } else if (!keg) {
+      if (tap.keg_id && !keg) {
         readings = '<span class="no-keg">Waiting for the scale…</span>';
-      } else {
+      } else if (keg) {
         readings = `
           <div class="reading temp">
             <span class="reading-value">${num(roundTemp(temp), 0) ?? '—'}<small>${esc(tempUnit)}</small></span>
