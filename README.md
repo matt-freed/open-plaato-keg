@@ -155,7 +155,7 @@ redirects to whichever page is set as home — the tap list unless you change it
 | `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
-| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), the keg the tap draws from and an open-tap display id. |
+| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), and the keg the tap draws from. |
 | `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), which page is home, and 12- or 24-hour times. |
 
 ## API
@@ -229,7 +229,6 @@ A tap body takes these fields, all optional:
 | `description`, `tasting_notes` | string | |
 | `kegged_date` | string | When the beer was kegged, as `YYYY-MM-DD` or `DD.MM.YYYY`; stored as `YYYY-MM-DD`. Anything that is not a real date is a 400; empty means none |
 | `keg_id` | string | The keg this tap draws from, so the card can show what is left |
-| `device_id` | string | Binds an open-tap display; truncated to 6 characters |
 
 ### Settings
 
@@ -238,7 +237,7 @@ A tap body takes these fields, all optional:
 | `GET` | `/api/config` | — | Home page, clock format, display units and theme together |
 | `GET` `POST` | `/api/config/home-page` | `{"home_page": "taplist"\|"kegs"}` | Where `/` sends the browser |
 | `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | How times are shown, such as on the history page |
-| `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage, BarHelper and `/get_keg` stay in the scale's own units |
+| `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage and BarHelper stay in the scale's own units |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
 | `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` consumes |
 | `GET` | `/api/alive` | — | Status and server version |
@@ -249,14 +248,6 @@ than being rejected. The theme accepts `accent_color`, `bg_color`, `card_bg`,
 anything else is ignored, and a value
 that could break out of the stylesheet is dropped. A named font is fetched from
 Google Fonts.
-
-### Displays
-
-`GET /get_keg/{device_id}` serves an
-[open-tap](https://github.com/pcurylo/open-tap) ESP32 display. It looks up the
-tap bound to that device id and answers with the field names that firmware
-expects, including the total weight on the scale. `logo_url` is always empty:
-tap handle images are not kept.
 
 ### WebSocket
 

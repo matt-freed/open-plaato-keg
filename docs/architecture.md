@@ -66,11 +66,11 @@ docs/              this documentation
    builds the schema in a scratch in-memory database, compares each existing
    table's columns with it, and adds whatever is missing in one transaction.
    `schema.sql` is therefore the only place a column is declared. This covers
-   additions only: a column removed from `schema.sql` stays in older databases
-   , which is harmless because every query names its columns.  A rename, type change or
-   backfill needs a hand-written migration, and a column SQLite cannot add (NOT
-   NULL without a default, or a primary key) stops startup with an error naming
-   it.
+   additions only: a table or column removed from `schema.sql`  stays
+   in older databases, which is harmless because every query names its
+   columns. A rename, type change or backfill needs a hand-written migration,
+   and a column SQLite cannot add (NOT NULL without a default, or a primary
+   key) stops startup with an error naming it.
 4. **Shutdown context** — `signal.NotifyContext` cancels `ctx` on SIGINT or
    SIGTERM. The Dockerfile uses an exec-form `ENTRYPOINT`, so the binary is PID 1
    and receives `docker stop`'s SIGTERM directly.
@@ -273,7 +273,6 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
 | `/api/config/…` | Home page, time format, display units, theme |
-| `GET /get_keg/{deviceID}` | Keg data for a tap display device, looked up through `taps.device_id`; its `logo_url` is always empty |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -297,9 +296,8 @@ Stored values always stay in the units the device reported. Conversion to the
 user's preferred units is a presentation step, applied only where the browser
 reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
 paths and the history JSON. The converted values go in a `display` block
-alongside the original fields; it is never stored. BarHelper,
-`/get_keg/{deviceID}`, the CSV export and the scale setup page all use device
-units.
+alongside the original fields; it is never stored. BarHelper, the CSV export
+and the scale setup page all use device units.
 
 ## BarHelper — `internal/barhelper`
 

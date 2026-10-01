@@ -104,12 +104,8 @@ CREATE TABLE IF NOT EXISTS taps (
     -- When the beer was kegged, as YYYY-MM-DD, or ''. Held on the tap; the
     -- keg's own keg_date is not used for it.
     kegged_date     TEXT NOT NULL DEFAULT '',
-    keg_id          TEXT NOT NULL DEFAULT '',
-    -- Identifier reported by an open-tap ESP32 display; at most 6 characters.
-    device_id       TEXT NOT NULL DEFAULT ''
+    keg_id          TEXT NOT NULL DEFAULT ''
 );
-
-CREATE INDEX IF NOT EXISTS taps_device_id ON taps (device_id);
 
 
 CREATE TABLE IF NOT EXISTS app_config (

@@ -89,9 +89,6 @@ func (s *Server) Handler() http.Handler {
 
 	})
 
-	// Serves an open-tap ESP32 display; the path is fixed by its firmware.
-	r.Get("/get_keg/{deviceID}", s.handleGetKegForDisplay)
-
 	r.Get("/theme.css", s.handleThemeCSS)
 
 	r.Get("/ws", s.hub.ServeHTTP)

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"math"
 	"net/http"
 	"strings"
 
@@ -24,7 +23,6 @@ type tapRequest struct {
 	TastingNotes string         `json:"tasting_notes"`
 	KeggedDate   string         `json:"kegged_date"`
 	KegID        string         `json:"keg_id"`
-	DeviceID     string         `json:"device_id"`
 }
 
 func (s *Server) handleListTaps(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +80,6 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 		TastingNotes: strings.TrimSpace(req.TastingNotes),
 		KeggedDate:   keggedDate,
 		KegID:        strings.TrimSpace(req.KegID),
-		DeviceID:     strings.TrimSpace(req.DeviceID),
 	}
 	if err := s.store.SaveTap(tap); err != nil {
 		writeStoreError(w, err, "tap")
@@ -137,95 +134,4 @@ func (s *Server) handleDeleteTap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "deleted": id})
-}
-
-// displayTap is what an open-tap ESP32 display fetches. The field names are
-// fixed by that firmware.
-type displayTap struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	// LogoURL is always empty: tap handle images are no longer kept, but the
-	// firmware expects the field.
-	LogoURL        string   `json:"logo_url"`
-	KegCapacity    *float64 `json:"keg_capacity"`
-	EmptyKegWeight *float64 `json:"empty_keg_weight"`
-	CurrentWeight  *float64 `json:"current_weight"`
-	KegID          string   `json:"keg_id"`
-}
-
-// litresPerUnit converts a remaining-beer reading to kilograms, which is what
-// the display's own arithmetic expects. Beer is close enough to water that one
-// litre is treated as one kilogram.
-var weightPerUnit = map[string]float64{
-	"litre": 1,
-	"kg":    1,
-	"lbs":   0.453592,
-	"gal":   3.78541,
-}
-
-func (s *Server) handleGetKegForDisplay(w http.ResponseWriter, r *http.Request) {
-	tap, err := s.store.GetTapByDeviceID(chi.URLParam(r, "deviceID"))
-	if err != nil {
-		writeStoreError(w, err, "tap for this display")
-		return
-	}
-
-	out := displayTap{
-		ID:          tap.ID,
-		Name:        joinNonEmpty(" - ", tap.Name, tap.Brewery),
-		Description: joinNonEmpty(" | ", tap.Description, tap.TastingNotes),
-		KegID:       tap.KegID,
-	}
-
-	if tap.KegID != "" {
-		if k, err := s.store.GetKeg(tap.KegID); err == nil {
-			out.KegCapacity = k.MaxKegVolume
-			out.EmptyKegWeight = k.EmptyKegWeight
-			out.CurrentWeight = currentWeight(k)
-		}
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// currentWeight estimates the total weight sitting on the scale.
-//
-// The raw scale reading is preferred when it looks sane; otherwise the
-// remaining volume is converted and added to the empty keg's weight.
-func currentWeight(k *store.Keg) *float64 {
-	empty := 0.0
-	if k.EmptyKegWeight != nil {
-		empty = *k.EmptyKegWeight
-	}
-
-	// A raw reading outside this range means the scale is uncalibrated or
-	// reporting in its own internal units.
-	if k.WeightRaw != nil && *k.WeightRaw > 0 && *k.WeightRaw < 200 {
-		total := round2(empty + *k.WeightRaw)
-		return &total
-	}
-	if k.AmountLeft == nil {
-		return nil
-	}
-
-	factor, ok := weightPerUnit[k.DeriveBeerLeftUnit()]
-	if !ok {
-		factor = 1
-	}
-	total := round2(empty + *k.AmountLeft*factor)
-	return &total
-}
-
-func round2(f float64) float64 {
-	return math.Round(f*100) / 100
-}
-
-func joinNonEmpty(sep string, parts ...string) string {
-	kept := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
-			kept = append(kept, p)
-		}
-	}
-	return strings.Join(kept, sep)
 }

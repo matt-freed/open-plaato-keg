@@ -564,45 +564,6 @@ func TestTapOrder(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
-// An explicit strength must not be overwritten by the derived one.
-// The open-tap display fetches its tap by the device id it was configured with.
-func TestGetKegForDisplay(t *testing.T) {
-	a := newTestAPI(t)
-	a.storeKeg("keg-1", "vw\x0051\x003.000", "vw\x0062\x004.000", "vw\x0076\x0019.0",
-		"vw\x0071\x001", "vw\x0075\x001")
-
-	if err := a.store.SaveTap(&store.Tap{
-		ID: "tap-1", Name: "Pale Ale", Brewery: "Home", Description: "Crisp",
-		TastingNotes: "Citrus", KegID: "keg-1", DeviceID: "AB12CD",
-	}); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-
-	rec := a.do(http.MethodGet, "/get_keg/ab12cd", nil)
-	assertStatus(t, rec, http.StatusOK)
-
-	var out displayTap
-	a.decode(rec, &out)
-	if out.Name != "Pale Ale - Home" {
-		t.Errorf("Name = %q", out.Name)
-	}
-	if out.Description != "Crisp | Citrus" {
-		t.Errorf("Description = %q", out.Description)
-	}
-	if out.CurrentWeight == nil || *out.CurrentWeight != 7 {
-		t.Errorf("CurrentWeight = %v, want 7 (4 kg empty + 3 kg beer)", out.CurrentWeight)
-	}
-	// The firmware expects logo_url even though no handle images are kept.
-	var raw map[string]any
-	a.decode(rec, &raw)
-	if logo, ok := raw["logo_url"]; !ok || logo != "" {
-		t.Errorf("logo_url = %v (present %v), want an empty string", logo, ok)
-	}
-
-	rec = a.do(http.MethodGet, "/get_keg/unknown", nil)
-	assertStatus(t, rec, http.StatusNotFound)
-}
-
 func TestAppConfigEndpoints(t *testing.T) {
 	a := newTestAPI(t)
 

@@ -5,12 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"strings"
 )
-
-// DeviceIDMaxLen bounds the identifier an open-tap display reports. The
-// firmware sends a short id and longer values would never match.
-const DeviceIDMaxLen = 6
 
 // Tap is one configured tap on the tap list.
 type Tap struct {
@@ -36,8 +31,6 @@ type Tap struct {
 	KeggedDate string `json:"kegged_date"`
 	// KegID links the tap to a keg, so the tap list can show what is left.
 	KegID string `json:"keg_id"`
-	// DeviceID identifies an open-tap ESP32 display bound to this tap.
-	DeviceID string `json:"device_id"`
 }
 
 // ColorPresets are the named colours offered beside SRM, for drinks the SRM
@@ -59,13 +52,12 @@ func IsColorPreset(name string) bool {
 const DefaultTapColor = "#c9a849"
 
 const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, srm, color_preset, color,
-	description, tasting_notes, kegged_date, keg_id, device_id`
+	description, tasting_notes, kegged_date, keg_id`
 
 func scanTap(row interface{ Scan(...any) error }) (*Tap, error) {
 	t := &Tap{}
 	err := row.Scan(&t.ID, &t.TapNumber, &t.Name, &t.Brewery, &t.Style, &t.ABV, &t.IBU,
-		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID,
-		&t.DeviceID)
+		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID)
 	if err != nil {
 		return nil, err
 	}
@@ -101,34 +93,15 @@ func (s *Store) GetTap(id string) (*Tap, error) {
 	return t, err
 }
 
-// GetTapByDeviceID finds the tap bound to an open-tap display. The lookup is
-// case-insensitive because the firmware's casing is not guaranteed.
-func (s *Store) GetTapByDeviceID(deviceID string) (*Tap, error) {
-	deviceID = strings.TrimSpace(deviceID)
-	if deviceID == "" {
-		return nil, ErrNotFound
-	}
-	t, err := scanTap(s.db.QueryRow(
-		`SELECT `+tapColumns+` FROM taps WHERE device_id <> '' AND lower(device_id) = lower(?)`,
-		deviceID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	return t, err
-}
-
 // SaveTap inserts or replaces a tap.
 func (s *Store) SaveTap(t *Tap) error {
 	if t.Color == "" {
 		t.Color = DefaultTapColor
 	}
-	if len(t.DeviceID) > DeviceIDMaxLen {
-		t.DeviceID = t.DeviceID[:DeviceIDMaxLen]
-	}
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
-		t.Description, t.TastingNotes, t.KeggedDate, t.KegID, t.DeviceID)
+		t.Description, t.TastingNotes, t.KeggedDate, t.KegID)
 	return err
 }
 

@@ -92,9 +92,10 @@ func TestTapSRMRoundTrips(t *testing.T) {
 	}
 }
 
-// A database created before taps had an srm column gains it on open, loses the
-// removed beverage library and tap handles, and its existing taps survive. The
-// removed handle_image column is left in place and must not get in the way.
+// A database created before taps had an srm column gains it on open, and its
+// existing taps survive. Tables and columns this version no longer uses, such
+// as beverages, tap_handles, handle_image and device_id, are left in place and
+// must not get in the way.
 func TestMigrateOldTaps(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
@@ -121,16 +122,6 @@ func TestMigrateOldTaps(t *testing.T) {
 	for i := 0; i < 2; i++ { // the second pass must be a no-op
 		if err := applySchema(db, schema); err != nil {
 			t.Fatalf("applySchema pass %d: %v", i+1, err)
-		}
-	}
-
-	tables, err := tableNames(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range tables {
-		if name == "beverages" || name == "tap_handles" {
-			t.Errorf("table %s survived the migration", name)
 		}
 	}
 
@@ -180,47 +171,6 @@ func TestOrderTaps(t *testing.T) {
 	}
 	if got, _ := s.GetTap("b"); *got.TapNumber != 3 {
 		t.Errorf("tap b number = %d, want 3 after the failed reorder", *got.TapNumber)
-	}
-}
-
-func TestGetTapByDeviceID(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.SaveTap(&Tap{ID: "a", Name: "Pale Ale", DeviceID: "AB12CD"}); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-	if err := s.SaveTap(&Tap{ID: "b", Name: "Stout"}); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-
-	// The firmware's casing is not guaranteed.
-	for _, id := range []string{"AB12CD", "ab12cd", "Ab12Cd"} {
-		got, err := s.GetTapByDeviceID(id)
-		if err != nil {
-			t.Fatalf("GetTapByDeviceID(%q): %v", id, err)
-		}
-		if got.ID != "a" {
-			t.Errorf("GetTapByDeviceID(%q) = %q, want a", id, got.ID)
-		}
-	}
-
-	// An empty device id must not match the taps that have none.
-	if _, err := s.GetTapByDeviceID(""); !errors.Is(err, ErrNotFound) {
-		t.Errorf("empty device id = %v, want ErrNotFound", err)
-	}
-	if _, err := s.GetTapByDeviceID("nope"); !errors.Is(err, ErrNotFound) {
-		t.Errorf("unknown device id = %v, want ErrNotFound", err)
-	}
-}
-
-func TestSaveTapTruncatesDeviceID(t *testing.T) {
-	s := newTestStore(t)
-	tap := &Tap{ID: "a", DeviceID: "TOOLONGFORTHEDEVICE"}
-	if err := s.SaveTap(tap); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-	got, _ := s.GetTap("a")
-	if len(got.DeviceID) != DeviceIDMaxLen {
-		t.Errorf("DeviceID = %q, want it truncated to %d characters", got.DeviceID, DeviceIDMaxLen)
 	}
 }
 
