@@ -97,7 +97,7 @@ func run() error {
 		return fmt.Errorf("listen for kegs on port %d: %w", cfg.KegListenerPort, err)
 	}
 
-	apiServer := api.NewServer(st, commander, hub, bus, cfg, version, web.Static())
+	apiServer := api.NewServer(st, commander, hub, bus, version, web.Static())
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPListenerPort),
 		Handler:           apiServer.Handler(),

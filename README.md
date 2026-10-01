@@ -33,7 +33,6 @@ graph LR
   sensitivity
 - **Tap list** — a display-ready page for what is on tap, with a live keg
   fill gauge per beer
-- **Beverage library** — reusable beer records to attach to taps
 - **History** — per-keg time series with charts and CSV export
 - **REST API and WebSocket** — everything the UI does, available to your own
   tooling
@@ -117,7 +116,7 @@ server at startup rather than being silently ignored.
 |---|---|---|
 | `KEG_LISTENER_PORT` | `4545` | TCP port the keg hardware connects to |
 | `HTTP_LISTENER_PORT` | `8085` | Port for the web UI, REST API and WebSocket |
-| `DATABASE_FILE_PATH` | `/db/open-plaato-keg.db` | SQLite database. Uploaded images are stored beside it. |
+| `DATABASE_FILE_PATH` | `/db/open-plaato-keg.db` | SQLite database. |
 | `INCLUDE_UNKNOWN_DATA` | `false` | Keep virtual pins this server does not recognise, under the keg's `extra` field |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `BARHELPER_ENABLED` | `false` | Forward volume readings to BarHelper |
@@ -156,10 +155,8 @@ redirects to whichever page is set as home — the tap list unless you change it
 | `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
-| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), the keg the tap draws from, its handle image and an open-tap display id. Fields can be auto-filled from the beverage library. |
-| `/beverages.html` | **Beverage Library** — reusable beer records, including gravities, colour (SRM or a named colour) and where the recipe came from, to load into a tap later. ABV is worked out from OG and FG when it is not given. |
-| `/tap-handles.html` | **Tap Handles** — upload and delete the artwork served to open-tap displays. Each image must be a JPEG of exactly 200×200 pixels. |
-| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), a full-page background image with an adjustable dark overlay, which page is home, and 12- or 24-hour times. |
+| `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), the keg the tap draws from and an open-tap display id. |
+| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), which page is home, and 12- or 24-hour times. |
 
 ## API
 
@@ -232,44 +229,7 @@ A tap body takes these fields, all optional:
 | `description`, `tasting_notes` | string | |
 | `kegged_date` | string | When the beer was kegged, as `YYYY-MM-DD` or `DD.MM.YYYY`; stored as `YYYY-MM-DD`. Anything that is not a real date is a 400; empty means none |
 | `keg_id` | string | The keg this tap draws from, so the card can show what is left |
-| `handle_image` | string | A filename from `/api/tap-handles` |
 | `device_id` | string | Binds an open-tap display; truncated to 6 characters |
-
-### Beverages
-
-Reusable beer records, kept apart from the taps so the same beer can be put
-back on later.
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/beverages` | Every saved beverage |
-| `GET` | `/api/beverages/{id}` | One beverage |
-| `POST` | `/api/beverages/new` | Create one |
-| `POST` | `/api/beverages/{id}` | Save one; `created_at` is kept |
-| `POST` | `/api/beverages/{id}/delete` | Delete one |
-
-| Field | Type | Notes |
-|---|---|---|
-| `name`, `brewery`, `style` | string | |
-| `abv`, `ibu` | number | `abv` is estimated from `og` and `fg` when omitted |
-| `color` | string | Colour from before `srm` existed, used only when neither `srm` nor `color_preset` is set |
-| `description`, `tasting_notes` | string | |
-| `og`, `fg` | number | |
-| `srm` | number | Beer colour, copied to a tap loaded from this beverage. Must not be negative |
-| `color_preset` | string | As for taps; set this or `srm`, not both |
-| `source` | string | Where the recipe came from |
-
-### Tap handles
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/tap-handles` | Uploaded handles, newest first |
-| `POST` | `/api/tap-handles/upload` | Multipart, field `image`. JPEG, exactly 200×200, 10 MB at most |
-| `POST` | `/api/tap-handles/{filename}/delete` | Delete the record and the file |
-| `GET` | `/uploads/tap-handles/{filename}` | The image itself |
-
-The stored filename is generated rather than taken from the upload, so it can
-be used as given in a tap's `handle_image`.
 
 ### Settings
 
@@ -280,16 +240,13 @@ be used as given in a tap's `handle_image`.
 | `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | How times are shown, such as on the history page |
 | `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage, BarHelper and `/get_keg` stay in the scale's own units |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
-| `POST` | `/api/uploads/background` | Multipart, field `image` | JPEG, PNG, WebP or GIF. Replaces any existing background |
-| `DELETE` | `/api/uploads/background` | — | Remove it |
-| `GET` | `/uploads/background` | — | The image itself |
 | `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` consumes |
 | `GET` | `/api/alive` | — | Status and server version |
 
 An unrecognised `home_page` or `time_format` falls back to the default rather
 than being rejected. The theme accepts `accent_color`, `bg_color`, `card_bg`,
-`text_color`, `font_family`, `taplist_title_font`, `taplist_body_font`,
-`bg_image` and `bg_opacity` (`0`–`1`); anything else is ignored, and a value
+`text_color`, `font_family`, `taplist_title_font` and `taplist_body_font`;
+anything else is ignored, and a value
 that could break out of the stylesheet is dropped. A named font is fetched from
 Google Fonts.
 
@@ -298,8 +255,8 @@ Google Fonts.
 `GET /get_keg/{device_id}` serves an
 [open-tap](https://github.com/pcurylo/open-tap) ESP32 display. It looks up the
 tap bound to that device id and answers with the field names that firmware
-expects, including an absolute URL for the handle image and the total weight on
-the scale.
+expects, including the total weight on the scale. `logo_url` is always empty:
+tap handle images are not kept.
 
 ### WebSocket
 

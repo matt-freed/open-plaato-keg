@@ -6,7 +6,8 @@
 -- table must therefore be one SQLite can add: nullable or with a constant
 -- DEFAULT, not part of the primary key, and without UNIQUE, CHECK or
 -- REFERENCES, which are not carried over. Renames, type changes, drops and
--- backfills still need a hand-written migration.
+-- backfills still need a hand-written migration; a column removed from here is
+-- simply left in place in older databases.
 
 CREATE TABLE IF NOT EXISTS kegs (
     id                        TEXT PRIMARY KEY,
@@ -104,35 +105,12 @@ CREATE TABLE IF NOT EXISTS taps (
     -- keg's own keg_date is not used for it.
     kegged_date     TEXT NOT NULL DEFAULT '',
     keg_id          TEXT NOT NULL DEFAULT '',
-    handle_image    TEXT NOT NULL DEFAULT '',
     -- Identifier reported by an open-tap ESP32 display; at most 6 characters.
     device_id       TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS taps_device_id ON taps (device_id);
 
-CREATE TABLE IF NOT EXISTS beverages (
-    id            TEXT PRIMARY KEY,
-    name          TEXT NOT NULL DEFAULT '',
-    brewery       TEXT NOT NULL DEFAULT '',
-    style         TEXT NOT NULL DEFAULT '',
-    abv           REAL,
-    ibu           REAL,
-    color         TEXT NOT NULL DEFAULT '',
-    description   TEXT NOT NULL DEFAULT '',
-    tasting_notes TEXT NOT NULL DEFAULT '',
-    og            REAL,
-    fg            REAL,
-    srm           REAL,
-    color_preset  TEXT    NOT NULL DEFAULT '',
-    source        TEXT    NOT NULL DEFAULT 'manual',
-    created_at    INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS tap_handles (
-    filename    TEXT PRIMARY KEY,
-    uploaded_at INTEGER NOT NULL DEFAULT 0
-);
 
 CREATE TABLE IF NOT EXISTS app_config (
     key   TEXT PRIMARY KEY,

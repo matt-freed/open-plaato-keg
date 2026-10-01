@@ -60,8 +60,6 @@ type Theme struct {
 	FontFamily       string `json:"font_family,omitempty"`
 	TapListTitleFont string `json:"taplist_title_font,omitempty"`
 	TapListBodyFont  string `json:"taplist_body_font,omitempty"`
-	BgImage          string `json:"bg_image,omitempty"`
-	BgOpacity        string `json:"bg_opacity,omitempty"`
 }
 
 // AppConfig is the user-editable application configuration.

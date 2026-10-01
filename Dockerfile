@@ -29,7 +29,7 @@ RUN apk add --no-cache ca-certificates tzdata wget
 
 COPY --from=build /out/open-plaato-keg /usr/local/bin/open-plaato-keg
 
-# The database and uploaded images live here; mount a volume to keep them.
+# The database lives here; mount a volume to keep them.
 RUN mkdir -p /db && adduser -D -H -u 10001 plaato && chown plaato /db
 USER plaato
 

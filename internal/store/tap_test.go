@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
-	"time"
 )
 
 func intPtr(n int) *int           { return &n }
@@ -93,9 +92,10 @@ func TestTapSRMRoundTrips(t *testing.T) {
 	}
 }
 
-// A database created before taps had an srm column gains it on open, and its
-// existing taps survive.
-func TestMigrateAddsTapSRM(t *testing.T) {
+// A database created before taps had an srm column gains it on open, loses the
+// removed beverage library and tap handles, and its existing taps survive. The
+// removed handle_image column is left in place and must not get in the way.
+func TestMigrateOldTaps(t *testing.T) {
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -110,13 +110,27 @@ func TestMigrateAddsTapSRM(t *testing.T) {
 		tasting_notes TEXT NOT NULL DEFAULT '', expiration_date TEXT NOT NULL DEFAULT '',
 		keg_id TEXT NOT NULL DEFAULT '', handle_image TEXT NOT NULL DEFAULT '',
 		device_id TEXT NOT NULL DEFAULT '');
-		INSERT INTO taps (id, name, color) VALUES ('old', 'Pale Ale', '#e8b33a');`); err != nil {
+		INSERT INTO taps (id, name, color, handle_image) VALUES ('old', 'Pale Ale', '#e8b33a', 'h.jpg');
+		CREATE TABLE beverages (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '');
+		INSERT INTO beverages (id, name) VALUES ('b', 'Saison');
+		CREATE TABLE tap_handles (filename TEXT PRIMARY KEY, uploaded_at INTEGER NOT NULL DEFAULT 0);
+		INSERT INTO tap_handles (filename) VALUES ('h.jpg');`); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < 2; i++ { // the second pass must be a no-op
 		if err := applySchema(db, schema); err != nil {
 			t.Fatalf("applySchema pass %d: %v", i+1, err)
+		}
+	}
+
+	tables, err := tableNames(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range tables {
+		if name == "beverages" || name == "tap_handles" {
+			t.Errorf("table %s survived the migration", name)
 		}
 	}
 
@@ -210,126 +224,10 @@ func TestSaveTapTruncatesDeviceID(t *testing.T) {
 	}
 }
 
-func TestBeverageCRUD(t *testing.T) {
-	s := newTestStore(t)
-
-	b := &Beverage{ID: NewID(), Name: "Saison", ABV: floatPtr(6.1), CreatedAt: time.Now().Unix()}
-	if err := s.SaveBeverage(b); err != nil {
-		t.Fatalf("SaveBeverage: %v", err)
-	}
-	got, err := s.GetBeverage(b.ID)
-	if err != nil {
-		t.Fatalf("GetBeverage: %v", err)
-	}
-	if got.Name != "Saison" {
-		t.Errorf("Name = %q", got.Name)
-	}
-	if got.Source != "manual" {
-		t.Errorf("Source = %q, want the default manual", got.Source)
-	}
-
-	if err := s.DeleteBeverage(b.ID); err != nil {
-		t.Fatalf("DeleteBeverage: %v", err)
-	}
-	if _, err := s.GetBeverage(b.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("GetBeverage after delete = %v, want ErrNotFound", err)
-	}
-}
-
-func TestListBeveragesSortedCaseInsensitively(t *testing.T) {
-	s := newTestStore(t)
-	for _, name := range []string{"zebra", "Apple", "mango"} {
-		if err := s.SaveBeverage(&Beverage{ID: name, Name: name}); err != nil {
-			t.Fatalf("SaveBeverage: %v", err)
-		}
-	}
-	list, err := s.ListBeverages()
-	if err != nil {
-		t.Fatalf("ListBeverages: %v", err)
-	}
-	want := []string{"Apple", "mango", "zebra"}
-	for i, b := range list {
-		if b.Name != want[i] {
-			t.Errorf("position %d = %q, want %q", i, b.Name, want[i])
-		}
-	}
-}
-
 // Gravities arrive both as specific gravity and as the points the hardware
 // reports.
-func TestEstimateABV(t *testing.T) {
-	tests := []struct {
-		og, fg, want float64
-	}{
-		{1.050, 1.010, 5.25},
-		{1050, 1010, 5.25},
-		{1.055, 1.015, 5.25},
-	}
-	for _, tt := range tests {
-		// The result is rounded, so it must match exactly rather than
-		// approximately — an unrounded value carries floating point noise into
-		// the API.
-		if got := EstimateABV(tt.og, tt.fg); got != tt.want {
-			t.Errorf("EstimateABV(%v, %v) = %v, want %v", tt.og, tt.fg, got, tt.want)
-		}
-	}
-}
-
-func TestTapHandles(t *testing.T) {
-	s := newTestStore(t)
-	now := time.Unix(1_700_000_000, 0)
-
-	if err := s.AddTapHandle("one.jpg", now); err != nil {
-		t.Fatalf("AddTapHandle: %v", err)
-	}
-	if err := s.AddTapHandle("two.jpg", now.Add(time.Minute)); err != nil {
-		t.Fatalf("AddTapHandle: %v", err)
-	}
-
-	handles, err := s.ListTapHandles()
-	if err != nil {
-		t.Fatalf("ListTapHandles: %v", err)
-	}
-	if len(handles) != 2 || handles[0].Filename != "two.jpg" {
-		t.Errorf("got %+v, want the newest first", handles)
-	}
-
-	if ok, _ := s.HasTapHandle("one.jpg"); !ok {
-		t.Error("HasTapHandle = false for an uploaded handle")
-	}
-	if ok, _ := s.HasTapHandle("nope.jpg"); ok {
-		t.Error("HasTapHandle = true for a handle that was never uploaded")
-	}
-}
-
 // Deleting a handle must clear it from any tap using it, or the tap list shows
 // a broken image.
-func TestDeleteTapHandleClearsReferences(t *testing.T) {
-	s := newTestStore(t)
-	if err := s.AddTapHandle("handle.jpg", time.Now()); err != nil {
-		t.Fatalf("AddTapHandle: %v", err)
-	}
-	if err := s.SaveTap(&Tap{ID: "a", HandleImage: "handle.jpg"}); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-	if err := s.SaveTap(&Tap{ID: "b", HandleImage: "other.jpg"}); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-
-	if err := s.DeleteTapHandle("handle.jpg"); err != nil {
-		t.Fatalf("DeleteTapHandle: %v", err)
-	}
-
-	a, _ := s.GetTap("a")
-	if a.HandleImage != "" {
-		t.Errorf("tap a still references %q", a.HandleImage)
-	}
-	b, _ := s.GetTap("b")
-	if b.HandleImage != "other.jpg" {
-		t.Errorf("tap b's unrelated handle was cleared")
-	}
-}
-
 func TestAppConfigDefaultsAndUpdates(t *testing.T) {
 	s := newTestStore(t)
 
@@ -347,7 +245,7 @@ func TestAppConfigDefaultsAndUpdates(t *testing.T) {
 	if err := s.SetTimeFormat(TimeFormat24h); err != nil {
 		t.Fatalf("SetTimeFormat: %v", err)
 	}
-	if err := s.SetTheme(Theme{AccentColor: "#ff0000", BgOpacity: "0.5"}); err != nil {
+	if err := s.SetTheme(Theme{AccentColor: "#ff0000", CardBg: "#111111"}); err != nil {
 		t.Fatalf("SetTheme: %v", err)
 	}
 
@@ -358,7 +256,7 @@ func TestAppConfigDefaultsAndUpdates(t *testing.T) {
 	if cfg.HomePage != HomePageKegs || cfg.TimeFormat != TimeFormat24h {
 		t.Errorf("got %+v", cfg)
 	}
-	if cfg.Theme.AccentColor != "#ff0000" || cfg.Theme.BgOpacity != "0.5" {
+	if cfg.Theme.AccentColor != "#ff0000" || cfg.Theme.CardBg != "#111111" {
 		t.Errorf("Theme = %+v", cfg.Theme)
 	}
 }

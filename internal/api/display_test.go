@@ -193,52 +193,11 @@ func TestGetKegForDisplayIgnoresDisplayUnits(t *testing.T) {
 // The overlay strength is stored as whole percent, matching the settings
 // slider and what that page reads back into it, but a CSS colour needs the
 // 0-1 fraction.
-func TestThemeCSSConvertsOpacityPercentToAlpha(t *testing.T) {
-	tests := []struct {
-		name    string
-		stored  string
-		wantCSS string
-	}{
-		{"whole percent", "15", "--bg-opacity: 0.15"},
-		{"half", "50", "--bg-opacity: 0.5"},
-		{"none", "0", "--bg-opacity: 0"},
-		{"full", "100", "--bg-opacity: 1"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := newTestAPI(t)
-			rec := a.do(http.MethodPost, "/api/config/theme",
-				map[string]string{"bg_opacity": tt.stored})
-			assertStatus(t, rec, http.StatusOK)
-
-			rec = a.do(http.MethodGet, "/theme.css", nil)
-			assertStatus(t, rec, http.StatusOK)
-			if body := rec.Body.String(); !strings.Contains(body, tt.wantCSS) {
-				t.Errorf("theme.css does not contain %q:\n%s", tt.wantCSS, body)
-			}
-		})
-	}
-}
-
 // Out-of-range and unparseable values leave the declaration out entirely
 // rather than being clamped.
-func TestThemeCSSDropsAnUnusableOpacity(t *testing.T) {
-	for _, stored := range []string{"-1", "101", "", "abc"} {
-		a := newTestAPI(t)
-		rec := a.do(http.MethodPost, "/api/config/theme",
-			map[string]string{"bg_opacity": stored})
-		assertStatus(t, rec, http.StatusOK)
-
-		rec = a.do(http.MethodGet, "/theme.css", nil)
-		if body := rec.Body.String(); strings.Contains(body, "--bg-opacity") {
-			t.Errorf("opacity %q produced a declaration:\n%s", stored, body)
-		}
-	}
-}
-
-// The settings page posts every theme field as a string. A boolean or a
-// number for these two made the whole body fail to decode, which is what made
-// Save report failure however valid the rest of the form was.
+// The settings page posts every theme field as a string. A theme saved before
+// the background image was removed may still carry bg_image and bg_opacity;
+// they are ignored rather than failing the whole save.
 func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	a := newTestAPI(t)
 
@@ -257,7 +216,7 @@ func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	assertStatus(t, rec, http.StatusOK)
 	var theme store.Theme
 	a.decode(rec, &theme)
-	if theme.AccentColor != "#f59e0b" || theme.BgOpacity != "15" || theme.BgImage != "1" {
+	if theme.AccentColor != "#f59e0b" || theme.FontFamily != "Outfit" {
 		t.Errorf("theme did not round trip: %+v", theme)
 	}
 }

@@ -3,21 +3,14 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"image"
-	"image/color"
-	"image/jpeg"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/blynk"
-	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
 	"github.com/matt-freed/open-plaato-keg/internal/plaato"
@@ -31,7 +24,6 @@ type testAPI struct {
 	handler http.Handler
 	store   *store.Store
 	bus     *events.Bus
-	dataDir string
 }
 
 func newTestAPI(t *testing.T) *testAPI {
@@ -43,15 +35,12 @@ func newTestAPI(t *testing.T) *testAPI {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	dataDir := t.TempDir()
-	cfg := config.Config{DatabaseFilePath: dataDir + "/test.db"}
-
 	bus := events.NewBus()
 	commander := keg.NewCommander(keg.NewRegistry())
 	hub := ws.NewHub(st)
-	srv := NewServer(st, commander, hub, bus, cfg, "test", web.Static())
+	srv := NewServer(st, commander, hub, bus, "test", web.Static())
 
-	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus, dataDir: dataDir}
+	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus}
 }
 
 func (a *testAPI) do(method, path string, body any) *httptest.ResponseRecorder {
@@ -515,45 +504,20 @@ func TestTapSRM(t *testing.T) {
 // A drink's colour is an SRM or a named preset, never both.
 func TestColorPresetValidation(t *testing.T) {
 	a := newTestAPI(t)
-	for _, path := range []string{"/api/taps/new", "/api/beverages/new"} {
-		rec := a.do(http.MethodPost, path, map[string]any{"name": "Water", "color_preset": "clear"})
-		assertStatus(t, rec, http.StatusOK)
-		var created struct {
-			Tap, Beverage *struct {
-				SRM         *float64 `json:"srm"`
-				ColorPreset string   `json:"color_preset"`
-			}
-		}
-		a.decode(rec, &created)
-		saved := created.Tap
-		if saved == nil {
-			saved = created.Beverage
-		}
-		if saved == nil || saved.ColorPreset != "clear" || saved.SRM != nil {
-			t.Errorf("%s: saved %+v", path, saved)
-		}
-
-		rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "chartreuse"})
-		assertStatus(t, rec, http.StatusBadRequest)
-		rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "pink", "srm": 4})
-		assertStatus(t, rec, http.StatusBadRequest)
-	}
-}
-
-func TestBeverageSRM(t *testing.T) {
-	a := newTestAPI(t)
-
-	rec := a.do(http.MethodPost, "/api/beverages/new", map[string]any{"name": "Dunkel", "srm": "20"})
+	const path = "/api/taps/new"
+	rec := a.do(http.MethodPost, path, map[string]any{"name": "Water", "color_preset": "clear"})
 	assertStatus(t, rec, http.StatusOK)
 	var created struct {
-		Beverage store.Beverage `json:"beverage"`
+		Tap store.Tap `json:"tap"`
 	}
 	a.decode(rec, &created)
-	if created.Beverage.SRM == nil || *created.Beverage.SRM != 20 {
-		t.Errorf("SRM = %v, want 20", created.Beverage.SRM)
+	if created.Tap.ColorPreset != "clear" || created.Tap.SRM != nil {
+		t.Errorf("saved %+v", created.Tap)
 	}
 
-	rec = a.do(http.MethodPost, "/api/beverages/new", map[string]any{"name": "Oops", "srm": -3})
+	rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "chartreuse"})
+	assertStatus(t, rec, http.StatusBadRequest)
+	rec = a.do(http.MethodPost, path, map[string]any{"name": "Oops", "color_preset": "pink", "srm": 4})
 	assertStatus(t, rec, http.StatusBadRequest)
 }
 
@@ -600,43 +564,7 @@ func TestTapOrder(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
-func TestBeverageDerivesABVFromGravities(t *testing.T) {
-	a := newTestAPI(t)
-
-	rec := a.do(http.MethodPost, "/api/beverages/new", map[string]any{
-		"name": "Saison", "og": "1.055", "fg": "1.010",
-	})
-	assertStatus(t, rec, http.StatusOK)
-
-	var created struct {
-		Beverage store.Beverage `json:"beverage"`
-	}
-	a.decode(rec, &created)
-	if created.Beverage.ABV == nil {
-		t.Fatal("ABV was not derived from the gravities")
-	}
-	if diff := *created.Beverage.ABV - 5.906; diff > 0.01 || diff < -0.01 {
-		t.Errorf("ABV = %v, want about 5.9", *created.Beverage.ABV)
-	}
-}
-
 // An explicit strength must not be overwritten by the derived one.
-func TestBeverageKeepsExplicitABV(t *testing.T) {
-	a := newTestAPI(t)
-	rec := a.do(http.MethodPost, "/api/beverages/new", map[string]any{
-		"name": "Saison", "abv": 6.5, "og": "1.055", "fg": "1.010",
-	})
-	assertStatus(t, rec, http.StatusOK)
-
-	var created struct {
-		Beverage store.Beverage `json:"beverage"`
-	}
-	a.decode(rec, &created)
-	if created.Beverage.ABV == nil || *created.Beverage.ABV != 6.5 {
-		t.Errorf("ABV = %v, want the supplied 6.5", created.Beverage.ABV)
-	}
-}
-
 // The open-tap display fetches its tap by the device id it was configured with.
 func TestGetKegForDisplay(t *testing.T) {
 	a := newTestAPI(t)
@@ -663,6 +591,12 @@ func TestGetKegForDisplay(t *testing.T) {
 	}
 	if out.CurrentWeight == nil || *out.CurrentWeight != 7 {
 		t.Errorf("CurrentWeight = %v, want 7 (4 kg empty + 3 kg beer)", out.CurrentWeight)
+	}
+	// The firmware expects logo_url even though no handle images are kept.
+	var raw map[string]any
+	a.decode(rec, &raw)
+	if logo, ok := raw["logo_url"]; !ok || logo != "" {
+		t.Errorf("logo_url = %v (present %v), want an empty string", logo, ok)
 	}
 
 	rec = a.do(http.MethodGet, "/get_keg/unknown", nil)
@@ -715,7 +649,7 @@ func TestThemeCSS(t *testing.T) {
 	a := newTestAPI(t)
 
 	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
-		"accent_color": "#ff0000", "bg_opacity": "50", "font_family": "Inter, sans-serif",
+		"accent_color": "#ff0000", "font_family": "Inter, sans-serif",
 	})
 	assertStatus(t, rec, http.StatusOK)
 
@@ -725,7 +659,7 @@ func TestThemeCSS(t *testing.T) {
 		t.Errorf("Content-Type = %q", ct)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"--accent-color: #ff0000", "--bg-opacity: 0.5", "fonts.googleapis.com"} {
+	for _, want := range []string{"--accent-color: #ff0000", "fonts.googleapis.com"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("theme.css does not contain %q:\n%s", want, body)
 		}
@@ -739,8 +673,7 @@ func TestThemeCSSRejectsInjection(t *testing.T) {
 
 	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
 		"accent_color": "red; } body { display: none; } :root { --x: y",
-		"bg_image":     "url(https://example.com/track.png)",
-		"bg_opacity":   "150",
+		"bg_color":     "url(https://example.com/track.png)",
 	})
 	assertStatus(t, rec, http.StatusOK)
 
@@ -751,158 +684,6 @@ func TestThemeCSSRejectsInjection(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(body), "url(") {
 		t.Errorf("a url() value survived:\n%s", body)
-	}
-	if strings.Contains(body, "--bg-opacity") {
-		t.Errorf("an out-of-range opacity survived:\n%s", body)
-	}
-}
-
-// jpegBytes builds a JPEG of the given size, for upload tests.
-func jpegBytes(t *testing.T, w, h int) []byte {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for x := 0; x < w; x++ {
-		for y := 0; y < h; y++ {
-			img.Set(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: 128, A: 255})
-		}
-	}
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("encode jpeg: %v", err)
-	}
-	return buf.Bytes()
-}
-
-func (a *testAPI) upload(path, filename, contentType string, content []byte) *httptest.ResponseRecorder {
-	a.t.Helper()
-
-	var body bytes.Buffer
-	mw := multipart.NewWriter(&body)
-	header := make(map[string][]string)
-	header["Content-Disposition"] = []string{
-		fmt.Sprintf(`form-data; name="image"; filename=%q`, filename)}
-	header["Content-Type"] = []string{contentType}
-
-	part, err := mw.CreatePart(header)
-	if err != nil {
-		a.t.Fatalf("create part: %v", err)
-	}
-	if _, err := part.Write(content); err != nil {
-		a.t.Fatalf("write part: %v", err)
-	}
-	mw.Close()
-
-	req := httptest.NewRequest(http.MethodPost, path, &body)
-	req.Header.Set("Content-Type", mw.FormDataContentType())
-	rec := httptest.NewRecorder()
-	a.handler.ServeHTTP(rec, req)
-	return rec
-}
-
-func TestTapHandleUpload(t *testing.T) {
-	a := newTestAPI(t)
-
-	rec := a.upload("/api/tap-handles/upload", "handle.jpg", "image/jpeg",
-		jpegBytes(t, TapHandleSize, TapHandleSize))
-	assertStatus(t, rec, http.StatusOK)
-
-	var body map[string]string
-	a.decode(rec, &body)
-	filename := body["filename"]
-	if !strings.HasSuffix(filename, ".jpg") {
-		t.Fatalf("filename = %q", filename)
-	}
-
-	if _, err := os.Stat(a.dataDir + "/tap-handles/" + filename); err != nil {
-		t.Errorf("the uploaded file was not written: %v", err)
-	}
-
-	rec = a.do(http.MethodGet, "/api/tap-handles", nil)
-	assertStatus(t, rec, http.StatusOK)
-	var handles []store.TapHandle
-	a.decode(rec, &handles)
-	if len(handles) != 1 || handles[0].Filename != filename {
-		t.Errorf("handles = %+v", handles)
-	}
-
-	rec = a.do(http.MethodGet, "/uploads/tap-handles/"+filename, nil)
-	assertStatus(t, rec, http.StatusOK)
-	if ct := rec.Header().Get("Content-Type"); ct != "image/jpeg" {
-		t.Errorf("Content-Type = %q", ct)
-	}
-
-	rec = a.do(http.MethodPost, "/api/tap-handles/"+filename+"/delete", nil)
-	assertStatus(t, rec, http.StatusOK)
-	if _, err := os.Stat(a.dataDir + "/tap-handles/" + filename); !os.IsNotExist(err) {
-		t.Error("the file survived the delete")
-	}
-}
-
-// The tap list lays handles out on a fixed grid, so the size is enforced.
-func TestTapHandleUploadRejectsWrongSize(t *testing.T) {
-	a := newTestAPI(t)
-	rec := a.upload("/api/tap-handles/upload", "handle.jpg", "image/jpeg", jpegBytes(t, 150, 150))
-	assertStatus(t, rec, http.StatusBadRequest)
-
-	var body errorResponse
-	a.decode(rec, &body)
-	if body.Error != "invalid_dimensions" {
-		t.Errorf("error = %q, want invalid_dimensions", body.Error)
-	}
-}
-
-func TestTapHandleUploadRejectsNonJPEG(t *testing.T) {
-	a := newTestAPI(t)
-	rec := a.upload("/api/tap-handles/upload", "handle.png", "image/png", []byte("not an image"))
-	assertStatus(t, rec, http.StatusBadRequest)
-}
-
-// A crafted filename must never reach outside the uploads directory.
-func TestTapHandlePathTraversalIsRejected(t *testing.T) {
-	a := newTestAPI(t)
-	for _, name := range []string{"..%2f..%2fetc%2fpasswd", "no-extension", "evil.sh"} {
-		rec := a.do(http.MethodGet, "/uploads/tap-handles/"+name, nil)
-		if rec.Code == http.StatusOK {
-			t.Errorf("%q was served", name)
-		}
-	}
-}
-
-func TestBackgroundUploadAndDelete(t *testing.T) {
-	a := newTestAPI(t)
-
-	rec := a.do(http.MethodGet, "/uploads/background", nil)
-	assertStatus(t, rec, http.StatusNotFound)
-
-	rec = a.upload("/api/uploads/background", "bg.jpg", "image/jpeg", jpegBytes(t, 64, 64))
-	assertStatus(t, rec, http.StatusOK)
-
-	rec = a.do(http.MethodGet, "/uploads/background", nil)
-	assertStatus(t, rec, http.StatusOK)
-
-	rec = a.do(http.MethodDelete, "/api/uploads/background", nil)
-	assertStatus(t, rec, http.StatusOK)
-
-	rec = a.do(http.MethodGet, "/uploads/background", nil)
-	assertStatus(t, rec, http.StatusNotFound)
-}
-
-// Replacing a background with a different format must not leave the old one
-// behind to be served instead.
-func TestBackgroundReplacementRemovesTheOldFormat(t *testing.T) {
-	a := newTestAPI(t)
-
-	rec := a.upload("/api/uploads/background", "bg.jpg", "image/jpeg", jpegBytes(t, 64, 64))
-	assertStatus(t, rec, http.StatusOK)
-	if _, err := os.Stat(a.dataDir + "/background.jpg"); err != nil {
-		t.Fatalf("the jpeg was not written: %v", err)
-	}
-
-	rec = a.upload("/api/uploads/background", "bg.png", "image/png", []byte("\x89PNG\r\n\x1a\n fake"))
-	assertStatus(t, rec, http.StatusOK)
-
-	if _, err := os.Stat(a.dataDir + "/background.jpg"); !os.IsNotExist(err) {
-		t.Error("the previous jpeg background was left in place")
 	}
 }
 

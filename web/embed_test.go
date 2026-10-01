@@ -9,8 +9,8 @@ import (
 
 // pages are the UI entry points that must exist for the navigation to work.
 var pages = []string{
-	"index.html", "taplist.html", "taplist-setup.html", "tap-handles.html",
-	"beverages.html", "history.html", "dashboard-setup.html", "setup.html",
+	"index.html", "taplist.html", "taplist-setup.html", "history.html",
+	"dashboard-setup.html", "setup.html",
 	"style.css",
 }
 

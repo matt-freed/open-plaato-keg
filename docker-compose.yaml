@@ -9,7 +9,7 @@ services:
       # Web UI and REST API.
       - "8085:8085"
     volumes:
-      # The database and uploaded images live here. Without this volume every
+      # The database lives here. Without this volume every
       # container update starts from an empty database.
       #
       # The container runs as uid 10001, so on Linux the directory must be

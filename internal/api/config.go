@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/matt-freed/open-plaato-keg/internal/store"
@@ -134,9 +133,6 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 	writeCSSVar(&b, "--font-family", theme.FontFamily)
 	writeCSSVar(&b, "--taplist-title-font", theme.TapListTitleFont)
 	writeCSSVar(&b, "--taplist-body-font", theme.TapListBodyFont)
-	if opacity := parseOpacity(theme.BgOpacity); opacity != "" {
-		writeCSSVar(&b, "--bg-opacity", opacity)
-	}
 	b.WriteString("}\n")
 
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
@@ -166,21 +162,6 @@ func writeCSSVar(b *strings.Builder, name, value string) {
 	if v := cssValue(value); v != "" {
 		fmt.Fprintf(b, "  %s: %s;\n", name, v)
 	}
-}
-
-// parseOpacity converts the stored overlay strength into a CSS alpha value.
-//
-// The settings slider works in whole percent, and that is what is stored and
-// what the settings page reads back into the slider, so percent is the unit
-// accepted here. A CSS colour needs the 0-1 fraction, so the conversion
-// happens on the way out. Anything outside the range is dropped rather than
-// clamped, so a junk value leaves the declaration out entirely.
-func parseOpacity(value string) string {
-	percent, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	if err != nil || percent < 0 || percent > 100 {
-		return ""
-	}
-	return strconv.FormatFloat(percent/100, 'f', -1, 64)
 }
 
 // googleFontImport builds the @import for whichever fonts the theme names.

@@ -16,16 +16,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
 	"github.com/matt-freed/open-plaato-keg/internal/store"
 	"github.com/matt-freed/open-plaato-keg/internal/ws"
 )
-
-// maxUploadBytes caps an image upload. Tap handles are small squares and the
-// background is a single photo.
-const maxUploadBytes = 10 << 20
 
 // Server wires the HTTP handlers to the rest of the application.
 type Server struct {
@@ -33,17 +28,16 @@ type Server struct {
 	commander *keg.Commander
 	hub       *ws.Hub
 	bus       *events.Bus
-	cfg       config.Config
 	version   string
 	static    fs.FS
 }
 
 // NewServer returns a configured API server.
 func NewServer(st *store.Store, cmd *keg.Commander, hub *ws.Hub, bus *events.Bus,
-	cfg config.Config, version string, static fs.FS) *Server {
+	version string, static fs.FS) *Server {
 	return &Server{
 		store: st, commander: cmd, hub: hub, bus: bus,
-		cfg: cfg, version: version, static: static,
+		version: version, static: static,
 	}
 }
 
@@ -81,19 +75,6 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/{id}/delete", s.handleDeleteTap)
 		})
 
-		r.Route("/beverages", func(r chi.Router) {
-			r.Get("/", s.handleListBeverages)
-			r.Get("/{id}", s.handleGetBeverage)
-			r.Post("/{id}", s.handleSaveBeverage)
-			r.Post("/{id}/delete", s.handleDeleteBeverage)
-		})
-
-		r.Route("/tap-handles", func(r chi.Router) {
-			r.Get("/", s.handleListTapHandles)
-			r.Post("/upload", s.handleUploadTapHandle)
-			r.Post("/{filename}/delete", s.handleDeleteTapHandle)
-		})
-
 		r.Route("/config", func(r chi.Router) {
 			r.Get("/", s.handleGetConfig)
 			r.Get("/home-page", s.handleGetHomePage)
@@ -106,15 +87,11 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/theme", s.handleSetTheme)
 		})
 
-		r.Post("/uploads/background", s.handleUploadBackground)
-		r.Delete("/uploads/background", s.handleDeleteBackground)
 	})
 
 	// Serves an open-tap ESP32 display; the path is fixed by its firmware.
 	r.Get("/get_keg/{deviceID}", s.handleGetKegForDisplay)
 
-	r.Get("/uploads/tap-handles/{filename}", s.handleServeTapHandle)
-	r.Get("/uploads/background", s.handleServeBackground)
 	r.Get("/theme.css", s.handleThemeCSS)
 
 	r.Get("/ws", s.hub.ServeHTTP)

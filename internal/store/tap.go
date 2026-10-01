@@ -36,8 +36,6 @@ type Tap struct {
 	KeggedDate string `json:"kegged_date"`
 	// KegID links the tap to a keg, so the tap list can show what is left.
 	KegID string `json:"keg_id"`
-	// HandleImage is the filename of an uploaded tap handle image.
-	HandleImage string `json:"handle_image"`
 	// DeviceID identifies an open-tap ESP32 display bound to this tap.
 	DeviceID string `json:"device_id"`
 }
@@ -61,13 +59,13 @@ func IsColorPreset(name string) bool {
 const DefaultTapColor = "#c9a849"
 
 const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, srm, color_preset, color,
-	description, tasting_notes, kegged_date, keg_id, handle_image, device_id`
+	description, tasting_notes, kegged_date, keg_id, device_id`
 
 func scanTap(row interface{ Scan(...any) error }) (*Tap, error) {
 	t := &Tap{}
 	err := row.Scan(&t.ID, &t.TapNumber, &t.Name, &t.Brewery, &t.Style, &t.ABV, &t.IBU,
 		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID,
-		&t.HandleImage, &t.DeviceID)
+		&t.DeviceID)
 	if err != nil {
 		return nil, err
 	}
@@ -128,9 +126,9 @@ func (s *Store) SaveTap(t *Tap) error {
 		t.DeviceID = t.DeviceID[:DeviceIDMaxLen]
 	}
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
-		t.Description, t.TastingNotes, t.KeggedDate, t.KegID, t.HandleImage, t.DeviceID)
+		t.Description, t.TastingNotes, t.KeggedDate, t.KegID, t.DeviceID)
 	return err
 }
 

@@ -38,10 +38,10 @@ internal/
   blynk/       wire protocol: framing, encoding, command and status codes
   plaato/      Plaato meaning: virtual-pin map, frame batch → Packet
   keg/         TCP listener, per-connection state, registry, commander
-  store/       SQLite persistence: kegs, history, taps, beverages, settings
+  store/       SQLite persistence: kegs, history, taps, settings
   events/      in-process pub/sub bus
   ws/          WebSocket hub
-  api/         chi router, REST handlers, uploads, static UI serving
+  api/         chi router, REST handlers, static UI serving
   barhelper/   rate-limited forwarding of volumes to BarHelper
   units/       unit labels and conversions
   config/      configuration from environment variables
@@ -66,9 +66,11 @@ docs/              this documentation
    builds the schema in a scratch in-memory database, compares each existing
    table's columns with it, and adds whatever is missing in one transaction.
    `schema.sql` is therefore the only place a column is declared. This covers
-   additions only; a rename, type change, drop or backfill needs a hand-written
-   migration, and a column SQLite cannot add (NOT NULL without a default, or a
-   primary key) stops startup with an error naming it.
+   additions only: a column removed from `schema.sql` stays in older databases
+   , which is harmless because every query names its columns.  A rename, type change or
+   backfill needs a hand-written migration, and a column SQLite cannot add (NOT
+   NULL without a default, or a primary key) stops startup with an error naming
+   it.
 4. **Shutdown context** — `signal.NotifyContext` cancels `ctx` on SIGINT or
    SIGTERM. The Dockerfile uses an exec-form `ENTRYPOINT`, so the binary is PID 1
    and receives `docker stop`'s SIGTERM directly.
@@ -193,8 +195,6 @@ path and the API never contend for SQLite's lock.
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `taps` | Tap list entries, optionally linked to a keg and to a display device |
-| `beverages` | Beverage library |
-| `tap_handles` | Uploaded handle images (files live in the data directory) |
 | `app_config` | Key/value settings: theme, display units, home page, time format |
 
 There are no foreign keys.
@@ -271,10 +271,9 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs` | List, connected ids, known ids, ordering |
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps`, `/api/beverages`, `/api/tap-handles` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
+| `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
 | `/api/config/…` | Home page, time format, display units, theme |
-| `/api/uploads/background` | Background image upload and removal |
-| `GET /get_keg/{deviceID}` | Keg data for a tap display device, looked up through `taps.device_id` |
+| `GET /get_keg/{deviceID}` | Keg data for a tap display device, looked up through `taps.device_id`; its `logo_url` is always empty |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -284,13 +283,13 @@ browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the dashboard (`index.html`), tap list,
-scale setup, history, beverages, tap handles and their setup pages.
+scale setup, history and their setup pages. A tap holds all of its drink's
+details; there is no separate beverage library.
 `beer-color.js` is the one shared script. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
 green, blue) for drinks the SRM scale cannot describe; the API rejects both at
 once. The script turns either into a colour for the tap list, which draws
-`clear` as a faint tint, and builds the colour picker used by the tap editor and
-the beverage library.
+`clear` as a faint tint, and builds the colour picker used by the tap editor.
 
 ### Display units
 
@@ -348,7 +347,7 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
 |---|---|---|
 | `KEG_LISTENER_PORT` | `4545` | Keg TCP port |
 | `HTTP_LISTENER_PORT` | `8085` | HTTP port |
-| `DATABASE_FILE_PATH` | `/db/open-plaato-keg.db` | Database; its directory also holds uploads |
+| `DATABASE_FILE_PATH` | `/db/open-plaato-keg.db` | Database |
 | `INCLUDE_UNKNOWN_DATA` | `false` | Store unmapped pins in `extra` |
 | `BARHELPER_ENABLED` | `false` | Enable BarHelper forwarding |
 | `BARHELPER_API_KEY` | — | Required when enabled |
@@ -376,8 +375,8 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   tests again, then a multi-arch Docker image (`linux/amd64`, `linux/arm64`)
   pushed to `ghcr.io/matt-freed/open-plaato-keg`.
 - `docker-compose.yaml` runs that image with `./data` mounted at `/db`, which
-  holds the database and uploads. The container runs as uid 10001, so on Linux
-  the directory must be writable by that user.
+  holds the database. The container runs as uid 10001, so on Linux the
+  directory must be writable by that user.
 
 ## Known limitations
 

@@ -38,10 +38,8 @@
             <a class="navbar-link" onclick="toggleDropdown(event)">Configure</a>
             <div class="navbar-dropdown">
               <a class="navbar-item" href="/taplist-setup.html">Tap Setup</a>
-              <a class="navbar-item" href="/tap-handles.html">Tap Handles</a>
               <a class="navbar-item" href="/setup.html">Scale Setup</a>
               <a class="navbar-item" href="/dashboard-setup.html">Dashboard Setup</a>
-              <a class="navbar-item" href="/beverages.html">Beverages</a>
             </div>
           </div>
         </div>
@@ -75,26 +73,6 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
             <h2 class="title is-5" style="margin:0;" id="formTitle">New Tap</h2>
             <button class="button is-danger is-light is-small" onclick="deleteTap()">Delete Tap</button>
-          </div>
-
-          <div class="field" id="beverageLibraryField">
-            <label class="label">Load from Beverage Library <span class="has-text-grey">(optional)</span></label>
-            <p class="help">Select a stored beverage to auto-fill the fields below.</p>
-            <div class="field has-addons">
-              <div class="control is-expanded">
-                <div class="select is-fullwidth">
-                  <select id="beverageSelect">
-                    <option value="">— select a beverage —</option>
-                  </select>
-                </div>
-              </div>
-              <div class="control">
-                <button class="button is-info" onclick="loadFromBeverage()">Load</button>
-              </div>
-              <div class="control">
-                <a class="button is-light" href="/beverages.html" target="_blank">Manage Library</a>
-              </div>
-            </div>
           </div>
 
           <div class="columns">
@@ -199,22 +177,6 @@
             </div>
           </div>
 
-          <div class="field">
-            <label class="label">Tap Handle Image</label>
-            <p class="help">Select an uploaded tap handle image. Upload images on the <a href="/tap-handles.html">Tap Handles</a> page.</p>
-            <div class="control">
-              <div class="select is-fullwidth">
-                <select id="handleImage">
-                  <option value="">No image</option>
-                </select>
-              </div>
-            </div>
-            <div id="handlePreview" style="margin-top:0.75rem;display:none;">
-              <img id="handlePreviewImg" src="" alt="handle preview"
-                style="width:100px;height:100px;object-fit:contain;border-radius:6px;background:rgba(255,255,255,0.05);" />
-            </div>
-          </div>
-
           <hr />
 
           <div class="field">
@@ -269,8 +231,6 @@
     let currentTapId = null;
     let allTaps = [];
     let allKegs = [];
-    let allHandles = [];
-    let allBeverages = [];
 
     function showToast(msg, type = 'info') {
       const t = document.getElementById('toast');
@@ -295,68 +255,16 @@
       if (ev.target.id === 'deviceId') updateDeviceIdCallout(ev.target.value);
     });
 
-    // ── Handle image preview ──────────────────────
-    document.addEventListener('change', ev => {
-      if (ev.target.id === 'handleImage') {
-        const val = ev.target.value;
-        const preview = document.getElementById('handlePreview');
-        const img = document.getElementById('handlePreviewImg');
-        if (val) {
-          img.src = `/uploads/tap-handles/${encodeURIComponent(val)}`;
-          preview.style.display = 'block';
-        } else {
-          preview.style.display = 'none';
-        }
-      }
-    });
-
     // ── Load all data ─────────────────────────────
     async function loadAll() {
-      const [tapsRes, kegsRes, handlesRes, bevsRes] = await Promise.all([
+      const [tapsRes, kegsRes] = await Promise.all([
         fetch('/api/taps'),
         fetch('/api/kegs'),
-        fetch('/api/tap-handles'),
-        fetch('/api/beverages'),
       ]);
-      allTaps      = await tapsRes.json();
-      allKegs      = await kegsRes.json();
-      allHandles   = await handlesRes.json();
-      allBeverages = await bevsRes.json();
+      allTaps = await tapsRes.json();
+      allKegs = await kegsRes.json();
       renderTapList();
       populateDropdowns();
-    }
-
-    function loadBeverages() {
-      const sel = document.getElementById('beverageSelect');
-      const prev = sel.value;
-      sel.innerHTML = '<option value="">— select a beverage —</option>';
-      allBeverages.forEach(b => {
-        const opt = document.createElement('option');
-        opt.value = b.id;
-        opt.textContent = b.name + (b.style ? ` (${b.style})` : '') + (b.abv ? ` · ${b.abv}%` : '');
-        opt.dataset.beverage = JSON.stringify(b);
-        sel.appendChild(opt);
-      });
-      if (prev) sel.value = prev;
-    }
-
-    function loadFromBeverage() {
-      const sel = document.getElementById('beverageSelect');
-      const opt = sel.options[sel.selectedIndex];
-      if (!opt || !opt.dataset.beverage) {
-        showToast('Select a beverage first', 'warning');
-        return;
-      }
-      const b = JSON.parse(opt.dataset.beverage);
-      if (b.name)          document.getElementById('beerName').value        = b.name;
-      if (b.brewery)       document.getElementById('breweryName').value     = b.brewery;
-      if (b.style)         document.getElementById('beerStyle').value       = b.style;
-      if (b.abv)           document.getElementById('beerAbv').value         = b.abv;
-      if (b.ibu)           document.getElementById('beerIbu').value         = b.ibu;
-      if (b.description)   document.getElementById('beerDescription').value = b.description;
-      if (b.tasting_notes) document.getElementById('tastingNotes').value    = b.tasting_notes;
-      if (hasColor(b))     color.set(b);
-      showToast('Loaded from beverage library', 'success');
     }
 
     function renderTapList() {
@@ -396,18 +304,6 @@
         kegSel.appendChild(opt);
       });
       if (prev) kegSel.value = prev;
-
-      // Handles
-      const hSel = document.getElementById('handleImage');
-      const hPrev = hSel.value;
-      hSel.innerHTML = '<option value="">No image</option>';
-      allHandles.forEach(h => {
-        const opt = document.createElement('option');
-        opt.value = h.filename;
-        opt.textContent = h.filename;
-        hSel.appendChild(opt);
-      });
-      if (hPrev) hSel.value = hPrev;
     }
 
     // ── Add new tap ───────────────────────────────
@@ -419,7 +315,7 @@
         tap_number: maxNum + 1,
         name: '', brewery: '', style: '', abv: '', ibu: '',
         srm: null, color_preset: '', description: '', tasting_notes: '',
-        keg_id: '', handle_image: '', device_id: '', kegged_date: ''
+        keg_id: '', device_id: '', kegged_date: ''
       });
     }
 
@@ -435,8 +331,6 @@
       document.getElementById('editBox').style.display = '';
       document.getElementById('emptyState').style.display = 'none';
       document.getElementById('formTitle').textContent = tap.name ? `Editing: ${tap.name}` : 'New Tap';
-      document.getElementById('beverageSelect').value = '';
-      loadBeverages();
 
       document.getElementById('tapNumber').value    = tap.tap_number || '';
       document.getElementById('beerName').value     = tap.name || '';
@@ -448,21 +342,10 @@
       document.getElementById('tastingNotes').value = tap.tasting_notes || '';
       document.getElementById('linkedKeg').value    = tap.keg_id || '';
       document.getElementById('kegDate').value      = tap.kegged_date || '';
-      document.getElementById('handleImage').value  = tap.handle_image || '';
       document.getElementById('deviceId').value     = tap.device_id || '';
       updateDeviceIdCallout(tap.device_id || '');
 
       color.set(tap);
-
-      // handle preview
-      const preview = document.getElementById('handlePreview');
-      const pImg    = document.getElementById('handlePreviewImg');
-      if (tap.handle_image) {
-        pImg.src = `/uploads/tap-handles/${encodeURIComponent(tap.handle_image)}`;
-        preview.style.display = 'block';
-      } else {
-        preview.style.display = 'none';
-      }
     }
 
     function closeForm() {
@@ -492,7 +375,6 @@
         tasting_notes: document.getElementById('tastingNotes').value.trim(),
         kegged_date:   document.getElementById('kegDate').value,
         keg_id:        document.getElementById('linkedKeg').value || null,
-        handle_image:  document.getElementById('handleImage').value || null,
         device_id:     document.getElementById('deviceId').value.trim().slice(0, 6) || null,
       };
 

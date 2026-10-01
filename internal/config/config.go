@@ -4,7 +4,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -15,7 +14,7 @@ type Config struct {
 	KegListenerPort int
 	// HTTPListenerPort serves the web UI, REST API and WebSocket.
 	HTTPListenerPort int
-	// DatabaseFilePath is the SQLite database. Uploads are stored alongside it.
+	// DatabaseFilePath is the SQLite database.
 	DatabaseFilePath string
 	// IncludeUnknownData reports unmapped virtual pins in the keg's extra data
 	// instead of discarding them.
@@ -35,13 +34,6 @@ type BarHelperConfig struct {
 	// that is not in the map is never forwarded.
 	Monitors map[string]string
 }
-
-// DataDir is the directory holding the database, uploaded tap handles and the
-// background image.
-func (c Config) DataDir() string { return filepath.Dir(c.DatabaseFilePath) }
-
-// TapHandleDir is where uploaded tap handle images are stored.
-func (c Config) TapHandleDir() string { return filepath.Join(c.DataDir(), "tap-handles") }
 
 // Load reads the configuration from the environment, applying defaults.
 //

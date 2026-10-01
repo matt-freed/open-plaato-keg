@@ -4,7 +4,6 @@ import (
 	"math"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -25,7 +24,6 @@ type tapRequest struct {
 	TastingNotes string         `json:"tasting_notes"`
 	KeggedDate   string         `json:"kegged_date"`
 	KegID        string         `json:"keg_id"`
-	HandleImage  string         `json:"handle_image"`
 	DeviceID     string         `json:"device_id"`
 }
 
@@ -84,7 +82,6 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 		TastingNotes: strings.TrimSpace(req.TastingNotes),
 		KeggedDate:   keggedDate,
 		KegID:        strings.TrimSpace(req.KegID),
-		HandleImage:  strings.TrimSpace(req.HandleImage),
 		DeviceID:     strings.TrimSpace(req.DeviceID),
 	}
 	if err := s.store.SaveTap(tap); err != nil {
@@ -142,109 +139,14 @@ func (s *Server) handleDeleteTap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "deleted": id})
 }
 
-type beverageRequest struct {
-	Name         string         `json:"name"`
-	Brewery      string         `json:"brewery"`
-	Style        string         `json:"style"`
-	ABV          numberOrString `json:"abv"`
-	IBU          numberOrString `json:"ibu"`
-	Color        string         `json:"color"`
-	Description  string         `json:"description"`
-	TastingNotes string         `json:"tasting_notes"`
-	OG           numberOrString `json:"og"`
-	FG           numberOrString `json:"fg"`
-	SRM          numberOrString `json:"srm"`
-	ColorPreset  string         `json:"color_preset"`
-	Source       string         `json:"source"`
-}
-
-func (s *Server) handleListBeverages(w http.ResponseWriter, r *http.Request) {
-	beverages, err := s.store.ListBeverages()
-	if err != nil {
-		writeStoreError(w, err, "beverages")
-		return
-	}
-	writeJSON(w, http.StatusOK, beverages)
-}
-
-func (s *Server) handleGetBeverage(w http.ResponseWriter, r *http.Request) {
-	b, err := s.store.GetBeverage(chi.URLParam(r, "id"))
-	if err != nil {
-		writeStoreError(w, err, "beverage")
-		return
-	}
-	writeJSON(w, http.StatusOK, b)
-}
-
-func (s *Server) handleSaveBeverage(w http.ResponseWriter, r *http.Request) {
-	var req beverageRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	preset := strings.TrimSpace(req.ColorPreset)
-	if !validBeerColor(w, req.SRM, preset) {
-		return
-	}
-
-	id := chi.URLParam(r, "id")
-	createdAt := time.Now().Unix()
-	if id == "" || id == "new" {
-		id = store.NewID()
-	} else if existing, err := s.store.GetBeverage(id); err == nil {
-		createdAt = existing.CreatedAt
-	}
-
-	b := &store.Beverage{
-		ID:           id,
-		Name:         strings.TrimSpace(req.Name),
-		Brewery:      strings.TrimSpace(req.Brewery),
-		Style:        strings.TrimSpace(req.Style),
-		ABV:          req.ABV.Ptr(),
-		IBU:          req.IBU.Ptr(),
-		Color:        strings.TrimSpace(req.Color),
-		Description:  strings.TrimSpace(req.Description),
-		TastingNotes: strings.TrimSpace(req.TastingNotes),
-		OG:           req.OG.Ptr(),
-		FG:           req.FG.Ptr(),
-		SRM:          req.SRM.Ptr(),
-		ColorPreset:  preset,
-		Source:       strings.TrimSpace(req.Source),
-		CreatedAt:    createdAt,
-	}
-
-	// A recipe usually records its gravities but not its strength; deriving it
-	// saves the user doing the arithmetic.
-	if b.ABV == nil && b.OG != nil && b.FG != nil {
-		abv := store.EstimateABV(*b.OG, *b.FG)
-		b.ABV = &abv
-	}
-
-	if err := s.store.SaveBeverage(b); err != nil {
-		writeStoreError(w, err, "beverage")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": b.ID, "beverage": b})
-}
-
-func (s *Server) handleDeleteBeverage(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if _, err := s.store.GetBeverage(id); err != nil {
-		writeStoreError(w, err, "beverage")
-		return
-	}
-	if err := s.store.DeleteBeverage(id); err != nil {
-		writeStoreError(w, err, "beverage")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "deleted": id})
-}
-
 // displayTap is what an open-tap ESP32 display fetches. The field names are
 // fixed by that firmware.
 type displayTap struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name"`
-	Description    string   `json:"description"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// LogoURL is always empty: tap handle images are no longer kept, but the
+	// firmware expects the field.
 	LogoURL        string   `json:"logo_url"`
 	KegCapacity    *float64 `json:"keg_capacity"`
 	EmptyKegWeight *float64 `json:"empty_keg_weight"`
@@ -274,9 +176,6 @@ func (s *Server) handleGetKegForDisplay(w http.ResponseWriter, r *http.Request) 
 		Name:        joinNonEmpty(" - ", tap.Name, tap.Brewery),
 		Description: joinNonEmpty(" | ", tap.Description, tap.TastingNotes),
 		KegID:       tap.KegID,
-	}
-	if tap.HandleImage != "" {
-		out.LogoURL = absoluteURL(r, "/uploads/tap-handles/"+tap.HandleImage)
 	}
 
 	if tap.KegID != "" {
@@ -329,17 +228,4 @@ func joinNonEmpty(sep string, parts ...string) string {
 		}
 	}
 	return strings.Join(kept, sep)
-}
-
-// absoluteURL builds a URL the display can fetch, using the host it reached us
-// on.
-func absoluteURL(r *http.Request, path string) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	if forwarded := r.Header.Get("X-Forwarded-Proto"); forwarded != "" {
-		scheme = forwarded
-	}
-	return scheme + "://" + r.Host + path
 }
