@@ -1,5 +1,4 @@
-// Drink colours, shared by the tap list, the tap editor and the beverage
-// library.
+// Drink colours, shared by the tap list and the tap editor.
 //
 // A drink's colour is either an SRM, for beer and anything else the SRM scale
 // describes (cider, kombucha, coffee), or one of a few named presets for
@@ -57,7 +56,7 @@
     return mix(SRM_HEX[lo - 1], SRM_HEX[hi - 1], x - lo);
   }
 
-  // beerColor is the colour a tap or beverage is drawn in: its preset or SRM,
+  // beerColor is the colour a tap is drawn in: its preset or SRM,
   // otherwise the colour picked by hand before either existed.
   function beerColor(drink) {
     return PRESET_BY_KEY[drink.color_preset]?.hex || srmToHex(drink.srm) || drink.color || DEFAULT_COLOR;
@@ -167,15 +166,8 @@
     return { set, value };
   }
 
-  // hasColor reports whether a drink has an SRM or preset of its own, as
-  // opposed to only the legacy hand-picked colour.
-  function hasColor(drink) {
-    return drink.srm != null || Boolean(PRESET_BY_KEY[drink.color_preset]);
-  }
-
   window.srmToHex = srmToHex;
   window.beerColor = beerColor;
   window.isClear = isClear;
-  window.hasColor = hasColor;
   window.colorPicker = colorPicker;
 })();

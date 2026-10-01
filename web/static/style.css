@@ -1135,8 +1135,7 @@ body {
   vertical-align: middle;
 }
 
-/* Drink colour picker, used by the tap editor and the beverage library
-   (beer-color.js). */
+/* Drink colour picker, used by the tap editor (beer-color.js). */
 .bc-modes {
   display: inline-flex; padding: 3px; margin-bottom: 0.75rem;
   border-radius: 8px; background: rgba(255,255,255,0.06);

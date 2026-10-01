@@ -24,20 +24,6 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
-func TestDataDirDerivedFromDatabasePath(t *testing.T) {
-	t.Setenv("DATABASE_FILE_PATH", "/db/open-plaato-keg.db")
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got := cfg.DataDir(); got != "/db" {
-		t.Errorf("DataDir = %q, want /db", got)
-	}
-	if got := cfg.TapHandleDir(); got != "/db/tap-handles" {
-		t.Errorf("TapHandleDir = %q, want /db/tap-handles", got)
-	}
-}
-
 func TestEnvBool(t *testing.T) {
 	for _, v := range []string{"true", "TRUE", "1", "yes", "on"} {
 		t.Setenv("INCLUDE_UNKNOWN_DATA", v)

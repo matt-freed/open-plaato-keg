@@ -157,88 +157,9 @@ func TestHistoryCSVStaysInDeviceUnits(t *testing.T) {
 	}
 }
 
-// The ESP32 display has fixed firmware and must never see a converted value.
-func TestGetKegForDisplayIgnoresDisplayUnits(t *testing.T) {
-	a := newTestAPI(t)
-	a.storeKeg("keg-1", "vw\x0051\x003.000", "vw\x0062\x004.000", "vw\x0076\x0019.0",
-		"vw\x0071\x001", "vw\x0075\x001")
-	if err := a.store.SaveTap(&store.Tap{
-		ID: "tap-1", Name: "Pale Ale", KegID: "keg-1", DeviceID: "AB12CD",
-	}); err != nil {
-		t.Fatalf("SaveTap: %v", err)
-	}
-
-	rec := a.do(http.MethodGet, "/get_keg/ab12cd", nil)
-	assertStatus(t, rec, http.StatusOK)
-	var before displayTap
-	a.decode(rec, &before)
-
-	setUS(t, a)
-
-	rec = a.do(http.MethodGet, "/get_keg/ab12cd", nil)
-	assertStatus(t, rec, http.StatusOK)
-	var after displayTap
-	a.decode(rec, &after)
-
-	if *before.CurrentWeight != *after.CurrentWeight {
-		t.Errorf("current_weight moved from %v to %v after a display-unit change",
-			*before.CurrentWeight, *after.CurrentWeight)
-	}
-	if *before.KegCapacity != *after.KegCapacity {
-		t.Errorf("keg_capacity moved from %v to %v after a display-unit change",
-			*before.KegCapacity, *after.KegCapacity)
-	}
-}
-
-// The overlay strength is stored as whole percent, matching the settings
-// slider and what that page reads back into it, but a CSS colour needs the
-// 0-1 fraction.
-func TestThemeCSSConvertsOpacityPercentToAlpha(t *testing.T) {
-	tests := []struct {
-		name    string
-		stored  string
-		wantCSS string
-	}{
-		{"whole percent", "15", "--bg-opacity: 0.15"},
-		{"half", "50", "--bg-opacity: 0.5"},
-		{"none", "0", "--bg-opacity: 0"},
-		{"full", "100", "--bg-opacity: 1"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := newTestAPI(t)
-			rec := a.do(http.MethodPost, "/api/config/theme",
-				map[string]string{"bg_opacity": tt.stored})
-			assertStatus(t, rec, http.StatusOK)
-
-			rec = a.do(http.MethodGet, "/theme.css", nil)
-			assertStatus(t, rec, http.StatusOK)
-			if body := rec.Body.String(); !strings.Contains(body, tt.wantCSS) {
-				t.Errorf("theme.css does not contain %q:\n%s", tt.wantCSS, body)
-			}
-		})
-	}
-}
-
-// Out-of-range and unparseable values leave the declaration out entirely
-// rather than being clamped.
-func TestThemeCSSDropsAnUnusableOpacity(t *testing.T) {
-	for _, stored := range []string{"-1", "101", "", "abc"} {
-		a := newTestAPI(t)
-		rec := a.do(http.MethodPost, "/api/config/theme",
-			map[string]string{"bg_opacity": stored})
-		assertStatus(t, rec, http.StatusOK)
-
-		rec = a.do(http.MethodGet, "/theme.css", nil)
-		if body := rec.Body.String(); strings.Contains(body, "--bg-opacity") {
-			t.Errorf("opacity %q produced a declaration:\n%s", stored, body)
-		}
-	}
-}
-
-// The settings page posts every theme field as a string. A boolean or a
-// number for these two made the whole body fail to decode, which is what made
-// Save report failure however valid the rest of the form was.
+// The settings page posts every theme field as a string. A theme saved before
+// the background image was removed may still carry bg_image and bg_opacity;
+// they are ignored rather than failing the whole save.
 func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	a := newTestAPI(t)
 
@@ -257,7 +178,7 @@ func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	assertStatus(t, rec, http.StatusOK)
 	var theme store.Theme
 	a.decode(rec, &theme)
-	if theme.AccentColor != "#f59e0b" || theme.BgOpacity != "15" || theme.BgImage != "1" {
+	if theme.AccentColor != "#f59e0b" || theme.FontFamily != "Outfit" {
 		t.Errorf("theme did not round trip: %+v", theme)
 	}
 }

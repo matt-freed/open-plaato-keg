@@ -1,4 +1,4 @@
-// Package store persists keg data, taps, beverages and settings in SQLite.
+// Package store persists keg data, taps and settings in SQLite.
 package store
 
 import (
