@@ -336,6 +336,38 @@ go run ./cmd/kegsim -addr localhost:4545
 same way the firmware does, and fails loudly if one is missing or carries the
 wrong message id.
 
+The recording logs in as keg `00000000000000000000000000000001`. Pass
+`-token <32 characters>` to replay it as a different keg instead.
+
+### Demo data
+
+`testdata/demo.sql` fills a database with six kegs on eight taps, enough to see
+the tap list and keg pages populated without any hardware. It holds data only,
+so load it on top of the schema:
+
+```bash
+mkdir -p data
+cat internal/store/schema.sql testdata/demo.sql | sqlite3 data/demo.db
+DATABASE_FILE_PATH=data/demo.db go run ./cmd/open-plaato-keg
+```
+
+Then open <http://localhost:8085>. The readings are a snapshot and stay put
+until a keg reports new ones. `data/` is gitignored; delete `data/demo.db` and
+rerun the `cat` line to start over.
+
+To see live traffic on the tap list, replay the recording against the demo:
+
+```bash
+go run ./cmd/kegsim -addr localhost:4545 -pause 1s -loop
+```
+
+The recording logs in as keg 1, the keg on the Red Barn Amber tap, so that tap
+updates as each segment arrives. The recorded scale sat at room temperature
+and was loaded and emptied three times, so the level climbs (to at most 39%)
+and drops back to empty three times in each two-minute pass. To leave the six
+demo kegs alone, add `-token 00000000000000000000000000000007` and the
+recording arrives as a seventh keg on no tap.
+
 ### The protocol
 
 ```

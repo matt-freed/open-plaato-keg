@@ -7,6 +7,9 @@
 // acknowledgement shows up as a timeout rather than being silently tolerated.
 //
 //	go run ./cmd/kegsim -addr localhost:4545 -capture testdata/capture
+//
+// -token replays the session as a different keg, so the recording can run
+// alongside the demo data without overwriting the keg it was captured from.
 package main
 
 import (
@@ -17,10 +20,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/matt-freed/open-plaato-keg/internal/blynk"
 )
 
 func main() {
@@ -29,6 +35,7 @@ func main() {
 	pause := flag.Duration("pause", 50*time.Millisecond, "delay between segments")
 	timeout := flag.Duration("timeout", 5*time.Second, "how long to wait for each acknowledgement")
 	loop := flag.Bool("loop", false, "replay continuously")
+	token := flag.String("token", "", "keg id to log in as, in place of the recorded one")
 	flag.Parse()
 
 	segments, err := loadCapture(*capture)
@@ -36,6 +43,16 @@ func main() {
 		log.Fatalf("load capture: %v", err)
 	}
 	log.Printf("loaded %d segments from %s", len(segments), *capture)
+
+	if *token != "" {
+		if !kegID.MatchString(*token) {
+			log.Fatalf("-token %q is not a keg id: want 32 letters or digits", *token)
+		}
+		if err := setToken(segments, *token); err != nil {
+			log.Fatalf("set token: %v", err)
+		}
+		log.Printf("logging in as keg %s", *token)
+	}
 
 	for {
 		if err := replay(*addr, segments, *pause, *timeout); err != nil {
@@ -80,6 +97,35 @@ func loadCapture(dir string) ([]segment, error) {
 func captureIndex(path string) int {
 	n, _ := strconv.Atoi(strings.TrimSuffix(filepath.Base(path), ".bin"))
 	return n
+}
+
+var kegID = regexp.MustCompile(`^[0-9A-Za-z]{32}$`)
+
+// setToken rewrites the body of every login frame to token. Firmware announces
+// its token with either get_shared_dash or login, the same two commands the
+// decoder accepts. Message ids are left alone, so acknowledgements are checked
+// exactly as they are for the unmodified recording.
+func setToken(segments []segment, token string) error {
+	for i, seg := range segments {
+		var framer blynk.Framer
+		frames, err := framer.Feed(seg.data)
+		if err != nil {
+			return fmt.Errorf("%s: %w", seg.name, err)
+		}
+		if framer.Buffered() != 0 {
+			return fmt.Errorf("%s: ends partway through a frame", seg.name)
+		}
+
+		var out []byte
+		for _, f := range frames {
+			if f.Cmd == blynk.CmdGetSharedDash || f.Cmd == blynk.CmdLogin {
+				f.Body = []byte(token)
+			}
+			out = append(out, f.Encode()...)
+		}
+		segments[i].data = out
+	}
+	return nil
 }
 
 func replay(addr string, segments []segment, pause, timeout time.Duration) error {

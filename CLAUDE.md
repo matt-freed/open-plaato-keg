@@ -23,6 +23,11 @@ go run ./cmd/open-plaato-keg        # the server
 go run ./cmd/kegsim -addr localhost:4545   # replay recorded hardware traffic at it
 ```
 
+When asked to start a localhost server, run it on the demo seed data using the
+commands in the README's "Demo data" section (`testdata/demo.sql` loaded into
+`data/demo.db`). Do not run kegsim by default; start it alongside the server,
+with the README's demo command, only when asked to simulate a keg.
+
 ## Architecture
 
 Raw TCP bytes become stored keg state through three stages:
