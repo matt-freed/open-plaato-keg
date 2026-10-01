@@ -367,9 +367,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   firmware, waits for each acknowledgement, so a broken acknowledgement shows up
   as a timeout. `-token` rewrites the login frames (`setToken`) so the session
   arrives as a different keg; message ids are untouched.
-- `testdata/demo.sql` is seed data for a demo database: six kegs on eight taps,
-  data only, loaded on top of `internal/store/schema.sql`. Its keg 1 shares the
-  capture's token.
+- `testdata/demo.sql` is seed data for a demo database: six kegs on eight taps
+  and a US display unit system, data only, loaded on top of
+  `internal/store/schema.sql`. Its keg 1 shares the capture's token.
 - CI (`.github/workflows/ci.yaml`) checks `gofmt`, runs `go vet`,
   `go test -race ./...` and `go build ./...`.
 - Releases (`.github/workflows/release.yaml`) run on every push to `main`: the

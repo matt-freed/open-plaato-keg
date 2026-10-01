@@ -21,4 +21,5 @@ INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tast
 INSERT INTO beverages(id,name,brewery,style,abv,ibu,color,description,tasting_notes,og,fg,srm,source,created_at,color_preset) VALUES('bev_1a0ea454f36','Browser Dunkel','','',NULL,NULL,'','','',NULL,NULL,18.0,'manual',1790636805,'');
 INSERT INTO beverages(id,name,brewery,style,abv,ibu,color,description,tasting_notes,og,fg,srm,source,created_at,color_preset) VALUES('bev_1a0ea4e65fa','Hibiscus Soda','','',NULL,NULL,'','','',NULL,NULL,NULL,'manual',1790637401,'red');
 INSERT INTO beverages(id,name,brewery,style,abv,ibu,color,description,tasting_notes,og,fg,srm,source,created_at,color_preset) VALUES('e5a2e9fb','Old Colour Beverage','','Amber Lager',NULL,NULL,'#b5501f','','',NULL,NULL,NULL,'manual',1790636792,'');
+INSERT INTO app_config(key,value) VALUES('display_unit_system','us');
 COMMIT;

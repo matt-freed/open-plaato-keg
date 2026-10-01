@@ -152,7 +152,7 @@ redirects to whichever page is set as home — the tap list unless you change it
 
 | Page | Description |
 |---|---|
-| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the description (up to two lines), the linked keg's name and temperature, the tap's kegged date and how many days ago that was, and a keg graphic filled to the percentage remaining in the drink's colour, with the amount left beneath it; clear drinks are drawn as a faint tint. Amounts and temperatures are in the chosen display units. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. WebSocket updates and a full reload every minute. |
+| `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the description (up to two lines), the linked keg's name and temperature, the tap's kegged date and how many days ago that was, and a keg graphic filled to the percentage remaining in the drink's colour, with the amount left beneath it (a tap with no keg linked is drawn full); clear drinks are drawn as a faint tint. Amounts and temperatures are in the chosen display units. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. WebSocket updates and a full reload every minute. |
 | `/index.html` | **Kegs** — a card per scale, showing remaining volume or percentage, temperature, last pour and a pouring indicator, drawn as a keg or a CO₂ cylinder depending on the mode. Drag the cards to reorder them; the × forgets a scale and its history. |
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
@@ -342,8 +342,8 @@ The recording logs in as keg `00000000000000000000000000000001`. Pass
 ### Demo data
 
 `testdata/demo.sql` fills a database with six kegs on eight taps, enough to see
-the tap list and keg pages populated without any hardware. It holds data only,
-so load it on top of the schema:
+the tap list and keg pages populated without any hardware, and sets the display
+units to US. It holds data only, so load it on top of the schema:
 
 ```bash
 mkdir -p data
