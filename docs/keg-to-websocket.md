@@ -234,7 +234,7 @@ client.
 
 ## Known gaps
 
-- `setup.html` does not reconnect when the socket closes, so it shows stale
+- `keg-setup.html` does not reconnect when the socket closes, so it shows stale
   data after a server restart until the page is reloaded. `taplist.html` and
   `index.html` retry every five seconds.
 - The comment on `clientBuffer` says a client that falls behind is

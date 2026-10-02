@@ -15,7 +15,7 @@
   ];
   const CONFIGURE = [
     ['/taplist-setup.html', 'Tap Setup'],
-    ['/setup.html', 'Scale Setup'],
+    ['/keg-setup.html', 'Keg Setup'],
     ['/dashboard-setup.html', 'Dashboard Setup'],
   ];
 

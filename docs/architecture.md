@@ -282,7 +282,7 @@ browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the Kegs page (`index.html`), tap list,
-scale setup, history and their setup pages. A tap holds all of its drink's
+Keg Setup, history and their setup pages. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
@@ -341,7 +341,7 @@ user's preferred units is a presentation step, applied only where the browser
 reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
 paths and the history JSON. The converted values go in a `display` block
 alongside the original fields; it is never stored. BarHelper, the CSV export
-and the scale setup page all use device units.
+and the Keg Setup page all use device units.
 
 ## BarHelper — `internal/barhelper`
 
@@ -434,7 +434,7 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   for that segment.
 - **`hardware_sync` is not answered.** The device's startup request for its
   configuration pins is acknowledged but not replied to.
-- **UI reconnection.** The scale setup page does not reconnect its WebSocket;
+- **UI reconnection.** The Keg Setup page does not reconnect its WebSocket;
   the tap list and the Kegs page do.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
