@@ -44,14 +44,10 @@ hr {
    sets its own width. */
 .container { width: 100%; }
 
-/* Groups of settings, flowed into as many columns as fit, so a long setup
-   page uses the width the tap list does. */
-.box-columns {
-  columns: 2 480px;
-  column-gap: 1.25rem;
-}
-.box-columns > .box { break-inside: avoid; }
-.field.scale-picker { max-width: 480px; margin-bottom: 1.5rem; }
+/* A single column of settings, centred, for a page that reads top to bottom
+   rather than as a grid. */
+.container.is-centered { max-width: 760px; margin: 0 auto; }
+.field.scale-picker { margin-bottom: 1.5rem; }
 
 .columns {
   display: flex;
