@@ -290,6 +290,22 @@ green, blue) for drinks the SRM scale cannot describe; the API rejects both at
 once. The script turns either into a colour for the tap list, which draws
 `clear` as a faint tint, and builds the colour picker used by the tap editor.
 
+### Theme
+
+Dashboard Setup stores the theme through `store.SetTheme`, and
+`handleThemeCSS` serves it as `/theme.css`, a set of custom properties
+(`--bg-color`, `--card-bg`, `--text-color`, `--font-family`, the accent and the
+two tap list fonts). Every page links it. `style.css` and the tap list's own
+stylesheet both read the page background, card background, text colour and
+font from it. Their `var()` fallbacks hold the defaults, which are the tap
+list's palette and the system font, so an unset value leaves the page in its
+default look. The accent is emitted but not yet consumed.
+`fontStack` turns a stored family name into a full stack that falls back to the
+system font, and `System` selects that stack with no Google Fonts import.
+`GetAppConfig` runs a stored theme through `dropLegacyThemeDefaults`, which
+clears the settings page's former defaults. Every save used to post them while
+the colours had no effect, so they are treated as unset.
+
 ### Display units
 
 Stored values always stay in the units the device reported. Conversion to the

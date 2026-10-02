@@ -7,18 +7,20 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* Page, tile, text and font follow the Dashboard Setup theme from
+       /theme.css; these fallbacks are the defaults it starts from. */
     :root {
-      --bg:        #0c0d11;
-      --tile:      #16181f;
+      --bg:        var(--bg-color, #0c0d11);
+      --tile:      var(--card-bg, #16181f);
       --tile-2:    #1d2029;
       --line:      rgba(255, 255, 255, 0.07);
-      --text:      #eef0f5;
+      --text:      var(--text-color, #eef0f5);
       --soft:      #c3c8d3;
       --muted:     #9097a8;
       --faint:     #5b6172;
       --pour:      #5fd08a;
       --radius:    18px;
-      --sans:      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --sans:      var(--font-family, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
     }
 
     html { background: var(--bg); }

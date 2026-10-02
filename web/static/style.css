@@ -1,5 +1,5 @@
 /* Open Plaato Keg - Modern Beer Scale Dashboard */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
   /* Amber beer-inspired palette */
@@ -19,9 +19,12 @@
   --slate-900: #0f172a;
   --slate-950: #020617;
   
-  /* Foam whites */
-  --foam: #fefce8;
-  --foam-muted: #f8f8f2;
+  /* Page, surface and text follow the Dashboard Setup theme from /theme.css;
+     the fallbacks are the defaults, shared with the tap list. */
+  --page-bg: var(--bg-color, #0c0d11);
+  --surface: var(--card-bg, #16181f);
+  --foam: var(--text-color, #eef0f5);
+  --foam-muted: color-mix(in srgb, var(--foam) 85%, transparent);
   
   /* Accent colors */
   --success: #22c55e;
@@ -38,7 +41,7 @@
   --space-2xl: 3rem;
   
   /* Typography */
-  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: var(--font-family, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
   --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
   
   /* Border radius */
@@ -59,7 +62,7 @@
 }
 
 html {
-  background: linear-gradient(135deg, var(--slate-950) 0%, var(--slate-900) 50%, var(--slate-800) 100%);
+  background: var(--page-bg);
   min-height: 100vh;
 }
 
@@ -76,7 +79,7 @@ body {
 
 /* Navbar */
 .navbar {
-  background: rgba(15, 23, 42, 0.95);
+  background: var(--page-bg);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(245, 158, 11, 0.2);
   padding: var(--space-sm) var(--space-lg);
@@ -134,7 +137,7 @@ body {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  background: rgba(10, 16, 32, 0.98);
+  background: var(--surface);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(245, 158, 11, 0.25);
   border-radius: var(--radius-md);
@@ -198,7 +201,7 @@ body {
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(15, 23, 42, 0.98);
+    background: var(--surface);
     padding: var(--space-md);
     border-bottom: 1px solid rgba(245, 158, 11, 0.2);
   }
@@ -264,13 +267,13 @@ body {
 .title.is-5 { font-size: 1.1rem; }
 
 .subtitle {
-  color: rgba(254, 252, 232, 0.7);
+  color: color-mix(in srgb, var(--foam) 70%, transparent);
   font-weight: 400;
 }
 
 /* Box / Card styling */
 .box, .card {
-  background: linear-gradient(145deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%);
+  background: var(--surface);
   border: 1px solid rgba(245, 158, 11, 0.15);
   border-radius: var(--radius-xl);
   padding: var(--space-lg);
@@ -311,7 +314,7 @@ body {
 
 .content.is-small {
   font-size: 0.9rem;
-  color: rgba(254, 252, 232, 0.7);
+  color: color-mix(in srgb, var(--foam) 70%, transparent);
 }
 
 .content.is-small p {
@@ -333,7 +336,7 @@ body {
 
 .help {
   font-size: 0.85rem;
-  color: rgba(254, 252, 232, 0.6);
+  color: color-mix(in srgb, var(--foam) 60%, transparent);
   margin-top: var(--space-xs);
   margin-bottom: var(--space-sm);
 }
@@ -343,7 +346,7 @@ body {
 .help.is-danger { color: var(--danger); }
 
 .input, .select select, .textarea {
-  background: rgba(15, 23, 42, 0.8);
+  background: var(--page-bg);
   border: 1px solid rgba(245, 158, 11, 0.2);
   border-radius: var(--radius-md);
   color: var(--foam);
@@ -361,7 +364,7 @@ body {
 }
 
 .input::placeholder {
-  color: rgba(254, 252, 232, 0.4);
+  color: color-mix(in srgb, var(--foam) 40%, transparent);
 }
 
 .select {
@@ -458,19 +461,19 @@ body {
 }
 
 .button.is-light {
-  background: rgba(254, 252, 232, 0.1);
+  background: color-mix(in srgb, var(--foam) 10%, transparent);
   color: var(--foam);
-  border-color: rgba(254, 252, 232, 0.2);
+  border-color: color-mix(in srgb, var(--foam) 20%, transparent);
 }
 
 .button.is-light:hover {
-  background: rgba(254, 252, 232, 0.15);
-  border-color: rgba(254, 252, 232, 0.3);
+  background: color-mix(in srgb, var(--foam) 15%, transparent);
+  border-color: color-mix(in srgb, var(--foam) 30%, transparent);
 }
 
 .button.is-static {
-  background: rgba(15, 23, 42, 0.6);
-  color: rgba(254, 252, 232, 0.7);
+  background: var(--page-bg);
+  color: color-mix(in srgb, var(--foam) 70%, transparent);
   cursor: default;
   border-color: rgba(245, 158, 11, 0.2);
 }
@@ -582,7 +585,7 @@ body {
 .sensitivity-btn {
   flex-direction: column;
   padding: var(--space-md);
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--page-bg);
   border: 1px solid rgba(245, 158, 11, 0.2);
   color: var(--amber-400);
   font-size: 1.5rem;
@@ -638,7 +641,7 @@ body {
 }
 
 .table td:first-child {
-  color: rgba(254, 252, 232, 0.7);
+  color: color-mix(in srgb, var(--foam) 70%, transparent);
   width: 40%;
 }
 
@@ -699,7 +702,7 @@ body {
 
 /* Text utilities */
 .has-text-grey {
-  color: rgba(254, 252, 232, 0.5);
+  color: color-mix(in srgb, var(--foam) 50%, transparent);
 }
 
 .has-text-danger {
@@ -708,7 +711,7 @@ body {
 
 /* Keg cards specific styling */
 #kegContainer .card {
-  background: linear-gradient(145deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.85) 100%);
+  background: var(--surface);
   position: relative;
   overflow: hidden;
   cursor: grab;
@@ -766,7 +769,7 @@ body {
 .keg-meta {
   margin-top: 0.3rem;
   font-size: 0.82rem;
-  color: rgba(254, 252, 232, 0.5);
+  color: color-mix(in srgb, var(--foam) 50%, transparent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -783,7 +786,7 @@ body {
 .keg-temp-badge {
   font-family: var(--font-mono);
   font-size: 0.82rem;
-  color: rgba(254, 252, 232, 0.6);
+  color: color-mix(in srgb, var(--foam) 60%, transparent);
 }
 
 .keg-volume {
@@ -806,7 +809,7 @@ body {
   font-family: var(--font-sans);
   font-size: 1.2rem;
   font-weight: 500;
-  color: rgba(254, 252, 232, 0.45);
+  color: color-mix(in srgb, var(--foam) 45%, transparent);
   margin-left: 0.3rem;
 }
 
@@ -818,12 +821,12 @@ body {
 
 .keg-volume.is-secondary .keg-volume-number {
   font-size: 1.7rem;
-  color: rgba(254, 252, 232, 0.8);
+  color: color-mix(in srgb, var(--foam) 80%, transparent);
 }
 
 .keg-volume.is-secondary .keg-volume-unit {
   font-size: 0.95rem;
-  color: rgba(254, 252, 232, 0.55);
+  color: color-mix(in srgb, var(--foam) 55%, transparent);
 }
 
 .keg-remaining {
@@ -857,7 +860,7 @@ body {
 .keg-remaining-text {
   font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: rgba(254, 252, 232, 0.4);
+  color: color-mix(in srgb, var(--foam) 40%, transparent);
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -896,15 +899,15 @@ body {
   height: 10px;
   margin: 0 auto 4px;
   border-radius: 6px 6px 3px 3px;
-  background: rgba(254, 252, 232, 0.3);
-  border: 1px solid rgba(254, 252, 232, 0.18);
+  background: color-mix(in srgb, var(--foam) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foam) 18%, transparent);
 }
 
 .co2-gauge-body {
   position: relative;
   height: 118px;
   border-radius: 24px 24px 18px 18px;
-  border: 2px solid rgba(254, 252, 232, 0.22);
+  border: 2px solid color-mix(in srgb, var(--foam) 22%, transparent);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
@@ -943,7 +946,7 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  border: 2px solid rgba(254, 252, 232, 0.25);
+  border: 2px solid color-mix(in srgb, var(--foam) 25%, transparent);
   background: transparent;
   display: inline-block;
   flex-shrink: 0;
@@ -978,7 +981,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgba(254, 252, 232, 0.5);
+  color: color-mix(in srgb, var(--foam) 50%, transparent);
   margin-right: var(--space-xs);
 }
 
@@ -1001,7 +1004,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--slate-900);
+  background: var(--page-bg);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -1100,14 +1103,14 @@ body {
   font-family: var(--font-mono);
   font-size: 19px;
   font-weight: 700;
-  fill: rgba(254, 252, 232, 0.95);
+  fill: color-mix(in srgb, var(--foam) 95%, transparent);
 }
 
 .co2-unit {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
-  fill: rgba(254, 252, 232, 0.45);
+  fill: color-mix(in srgb, var(--foam) 45%, transparent);
 }
 
 .co2-pct {

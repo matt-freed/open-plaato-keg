@@ -130,15 +130,40 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 	writeCSSVar(&b, "--bg-color", theme.BgColor)
 	writeCSSVar(&b, "--card-bg", theme.CardBg)
 	writeCSSVar(&b, "--text-color", theme.TextColor)
-	writeCSSVar(&b, "--font-family", theme.FontFamily)
-	writeCSSVar(&b, "--taplist-title-font", theme.TapListTitleFont)
-	writeCSSVar(&b, "--taplist-body-font", theme.TapListBodyFont)
+	writeCSSVar(&b, "--font-family", fontStack(theme.FontFamily))
+	writeCSSVar(&b, "--taplist-title-font", fontStack(theme.TapListTitleFont))
+	writeCSSVar(&b, "--taplist-body-font", fontStack(theme.TapListBodyFont))
 	b.WriteString("}\n")
 
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	// The theme changes from the settings page and must take effect on reload.
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(w, b.String())
+}
+
+// systemFontStack is the default UI font, and what "System" selects.
+const systemFontStack = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+
+// fontStack turns a stored font setting into a complete stack, so a font that
+// fails to load falls back to the system font rather than the browser's serif.
+// The settings page stores a bare family name, or "System" for the default;
+// a value that is already a stack is left alone.
+func fontStack(name string) string {
+	name = strings.TrimSpace(name)
+	switch {
+	case name == "":
+		return ""
+	case strings.EqualFold(name, "system"):
+		return systemFontStack
+	case strings.Contains(name, ","):
+		return name
+	}
+	// Single quotes, since cssValue rejects double quotes. A name that could
+	// break out of them is dropped.
+	if strings.ContainsAny(name, `'"`) {
+		return ""
+	}
+	return "'" + name + "', " + systemFontStack
 }
 
 // cssValue rejects anything that could terminate the declaration and inject
@@ -200,7 +225,7 @@ func fontFamilyName(stack string) string {
 	}
 	// Generic keywords are not Google Fonts.
 	switch strings.ToLower(first) {
-	case "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "inherit":
+	case "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "inherit", "system":
 		return ""
 	}
 	return first

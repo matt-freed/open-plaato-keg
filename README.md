@@ -156,7 +156,7 @@ redirects to whichever page is set as home — the tap list unless you change it
 | `/setup.html` | **Scale Setup** — everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information and connection status. Needs the keg to be connected. |
 | `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
 | `/taplist-setup.html` | **Tap List Setup** — the tap editor: tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), and the keg the tap draws from. |
-| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: accent, page, card and text colours, fonts (with separate tap list title and body faces), which page is home, and 12- or 24-hour times. |
+| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, and 12- or 24-hour times. |
 
 ## API
 
@@ -239,7 +239,7 @@ A tap body takes these fields, all optional:
 | `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | How times are shown, such as on the history page |
 | `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage and BarHelper stay in the scale's own units |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
-| `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` consumes |
+| `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` and the tap list consume |
 | `GET` | `/api/alive` | — | Status and server version |
 
 An unrecognised `home_page` or `time_format` falls back to the default rather
@@ -247,7 +247,8 @@ than being rejected. The theme accepts `accent_color`, `bg_color`, `card_bg`,
 `text_color`, `font_family`, `taplist_title_font` and `taplist_body_font`;
 anything else is ignored, and a value
 that could break out of the stylesheet is dropped. A named font is fetched from
-Google Fonts.
+Google Fonts and falls back to the system font; `System` uses the system font
+directly.
 
 ### WebSocket
 

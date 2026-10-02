@@ -229,7 +229,7 @@
 
             const displayLabel = label
                 ? escapeHtml(label)
-                : `<span style="color:rgba(254,252,232,0.55);font-size:0.95rem;font-weight:500;">${escapeHtml(getFallbackScaleName(kegData.id, index))}</span>`;
+                : `<span style="color:color-mix(in srgb, var(--foam) 55%, transparent);font-size:0.95rem;font-weight:500;">${escapeHtml(getFallbackScaleName(kegData.id, index))}</span>`;
 
             const metaParts = [
                 beerStyle ? escapeHtml(beerStyle) : null,

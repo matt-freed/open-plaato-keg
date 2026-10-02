@@ -122,24 +122,24 @@
                   <div class="field">
                     <label class="label">Page Background</label>
                     <div class="color-row">
-                      <input type="color" id="bgColor" value="#020617">
-                      <input type="text" class="input" id="bgHex" value="#020617" maxlength="7" placeholder="#020617">
+                      <input type="color" id="bgColor" value="#0c0d11">
+                      <input type="text" class="input" id="bgHex" value="#0c0d11" maxlength="7" placeholder="#0c0d11">
                     </div>
                   </div>
 
                   <div class="field">
                     <label class="label">Card Background</label>
                     <div class="color-row">
-                      <input type="color" id="cardBg" value="#0f172a">
-                      <input type="text" class="input" id="cardBgHex" value="#0f172a" maxlength="7" placeholder="#0f172a">
+                      <input type="color" id="cardBg" value="#16181f">
+                      <input type="text" class="input" id="cardBgHex" value="#16181f" maxlength="7" placeholder="#16181f">
                     </div>
                   </div>
 
                   <div class="field">
                     <label class="label">Text Color</label>
                     <div class="color-row">
-                      <input type="color" id="textColor" value="#dfdfdf">
-                      <input type="text" class="input" id="textHex" value="#dfdfdf" maxlength="7" placeholder="#dfdfdf">
+                      <input type="color" id="textColor" value="#eef0f5">
+                      <input type="text" class="input" id="textHex" value="#eef0f5" maxlength="7" placeholder="#eef0f5">
                     </div>
                   </div>
 
@@ -162,7 +162,8 @@
                     <div class="control">
                       <div class="select is-fullwidth">
                         <select id="fontFamily">
-                          <option value="Outfit">Outfit (Default)</option>
+                          <option value="System">System Default (Default)</option>
+                          <option value="Outfit">Outfit</option>
                           <option value="Inter">Inter</option>
                           <option value="Roboto">Roboto</option>
                           <option value="Nunito">Nunito</option>
@@ -174,7 +175,6 @@
                           <option value="Oswald">Oswald</option>
                           <option value="Merriweather Sans">Merriweather Sans</option>
                           <option value="Fira Sans">Fira Sans</option>
-                          <option value="System">System Default</option>
                         </select>
                       </div>
                     </div>
@@ -185,7 +185,7 @@
                     <div class="control">
                       <div class="select is-fullwidth">
                         <select id="taplistTitleFont">
-                          <option value="">Use Tap List Default</option>
+                          <option value="">Use Global Font</option>
                           <option value="Outfit">Outfit</option>
                           <option value="Inter">Inter</option>
                           <option value="Roboto">Roboto</option>
@@ -397,10 +397,10 @@
       // ── Defaults ────────────────────────────────────────
       const DEFAULTS = {
         accent_color: '#f59e0b',
-        bg_color:     '#020617',
-        card_bg:      '#0f172a',
-        text_color:   '#dfdfdf',
-        font_family:  'Outfit',
+        bg_color:     '#0c0d11',
+        card_bg:      '#16181f',
+        text_color:   '#eef0f5',
+        font_family:  'System',
         taplist_title_font: '',
         taplist_body_font: ''
       };
@@ -458,19 +458,13 @@
         badge.style.color = bg;
 
         // Font
-        const fontStack = font === 'System'
-          ? '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-          : `"${font}", -apple-system, BlinkMacSystemFont, sans-serif`;
-        const tapTitleStack = !taplistTitleFont
-          ? 'Georgia, "Times New Roman", serif'
-          : taplistTitleFont === 'System'
-            ? '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-            : `"${taplistTitleFont}", -apple-system, BlinkMacSystemFont, sans-serif`;
-        const tapBodyStack = !taplistBodyFont
-          ? fontStack
-          : taplistBodyFont === 'System'
-            ? '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-            : `"${taplistBodyFont}", -apple-system, BlinkMacSystemFont, sans-serif`;
+        // Matches fontStack in internal/api/config.go, which builds the
+        // stacks /theme.css serves.
+        const SYSTEM_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+        const stackFor = name => !name || name === 'System' ? SYSTEM_STACK : `"${name}", ${SYSTEM_STACK}`;
+        const fontStack = stackFor(font);
+        const tapTitleStack = taplistTitleFont ? stackFor(taplistTitleFont) : fontStack;
+        const tapBodyStack = taplistBodyFont ? stackFor(taplistBodyFont) : fontStack;
         pa.style.fontFamily = fontStack;
         tapName.style.fontFamily = tapTitleStack;
         tapDesc.style.fontFamily = tapBodyStack;

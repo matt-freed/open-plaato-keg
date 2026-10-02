@@ -627,6 +627,32 @@ func TestThemeCSS(t *testing.T) {
 	}
 }
 
+// The settings page stores bare family names. theme.css serves them as full
+// stacks, so a font that fails to load falls back to the system font, and
+// "System" is the system stack with nothing fetched from Google Fonts.
+func TestThemeCSSFontStacks(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
+		"font_family": "System", "taplist_title_font": "Playfair Display",
+	})
+	assertStatus(t, rec, http.StatusOK)
+
+	body := a.do(http.MethodGet, "/theme.css", nil).Body.String()
+	for _, want := range []string{
+		"--font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
+		"--taplist-title-font: 'Playfair Display', system-ui,",
+		"family=Playfair+Display",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("theme.css does not contain %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "family=System") {
+		t.Errorf("theme.css imports System from Google Fonts:\n%s", body)
+	}
+}
+
 // Theme values are interpolated into a stylesheet, so anything that could
 // close the declaration must be dropped.
 func TestThemeCSSRejectsInjection(t *testing.T) {
