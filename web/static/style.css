@@ -96,12 +96,15 @@ hr {
 /* The page's one-line description, under the title in the header bar. */
 .subtitle {
   margin: 0 0 1.5rem;
-  color: var(--muted);
+  color: var(--text);
   font-size: 0.95rem;
   font-weight: 400;
 }
 
 .has-text-grey { color: var(--muted); }
+/* Text inside a setup tile is full contrast: the hierarchy comes from size,
+   weight and case rather than from greying out what the user needs to read. */
+.box .has-text-grey, .card .has-text-grey { color: var(--text); }
 .has-text-danger { color: var(--danger); }
 .has-text-warning-dark { color: var(--warn); }
 /* Marks a setting that is experimental or needs care. */
@@ -117,18 +120,19 @@ hr {
 
 .section-box, .section-card { margin-bottom: 1.25rem; }
 
-/* A tile's heading reads like the tap list's keg name: small, uppercase and
-   quiet, so the content carries the weight. */
+/* A tile's heading is set like the tap list's keg name, small and
+   uppercase, but in full-contrast text: on a setup page it names the group
+   of settings, so it has to read clearly above the muted field labels. */
 .box > .title:first-child,
 .box > div:first-child > .title,
 .card-header-title {
   margin: 0 0 1.1rem;
   font-family: var(--sans);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--text);
 }
 
 .card { padding: 0; }
@@ -140,11 +144,11 @@ hr {
 .content .title {
   margin: 1.75rem 0 0.25rem;
   font-family: var(--sans);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--text);
 }
 
 /* ─── Forms ──────────────────────────────────── */
@@ -158,15 +162,15 @@ hr {
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--text);
 }
-.label .has-text-grey { color: var(--faint); letter-spacing: 0.06em; }
+.label .has-text-grey { color: var(--text); font-weight: 500; letter-spacing: 0.06em; }
 
 .help {
   margin: 0.15rem 0 0.5rem;
   font-size: 0.85rem;
   line-height: 1.45;
-  color: var(--muted);
+  color: var(--text);
 }
 .help.is-success { color: var(--pour); }
 .help.is-warning { color: var(--warn); }
@@ -218,7 +222,7 @@ hr {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  color: var(--soft);
+  color: var(--text);
   cursor: pointer;
 }
 .radio input { accent-color: var(--action); margin: 0; }
@@ -289,7 +293,7 @@ hr {
 .button.is-static {
   background: var(--tile-2);
   border-color: var(--line-strong);
-  color: var(--muted);
+  color: var(--text);
   font-weight: 500;
   cursor: default;
 }
@@ -354,7 +358,7 @@ hr {
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
+  color: var(--text);
   font-size: 0.75rem;
 }
 
@@ -364,7 +368,7 @@ hr {
 .table td, .table th {
   padding: 0.6rem 0;
   border-bottom: 1px solid var(--line);
-  color: var(--soft);
+  color: var(--text);
   text-align: left;
   font-variant-numeric: tabular-nums;
   vertical-align: baseline;
@@ -373,7 +377,7 @@ hr {
 .table td:first-child {
   width: 40%;
   padding-right: 1rem;
-  color: var(--faint);
+  color: var(--text);
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -501,7 +505,7 @@ hr {
 .bc-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .bc-preset {
   display: inline-flex; align-items: center; gap: 0.45rem;
-  font: inherit; font-size: 0.85rem; color: var(--soft); cursor: pointer;
+  font: inherit; font-size: 0.85rem; color: var(--text); cursor: pointer;
   padding: 0.35rem 0.75rem 0.35rem 0.4rem; border-radius: 999px;
   border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.03);
 }
