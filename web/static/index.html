@@ -8,80 +8,19 @@
       @import url("style.css");
     </style>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
 </head>
 <body>
-  <div id="header_container">
-    <div id="page_container" class="container pageEntry"></div>
-    <nav class="navbar" role="navigation" aria-label="main navigation">
-      <div class="navbar-brand">
-        <a
-          role="button"
-          class="navbar-burger burger"
-          aria-label="menu"
-          aria-expanded="false"
-          data-target="navbarMenu"
-        >
-          <span aria-hidden="true"></span>
-          <span aria-hidden="true"></span>
-          <span aria-hidden="true"></span>
-        </a>
-      </div>
-
-      <div id="navbarMenu" class="navbar-menu">
-        <div class="navbar-start">
-          <a class="navbar-item" href="/">Home</a>
-          <a class="navbar-item" href="/index.html">Kegs</a>
-          <a class="navbar-item" href="/history.html">History</a>
-          <div class="navbar-item has-dropdown" id="configureDropdown">
-            <a class="navbar-link" onclick="toggleDropdown(event)">Configure</a>
-            <div class="navbar-dropdown">
-              <a class="navbar-item" href="/taplist-setup.html">Tap Setup</a>
-              <a class="navbar-item" href="/setup.html">Scale Setup</a>
-              <a class="navbar-item" href="/dashboard-setup.html">Dashboard Setup</a>
-            </div>
-          </div>
-        </div>
-        <div class="navbar-end">
-          <span class="navbar-item" id="serverVersion" style="font-size:0.75rem;opacity:0.5;"></span>
-        </div>
-      </div>
-    </nav>
-  </div>
+  <site-header heading="Kegs"></site-header>
 
     <section class="section">
         <div class="container">
-            <h1 class="title is-1">Kegs</h1>
             <div class="columns is-multiline" id="kegContainer"></div>
         </div>
     </section>
 
-  </div>
-
     <script>
-      // Navbar burger menu
-      document.querySelectorAll('.navbar-burger').forEach(el =>
-        el.addEventListener('click', () => {
-          document.getElementById(el.dataset.target).classList.toggle('is-active');
-          el.classList.toggle('is-active');
-        })
-      );
-
-      // Server version
-      fetch('/api/alive')
-        .then(r => r.json())
-        .then(d => { if (d.version) document.getElementById('serverVersion').textContent = 'v' + d.version; })
-        .catch(() => {});
-
-      // Configure dropdown (click to toggle on desktop; hover handled by CSS)
-      function toggleDropdown(e) {
-        e.preventDefault();
-        document.getElementById('configureDropdown').classList.toggle('is-open');
-      }
-      document.addEventListener('click', e => {
-        if (!e.target.closest('#configureDropdown'))
-          document.getElementById('configureDropdown')?.classList.remove('is-open');
-      });
-
         const kegContainer = document.getElementById('kegContainer');
         let dragSourceColumn = null;
 

@@ -284,7 +284,16 @@ The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the dashboard (`index.html`), tap list,
 scale setup, history and their setup pages. A tap holds all of its drink's
 details; there is no separate beverage library.
-`beer-color.js` is the one shared script. A drink's colour is either an SRM or
+Every page shares one header bar, the `<site-header>` custom element in
+`site-header.js` with its styles in `site-header.css`. It renders the page
+title from its `heading` attribute, the Tap List, Kegs and History links, the
+Configure menu with the server version, and marks the current page. Pages load
+it in `<head>` without `defer`, so the element is defined before the parser
+reaches it. The tap list sets the beer count beside its title through the
+element's `count` property. The header's colours come from `/theme.css`, so it
+looks the same whether or not the page loads `style.css`.
+
+`beer-color.js` is shared by the tap list and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
 green, blue) for drinks the SRM scale cannot describe; the API rejects both at
 once. The script turns either into a colour for the tap list, which draws

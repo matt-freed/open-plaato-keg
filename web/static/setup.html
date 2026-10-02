@@ -9,46 +9,15 @@
 
     </style>
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
   </head>
   <body>
-    <div id="header_container">
-      <nav class="navbar" role="navigation" aria-label="main navigation">
-        <div class="navbar-brand">
-          <a
-            role="button"
-            class="navbar-burger burger"
-            aria-label="menu"
-            aria-expanded="false"
-            data-target="navbarMenu"
-          >
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-          </a>
-        </div>
-
-        <div id="navbarMenu" class="navbar-menu">
-          <div class="navbar-start">
-            <a class="navbar-item" href="/">Home</a>
-            <a class="navbar-item" href="/index.html">Kegs</a>
-            <a class="navbar-item" href="/history.html">History</a>
-            <div class="navbar-item has-dropdown" id="configureDropdown">
-              <a class="navbar-link" onclick="toggleDropdown(event)">Configure</a>
-              <div class="navbar-dropdown">
-                <a class="navbar-item" href="/taplist-setup.html">Tap Setup</a>
-                <a class="navbar-item" href="/setup.html">Scale Setup</a>
-                <a class="navbar-item" href="/dashboard-setup.html">Dashboard Setup</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-    </div>
+    <site-header heading="Scale Setup"></site-header>
 
     <div id="page_container" class="container pageEntry">
       <section class="section">
         <div class="container">
-          <h1 class="title is-2">Scale Setup</h1>
           <p class="subtitle">Configure and calibrate your scale</p>
 
           <!-- Scale Selector -->
@@ -350,22 +319,6 @@
     <div id="toast" class="notification toast is-hidden"></div>
 
     <script>
-      // Navbar
-      document.querySelectorAll('.navbar-burger').forEach(el =>
-        el.addEventListener('click', () => {
-          document.getElementById(el.dataset.target).classList.toggle('is-active');
-          el.classList.toggle('is-active');
-        })
-      );
-      function toggleDropdown(e) {
-        e.preventDefault();
-        document.getElementById('configureDropdown').classList.toggle('is-open');
-      }
-      document.addEventListener('click', e => {
-        if (!e.target.closest('#configureDropdown'))
-          document.getElementById('configureDropdown')?.classList.remove('is-open');
-      });
-
       const kegIdSelect = document.getElementById("kegId");
       const connectionStatus = document.getElementById("connectionStatus");
       let currentKegData = {};

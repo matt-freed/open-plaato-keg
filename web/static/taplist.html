@@ -32,55 +32,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ─── Header ─────────────────────────────────── */
-    .bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: 1.25rem clamp(1rem, 3vw, 2.5rem);
-    }
-    .bar-title { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
-    .bar-title h1 {
-      font-family: var(--taplist-title-font, var(--sans));
-      font-size: 1.6rem;
-      font-weight: 700;
-      letter-spacing: -0.01em;
-    }
-    .bar-count { color: var(--muted); font-size: 0.95rem; }
-    .bar-right { display: flex; align-items: center; gap: 1.25rem; }
-
-    .nav { display: flex; gap: 0.25rem; align-items: center; }
-    .nav a, .nav button {
-      font: inherit;
-      font-size: 0.8rem;
-      color: var(--muted);
-      background: none;
-      border: 0;
-      border-radius: 8px;
-      padding: 0.4rem 0.65rem;
-      text-decoration: none;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    .nav a:hover, .nav button:hover { background: var(--tile-2); color: var(--text); }
-    .menu { position: relative; }
-    .menu-list {
-      display: none;
-      position: absolute;
-      right: 0;
-      top: calc(100% + 0.4rem);
-      min-width: 170px;
-      padding: 0.35rem;
-      background: var(--tile-2);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-      z-index: 50;
-    }
-    .menu.is-open .menu-list { display: block; }
-    .menu-list a { display: block; }
-
     /* ─── Grid ───────────────────────────────────── */
     main { padding: 0.25rem clamp(1rem, 3vw, 2.5rem) 2.5rem; }
 
@@ -292,7 +243,6 @@
     }
 
     @media (max-width: 640px) {
-      .bar { flex-wrap: wrap; }
       .tile { padding: 1.2rem 1rem 1.1rem 1.2rem; min-height: 190px; }
       .tile-keg { width: 68px; }
       .reading-value { font-size: 1rem; }
@@ -305,29 +255,12 @@
     }
   </style>
   <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/site-header.css">
+  <script src="/site-header.js"></script>
 </head>
 <body>
 
-  <header class="bar">
-    <div class="bar-title">
-      <h1>On Tap</h1>
-      <span class="bar-count" id="tapCount"></span>
-    </div>
-    <div class="bar-right">
-      <nav class="nav">
-        <a href="/index.html">Kegs</a>
-        <a href="/history.html">History</a>
-        <div class="menu" id="configMenu">
-          <button type="button" id="configToggle" aria-haspopup="true" aria-expanded="false">Configure ▾</button>
-          <div class="menu-list">
-            <a href="/taplist-setup.html">Tap Setup</a>
-            <a href="/setup.html">Scale Setup</a>
-            <a href="/dashboard-setup.html">Dashboard Setup</a>
-          </div>
-        </div>
-      </nav>
-    </div>
-  </header>
+  <site-header heading="On Tap"></site-header>
 
   <main>
     <p class="status" id="status">Loading taps…</p>
@@ -343,19 +276,6 @@
 
     let taps = [];
     const kegs = {};
-
-    // ── Configure menu ─────────────────────────────
-    const configMenu = document.getElementById('configMenu');
-    const configToggle = document.getElementById('configToggle');
-    configToggle.addEventListener('click', e => {
-      e.stopPropagation();
-      const open = configMenu.classList.toggle('is-open');
-      configToggle.setAttribute('aria-expanded', String(open));
-    });
-    document.addEventListener('click', () => {
-      configMenu.classList.remove('is-open');
-      configToggle.setAttribute('aria-expanded', 'false');
-    });
 
     // ── Keg graphic ────────────────────────────────
     // A side view of a 5 gallon corny keg: rubber top with two hand holes,
@@ -569,7 +489,7 @@
       // the drop renders instead.
       if (drag) { renderPending = true; return; }
 
-      document.getElementById('tapCount').textContent =
+      document.querySelector('site-header').count =
         taps.length ? `${taps.length} ${taps.length === 1 ? 'beer' : 'beers'}` : '';
 
       if (!taps.length) {

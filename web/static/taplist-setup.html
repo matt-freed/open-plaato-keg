@@ -6,6 +6,8 @@
   <title>Tap List Setup - Open Plaato</title>
   <style>@import url("style.css");</style>
   <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/site-header.css">
+  <script src="/site-header.js"></script>
   <style>
     .tap-list-item {
       display: flex; align-items: center; justify-content: space-between;
@@ -22,33 +24,9 @@
   </style>
 </head>
 <body>
-  <div id="header_container">
-    <nav class="navbar" role="navigation" aria-label="main navigation">
-      <div class="navbar-brand">
-        <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
-          <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
-        </a>
-      </div>
-      <div id="navbarMenu" class="navbar-menu">
-        <div class="navbar-start">
-          <a class="navbar-item" href="/">Home</a>
-          <a class="navbar-item" href="/index.html">Kegs</a>
-          <a class="navbar-item" href="/history.html">History</a>
-          <div class="navbar-item has-dropdown" id="configureDropdown">
-            <a class="navbar-link" onclick="toggleDropdown(event)">Configure</a>
-            <div class="navbar-dropdown">
-              <a class="navbar-item" href="/taplist-setup.html">Tap Setup</a>
-              <a class="navbar-item" href="/setup.html">Scale Setup</a>
-              <a class="navbar-item" href="/dashboard-setup.html">Dashboard Setup</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </nav>
-  </div>
+  <site-header heading="Tap List Setup"></site-header>
 
   <div class="container" style="padding:1.5rem 1rem 3rem;">
-    <h1 class="title is-2">Tap List Setup</h1>
     <p class="subtitle">Configure beer info and tasting notes for each tap. Data is stored in the beer database.</p>
 
     <div class="columns">
@@ -198,22 +176,6 @@
 
   <script src="/beer-color.js"></script>
   <script>
-    // navbar burger
-    document.querySelectorAll('.navbar-burger').forEach(el =>
-      el.addEventListener('click', () => {
-        document.getElementById(el.dataset.target).classList.toggle('is-active');
-        el.classList.toggle('is-active');
-      })
-    );
-    function toggleDropdown(e) {
-      e.preventDefault();
-      document.getElementById('configureDropdown').classList.toggle('is-open');
-    }
-    document.addEventListener('click', e => {
-      if (!e.target.closest('#configureDropdown'))
-        document.getElementById('configureDropdown')?.classList.remove('is-open');
-    });
-
     let currentTapId = null;
     let allTaps = [];
     let allKegs = [];
