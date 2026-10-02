@@ -1,41 +1,33 @@
-/* The header bar every page shares, rendered by site-header.js.
-   Self-contained, since the tap list does not load style.css: the page
-   colours come from the Dashboard Setup theme in /theme.css, and the
-   fallbacks match the tap list's palette. */
+/* The header bar every page shares, rendered by site-header.js. Uses the
+   tokens from tokens.css. */
 site-header { display: block; }
 
 .site-header {
-  --sh-text:    var(--text-color, #eef0f5);
-  --sh-muted:   #9097a8;
-  --sh-faint:   #5b6172;
-  --sh-raised:  #1d2029;
-  --sh-line:    rgba(255, 255, 255, 0.07);
-
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 1.25rem clamp(1rem, 3vw, 2.5rem);
-  color: var(--sh-text);
+  color: var(--text);
   line-height: normal;
 }
 
 .site-header-title { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
 .site-header-title h1 {
   margin: 0;
-  font-family: var(--taplist-title-font, var(--font-family, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif));
+  font-family: var(--title-font);
   font-size: 1.6rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: inherit;
 }
-.site-header-count { color: var(--sh-muted); font-size: 0.95rem; }
+.site-header-count { color: var(--muted); font-size: 0.95rem; }
 
 .site-nav { display: flex; gap: 0.25rem; align-items: center; }
 .site-nav a, .site-nav button {
   font: inherit;
   font-size: 0.8rem;
-  color: var(--sh-muted);
+  color: var(--muted);
   background: none;
   border: 0;
   border-radius: 8px;
@@ -44,8 +36,8 @@ site-header { display: block; }
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.site-nav a:hover, .site-nav button:hover { background: var(--sh-raised); color: var(--sh-text); }
-.site-nav [aria-current="page"], .site-nav .is-current { color: var(--sh-text); }
+.site-nav a:hover, .site-nav button:hover { background: var(--tile-2); color: var(--text); }
+.site-nav [aria-current="page"], .site-nav .is-current { color: var(--text); }
 
 .site-menu { position: relative; }
 .site-menu-list {
@@ -55,8 +47,8 @@ site-header { display: block; }
   top: calc(100% + 0.4rem);
   min-width: 170px;
   padding: 0.35rem;
-  background: var(--sh-raised);
-  border: 1px solid var(--sh-line);
+  background: var(--tile-2);
+  border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
   z-index: 50;
@@ -66,9 +58,9 @@ site-header { display: block; }
 .site-version {
   margin: 0.3rem 0.3rem 0;
   padding: 0.4rem 0.35rem 0.1rem;
-  border-top: 1px solid var(--sh-line);
+  border-top: 1px solid var(--line);
   font-size: 0.7rem;
-  color: var(--sh-faint);
+  color: var(--faint);
 }
 .site-version:empty { display: none; }
 

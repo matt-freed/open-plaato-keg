@@ -281,7 +281,7 @@ are sent as a press and a release. Edits and deletes publish events so open
 browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
-`web/embed.go`, with no build step: the dashboard (`index.html`), tap list,
+`web/embed.go`, with no build step: the Kegs page (`index.html`), tap list,
 scale setup, history and their setup pages. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
@@ -290,10 +290,28 @@ title from its `heading` attribute, the Tap List, Kegs and History links, the
 Configure menu with the server version, and marks the current page. Pages load
 it in `<head>` without `defer`, so the element is defined before the parser
 reaches it. The tap list sets the beer count beside its title through the
-element's `count` property. The header's colours come from `/theme.css`, so it
-looks the same whether or not the page loads `style.css`.
+element's `count` property.
 
-`beer-color.js` is shared by the tap list and the tap editor. A drink's colour is either an SRM or
+The pages are styled as one application, in the tap list's look:
+
+- `tokens.css` holds the design tokens every page loads first: the page, tile
+  and text colours, the greys for secondary text, the radii, the fonts and
+  `--action`, the accent used for main buttons and selections. The themeable
+  ones read the variables from `/theme.css` (see Theme below).
+- `tiles.css` is the tile grid and tile shared by the tap list and the Kegs
+  page: the heading, specs, readings and the keg graphic.
+- `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
+  sets its level. The tap list, the Kegs page and the Dashboard Setup preview
+  use it.
+- `style.css` styles everything else, used by every page except the tap list:
+  layout, tiles for groups of settings, form controls, segmented choices,
+  tables and toasts.
+
+The Kegs page (`index.html`) draws a tile per scale with the scale's label as
+its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
+and to fill the keg in that beer's colour.
+
+`beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
 green, blue) for drinks the SRM scale cannot describe; the API rejects both at
 once. The script turns either into a colour for the tap list, which draws
@@ -304,11 +322,12 @@ once. The script turns either into a colour for the tap list, which draws
 Dashboard Setup stores the theme through `store.SetTheme`, and
 `handleThemeCSS` serves it as `/theme.css`, a set of custom properties
 (`--bg-color`, `--card-bg`, `--text-color`, `--font-family`, the accent and the
-two tap list fonts). Every page links it. `style.css` and the tap list's own
-stylesheet both read the page background, card background, text colour and
-font from it. Their `var()` fallbacks hold the defaults, which are the tap
-list's palette and the system font, so an unset value leaves the page in its
-default look. The accent is emitted but not yet consumed.
+two tap list fonts). Every page links it, and `tokens.css` reads every one of
+them, so they reach all pages. The `var()` fallbacks in `tokens.css` hold the
+defaults, which are the tap list's palette, the system font and an amber
+accent, so an unset value leaves the page in its default look. The tap list
+does not use the accent, since each tile takes its beer's colour. The tap list
+title font is also the font of the page title in the header bar.
 `fontStack` turns a stored family name into a full stack that falls back to the
 system font, and `System` selects that stack with no Google Fonts import.
 `GetAppConfig` runs a stored theme through `dropLegacyThemeDefaults`, which
@@ -415,9 +434,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   for that segment.
 - **`hardware_sync` is not answered.** The device's startup request for its
   configuration pins is acknowledged but not replied to.
-- **UI reconnection.** The dashboard and scale setup pages do not reconnect
-  their WebSocket; the tap list does.
+- **UI reconnection.** The scale setup page does not reconnect its WebSocket;
+  the tap list and the Kegs page do.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
 - **Kegs without a tap.** The tap list shows taps, so a keg that no tap links to
-  appears only on the dashboard.
+  appears only on the Kegs page.

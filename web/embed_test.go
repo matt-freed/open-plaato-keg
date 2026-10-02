@@ -12,6 +12,7 @@ var pages = []string{
 	"index.html", "taplist.html", "taplist-setup.html", "history.html",
 	"dashboard-setup.html", "setup.html",
 	"style.css", "site-header.css", "site-header.js",
+	"tokens.css", "tiles.css", "keg-graphic.js",
 }
 
 func TestPagesArePresent(t *testing.T) {
@@ -225,7 +226,8 @@ func itoa(n int) string {
 }
 
 // Every page uses the shared header, loaded in <head> so the element is
-// defined before the parser reaches it, rather than carrying its own copy.
+// defined before the parser reaches it, rather than carrying its own copy, and
+// loads the shared design tokens so the pages look like one application.
 func TestPagesUseTheSharedHeader(t *testing.T) {
 	static := Static()
 	for _, name := range pages {
@@ -238,7 +240,7 @@ func TestPagesUseTheSharedHeader(t *testing.T) {
 		}
 		page := string(data)
 		head, _, _ := strings.Cut(page, "</head>")
-		for _, want := range []string{`<script src="/site-header.js"></script>`, `href="/site-header.css"`} {
+		for _, want := range []string{`<script src="/site-header.js"></script>`, `href="/site-header.css"`, `href="/tokens.css"`} {
 			if !strings.Contains(head, want) {
 				t.Errorf("%s does not load %s in <head>", name, want)
 			}

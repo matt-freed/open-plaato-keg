@@ -4,10 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Scale Setup - Open Plaato</title>
-    <style>
-      @import url("style.css");
-
-    </style>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
@@ -15,13 +13,12 @@
   <body>
     <site-header heading="Scale Setup"></site-header>
 
-    <div id="page_container" class="container pageEntry">
-      <section class="section">
+    <section class="section">
         <div class="container">
           <p class="subtitle">Configure and calibrate your scale</p>
 
           <!-- Scale Selector -->
-          <div class="field">
+          <div class="field scale-picker">
             <label class="label" for="kegId">Select Scale</label>
             <div class="control">
               <div class="select is-fullwidth">
@@ -33,6 +30,7 @@
             <p class="help" id="connectionStatus">Loading connected scales...</p>
           </div>
 
+          <div class="box-columns">
           <!-- Units Section -->
           <div class="box section-box">
             <h2 class="title is-4">Units & Mode</h2>
@@ -51,11 +49,9 @@
                   <div class="control">
                     <div class="buttons has-addons">
                       <button class="button unit-btn" id="unitMetric" data-value="metric" onclick="setUnit('metric')">
-                        <span class="icon">🌍</span>
                         <span>Metric</span>
                       </button>
                       <button class="button unit-btn" id="unitUS" data-value="us" onclick="setUnit('us')">
-                        <span class="icon">🇺🇸</span>
                         <span>US</span>
                       </button>
                     </div>
@@ -70,11 +66,9 @@
                   <div class="control">
                     <div class="buttons has-addons">
                       <button class="button measure-btn" id="measureWeight" data-value="weight" onclick="setMeasureUnit('weight')">
-                        <span class="icon">⚖️</span>
                         <span>Weight</span>
                       </button>
                       <button class="button measure-btn" id="measureVolume" data-value="volume" onclick="setMeasureUnit('volume')">
-                        <span class="icon">🧪</span>
                         <span>Volume</span>
                       </button>
                     </div>
@@ -84,7 +78,7 @@
             </div>
 
             <div class="field">
-              <label class="label">Scale Sensitivity <span style="color: #ff3860;">*</span></label>
+              <label class="label">Scale Sensitivity <span class="req">*</span></label>
               <p class="help">Higher = detects smaller pours</p>
               <div class="control">
                 <div class="sensitivity-buttons">
@@ -95,7 +89,7 @@
                 </div>
               </div>
               <p class="help has-text-warning-dark" style="margin-top: 0.5rem;">
-                <span style="color: #ff3860;">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
+                <span class="req">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
               </p>
             </div>
 
@@ -126,7 +120,6 @@
                   <p class="help">Zero the scale with an empty keg on it</p>
                   <div class="control">
                     <button class="button is-warning" id="tareBtn" onclick="sendTare()">
-                      <span class="icon">⚖️</span>
                       <span>Tare</span>
                     </button>
                   </div>
@@ -139,7 +132,6 @@
                   <p class="help">Store the current weight as empty keg reference</p>
                   <div class="control">
                     <button class="button is-info" id="emptyKegBtn" onclick="sendEmptyKeg()">
-                      <span class="icon">🍺</span>
                       <span>Set Empty</span>
                     </button>
                   </div>
@@ -152,7 +144,6 @@
                   <p class="help">Clear a spurious last pour reading (e.g. from vibration)</p>
                   <div class="control">
                     <button class="button is-danger is-light" onclick="resetLastPour()">
-                      <span class="icon">✖</span>
                       <span>Reset</span>
                     </button>
                   </div>
@@ -220,7 +211,7 @@
             <h2 class="title is-4">Scale Information</h2>
 
             <div class="field">
-              <label class="label">Scale Label <span style="color: #ff3860;">*</span></label>
+              <label class="label">Scale Label <span class="req">*</span></label>
               <p class="help">Friendly name shown on the dashboard (e.g. "Basement Tap", "Fridge #1")</p>
               <div class="control">
                 <div class="field has-addons">
@@ -276,11 +267,9 @@
               <div class="control">
                 <div class="buttons has-addons">
                   <button class="button kegmode-btn" id="kegModeBeer" data-value="beer" onclick="setKegMode('beer')">
-                    <span class="icon">🍺</span>
                     <span>Beer</span>
                   </button>
                   <button class="button kegmode-btn" id="kegModeCO2" data-value="co2" onclick="setKegMode('co2')">
-                    <span class="icon">💨</span>
                     <span>CO₂</span>
                   </button>
                 </div>
@@ -311,9 +300,9 @@
             </div>
           </div>
 
+          </div>
         </div>
-      </section>
-    </div>
+    </section>
 
     <!-- Toast notification -->
     <div id="toast" class="notification toast is-hidden"></div>
@@ -484,7 +473,7 @@
               </tr>
             </tbody>
           </table>
-          <h3 class="title is-6" style="margin-top: 1rem;">System</h3>
+          <h3 class="title is-6">System</h3>
           <table class="table is-fullwidth is-hoverable">
             <tbody>
               <tr>
@@ -701,7 +690,7 @@
         const button = document.getElementById(buttonId);
         const originalText = button.innerHTML;
         button.disabled = true;
-        button.innerHTML = '<span class="icon">⏳</span><span>Working...</span>';
+        button.innerHTML = '<span>Working...</span>';
 
         fetch(`/api/kegs/${kegId}/${command}`, {
           method: "POST",

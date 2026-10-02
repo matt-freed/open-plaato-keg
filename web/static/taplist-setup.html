@@ -4,29 +4,34 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tap List Setup - Open Plaato</title>
-  <style>@import url("style.css");</style>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
   <style>
     .tap-list-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 0.4rem;
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-      cursor: pointer; transition: background 0.15s;
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      padding: 0.65rem 0.8rem; margin: 0 -0.8rem 0.15rem; border-radius: 12px;
+      border: 1px solid transparent; cursor: pointer; transition: background 0.15s, border-color 0.15s;
     }
-    .tap-list-item:hover { background: rgba(255,255,255,0.08); }
-    .tap-list-item.active { border-color: #3273dc; background: rgba(50,115,220,0.1); }
+    .tap-list-item:hover { background: var(--tile-2); }
+    .tap-list-item.active { background: var(--tile-2); border-color: var(--line-strong); }
     .tap-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    .tap-list-left { display: flex; align-items: center; gap: 0.6rem; }
-    .tap-list-name { font-weight: 600; }
-    .tap-list-meta { font-size: 0.8rem; color: #888; }
+    .tap-list-left { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
+    .tap-list-name { font-weight: 600; color: var(--text); }
+    .tap-list-meta { font-size: 0.82rem; color: var(--muted); }
+    .tap-list-id { font-size: 0.72rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+    .form-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+    .form-head .title { margin: 0; }
+    .form-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
   </style>
 </head>
 <body>
   <site-header heading="Tap List Setup"></site-header>
 
-  <div class="container" style="padding:1.5rem 1rem 3rem;">
+  <section class="section">
+  <div class="container">
     <p class="subtitle">Configure beer info and tasting notes for each tap. Data is stored in the beer database.</p>
 
     <div class="columns">
@@ -48,8 +53,8 @@
       <!-- RIGHT: edit form -->
       <div class="column is-8">
         <div class="box" id="editBox" style="display:none;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-            <h2 class="title is-5" style="margin:0;" id="formTitle">New Tap</h2>
+          <div class="form-head">
+            <h2 class="title is-5" id="formTitle">New Tap</h2>
             <button class="button is-danger is-light is-small" onclick="deleteTap()">Delete Tap</button>
           </div>
 
@@ -157,20 +162,17 @@
 
           <hr />
 
-          <div class="field" style="margin-top:1.5rem;">
-            <div class="control">
-              <button class="button is-primary is-medium" onclick="saveTap()">Save Tap</button>
-              <button class="button is-light" style="margin-left:0.5rem;" onclick="closeForm()">Cancel</button>
-            </div>
+          <div class="form-actions">
+            <button class="button is-primary" onclick="saveTap()">Save Tap</button>
+            <button class="button" onclick="closeForm()">Cancel</button>
           </div>
         </div>
 
-        <div id="emptyState" style="text-align:center;padding:3rem;color:#888;">
-          <p style="font-size:1.2rem;">Select a tap to edit, or click <strong>+ Add Tap</strong></p>
-        </div>
+        <p class="empty-state" id="emptyState">Select a tap to edit, or add a new one.</p>
       </div>
     </div>
   </div>
+  </section>
 
   <div id="toast" class="notification toast is-hidden"></div>
 
@@ -218,7 +220,7 @@
               <div class="tap-list-meta">${tap.style || ''}${tap.abv ? ' · '+tap.abv+'%' : ''}</div>
             </div>
           </div>
-          <span style="font-size:0.75rem;color:#666;">#${tap.id}</span>`;
+          <span class="tap-list-id">#${tap.id}</span>`;
         container.appendChild(item);
       });
     }

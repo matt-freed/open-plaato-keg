@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>History</title>
-    <style>
-      @import url("style.css");
-    </style>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
@@ -18,8 +17,6 @@
 
   <section class="section">
     <div class="container">
-
-
       <!-- Controls row -->
       <div class="columns is-vcentered mb-4">
         <div class="column is-narrow">
@@ -41,29 +38,33 @@
               <div class="buttons has-addons" id="rangeButtons">
                 <button class="button" data-range="1h">1h</button>
                 <button class="button" data-range="6h">6h</button>
-                <button class="button is-info" data-range="24h">24h</button>
+                <button class="button is-selected" data-range="24h">24h</button>
                 <button class="button" data-range="7d">7d</button>
                 <button class="button" data-range="30d">30d</button>
               </div>
             </div>
           </div>
         </div>
-        <div class="column is-narrow" style="padding-top: 1.75rem;">
-          <button class="button is-light" id="downloadBtn" title="Download CSV">
+        <div class="column is-narrow">
+          <button class="button" id="downloadBtn" title="Download CSV">
             &#8595; Download CSV
           </button>
         </div>
-        <div class="column is-narrow" style="padding-top: 1.75rem;">
-          <span id="entryCount" style="font-size:0.875rem; opacity:0.6;"></span>
+        <div class="column is-narrow">
+          <span class="help" id="entryCount"></span>
         </div>
       </div>
 
       <!-- Chart -->
-      <div class="box" style="position: relative; min-height: 350px;">
-        <div id="noDataMsg" style="display:none; text-align:center; padding: 4rem 0; color: #aaa;">
+      <div class="box">
+        <div class="empty-state" id="noDataMsg" style="display:none;">
           No data for this device and time range.
         </div>
-        <canvas id="historyChart"></canvas>
+        <!-- Sized by the page rather than by the chart's aspect ratio, which
+             would make a full-width chart taller than the screen. -->
+        <div style="position: relative; height: clamp(300px, 55vh, 560px);">
+          <canvas id="historyChart"></canvas>
+        </div>
       </div>
 
     </div>
@@ -93,9 +94,9 @@
     document.querySelectorAll('#rangeButtons button').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('#rangeButtons button').forEach(b => {
-          b.classList.remove('is-info');
+          b.classList.remove('is-selected');
         });
-        btn.classList.add('is-info');
+        btn.classList.add('is-selected');
         selectedRange = btn.dataset.range;
         if (selectedDevice) loadChart();
       });
@@ -219,6 +220,20 @@
 
       const ctx = document.getElementById('historyChart').getContext('2d');
 
+      // Chart.js draws on a canvas, so it takes the page's colours and font
+      // from the shared tokens rather than from CSS.
+      const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      Chart.defaults.color = token('--muted');
+      Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
+      Chart.defaults.font.family = token('--sans');
+      const amountColor = token('--action');
+      const tempColor = '#8fb3ff';
+      const pctColor = token('--pour');
+      // The area under the amount line is the same colour, faded. The theme
+      // stores colours as #rrggbb, which takes a hex alpha suffix.
+      const withAlpha = (hex, a) => /^#[0-9a-f]{6}$/i.test(hex)
+        ? hex + Math.round(a * 255).toString(16).padStart(2, '0') : 'transparent';
+
       // Timestamps are Unix seconds — convert to milliseconds for Chart.js
       const labels = entries.map(e => e.timestamp * 1000);
 
@@ -237,8 +252,8 @@
           {
             label: unitLabel,
             data: amountLeft,
-            borderColor: '#3273dc',
-            backgroundColor: 'rgba(50, 115, 220, 0.08)',
+            borderColor: amountColor,
+            backgroundColor: withAlpha(amountColor, 0.1),
             fill: true,
             tension: 0.2,
             yAxisID: 'yLeft',
@@ -248,7 +263,7 @@
           {
             label: tempLabel,
             data: temperature,
-            borderColor: '#e05d44',
+            borderColor: tempColor,
             backgroundColor: 'transparent',
             tension: 0.2,
             yAxisID: 'yRight',
@@ -258,7 +273,7 @@
           {
             label: '% Left',
             data: pctLeft,
-            borderColor: '#48c774',
+            borderColor: pctColor,
             backgroundColor: 'transparent',
             tension: 0.2,
             yAxisID: 'yLeft2',
@@ -294,9 +309,14 @@
         data: { labels, datasets },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
           plugins: {
-            legend: { position: 'top' },
+            legend: {
+              position: 'top',
+              align: 'end',
+              labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, color: token('--soft') },
+            },
             tooltip: {
               callbacks: {
                 title: items => new Date(items[0].parsed.x).toLocaleString([], { hour12: timeFormat !== '24h' }),

@@ -1,0 +1,202 @@
+/* Tiles shared by the tap list and the Kegs page: the grid, the tile with its
+   heading, specs and readings, and the keg graphic from keg-graphic.js.
+   Uses the tokens from tokens.css. */
+
+.grid {
+  position: relative;
+  display: grid;
+  --gap: clamp(0.9rem, 1.6vw, 1.4rem);
+  /* Never more than three across: each column is at least a third of the
+     row, and narrower screens drop to two and then one. */
+  grid-template-columns: repeat(auto-fill,
+    minmax(max(min(100%, 340px), calc((100% - 2 * var(--gap)) / 3)), 1fr));
+  gap: var(--gap);
+}
+
+/* ─── Tile ───────────────────────────────────── */
+.tile {
+  --accent: #c9a849;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  line-height: normal;
+  gap: 1.25rem;
+  min-height: 220px;
+  padding: 1.4rem 1.25rem 1.3rem 1.5rem;
+  background: var(--tile);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: box-shadow 0.25s, border-color 0.25s;
+}
+.tile:hover { border-color: var(--line-strong); }
+.tile.is-pouring {
+  border-color: color-mix(in srgb, var(--pour) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pour) 35%, transparent),
+              0 0 32px -8px color-mix(in srgb, var(--pour) 45%, transparent);
+}
+
+.tile-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tile-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 1.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.keg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pouring {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--pour);
+  flex-shrink: 0;
+}
+.pouring::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.tile.is-pouring .pouring { display: inline-flex; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+
+.beer {
+  margin: 0.35rem 0 0;
+  font-family: var(--taplist-title-font, var(--sans));
+  font-size: clamp(1.5rem, 2.2vw, 1.95rem);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.specs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-top: 0.6rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+.specs:empty { display: none; }
+/* Kept to two lines so one long description cannot stretch its whole row;
+   the full text is in the tooltip. */
+.desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  margin: 0.45rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.desc:empty { display: none; }
+.specs .style { color: var(--text); opacity: 0.85; }
+.specs span + span::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.readings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.7rem 1.4rem;
+  margin-top: auto;
+  padding-top: 1.1rem;
+}
+.reading { display: flex; flex-direction: column; gap: 0.15rem; }
+/* Secondary to the beer and the amount left, so kept small and soft. */
+.reading-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.reading-value small {
+  margin-left: 0.15rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.reading.age .reading-value { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
+.reading-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.no-keg { color: var(--faint); font-size: 0.9rem; }
+
+/* ─── Keg graphic ────────────────────────────── */
+.tile-keg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 92px;
+}
+.tile-keg svg { display: block; width: 100%; height: auto; overflow: visible; }
+.liquid { transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+/* A clear drink such as sparkling water is a faint tint, so the level
+   shows as its surface line rather than as a block of colour. */
+.tile.is-clear .liquid-fill { opacity: 0.2; }
+.tile.is-clear .liquid-surface { fill-opacity: 0.85; }
+/* What is left sits under the keg it describes. */
+.keg-amount {
+  /* Held open with no keg linked, so kegs in a row stay level. */
+  min-height: 1.2em;
+  font-size: 1.1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.keg-amount small {
+  margin-left: 0.15rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .tile { padding: 1.2rem 1rem 1.1rem 1.2rem; min-height: 190px; }
+  .tile-keg { width: 68px; }
+  .reading-value { font-size: 1rem; }
+  .keg-amount { font-size: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid, .tile { transition: none; }
+  .pouring::before { animation: none; }
+}

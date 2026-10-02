@@ -4,64 +4,44 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Setup - Open Plaato</title>
-    <style>
-      @import url("style.css");
-    </style>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/tiles.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
     <style>
       .color-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
       .color-row input[type="color"] { width: 44px; height: 38px; border: none; border-radius: 6px; padding: 2px; cursor: pointer; background: transparent; }
-      .color-row input[type="text"] { max-width: 110px; font-family: var(--font-mono, monospace); }
+      .color-row input[type="text"] { max-width: 110px; font-variant-numeric: tabular-nums; }
+      /* The preview redefines the shared tokens on its own element, so the
+         real tile styles below draw it in the colours being edited. */
       .preview-area {
-        border-radius: 12px;
-        padding: 1.5rem;
-        min-height: 320px;
-        transition: background 0.3s;
-      }
-      .preview-card {
-        border-radius: 12px;
+        display: grid;
+        gap: 0.75rem;
         padding: 1.25rem;
-        margin-bottom: 1rem;
-        transition: background 0.3s, color 0.3s;
-      }
-      .preview-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem; }
-      .preview-card-label { font-weight: 600; font-size: 1.05rem; }
-      .preview-card-meta { font-size: 0.75rem; opacity: 0.5; margin-top: 0.15rem; }
-      .preview-card-temp { font-size: 0.85rem; }
-      .preview-card-vol { text-align: center; padding: 0.75rem 0; }
-      .preview-card-vol .vol-num { font-size: 2.8rem; font-weight: 700; }
-      .preview-card-vol .vol-unit { font-size: 1.1rem; margin-left: 0.2rem; }
-      .preview-bar-track { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; }
-      .preview-bar-fill { height: 100%; width: 65%; border-radius: 4px; transition: background 0.3s; }
-      .preview-bar-label { font-size: 0.72rem; text-align: right; margin-top: 0.25rem; opacity: 0.55; }
-      .preview-tap-row {
-        border-radius: 12px;
-        padding: 1rem;
-        display: flex;
-        gap: 1rem;
-        align-items: center;
+        border-radius: 0 0 var(--radius) var(--radius);
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
         transition: background 0.3s;
       }
-      .preview-tap-badge {
-        width: 52px; height: 52px; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-weight: 700; font-size: 1.1rem; flex-shrink: 0;
-        transition: background 0.3s, color 0.3s;
+      .preview-caption {
+        margin: 0.25rem 0 0;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
       }
-      .preview-tap-copy { min-width: 0; }
-      .preview-tap-name { font-weight: 600; font-size: 1rem; }
-      .preview-tap-sub { font-size: 0.78rem; opacity: 0.55; }
-      .preview-tap-desc { font-size: 0.8rem; opacity: 0.75; margin-top: 0.35rem; line-height: 1.5; }
-      .section-card { margin-bottom: 1.5rem; }
-      input[type="range"] { width: 100%; accent-color: var(--amber-400, #f59e0b); }
+      .preview-area .tile { cursor: default; min-height: 0; --accent: #c9a849; }
+      .preview-area .tile-keg { width: 72px; }
+      input[type="range"] { width: 100%; accent-color: var(--action); }
     </style>
   </head>
   <body>
     <site-header heading="Dashboard Setup"></site-header>
 
-    <div id="page_container" class="container pageEntry">
       <section class="section">
         <div class="container">
           <p class="subtitle">Customize colors and fonts across all pages</p>
@@ -81,7 +61,7 @@
                     <div class="color-row">
                       <input type="color" id="accentColor" value="#f59e0b">
                       <input type="text" class="input" id="accentHex" value="#f59e0b" maxlength="7" placeholder="#f59e0b">
-                      <span class="tag is-dark">Buttons · borders · highlights</span>
+                      <span class="tag">Main buttons and selections</span>
                     </div>
                   </div>
 
@@ -308,7 +288,7 @@
                   <button class="button is-light" id="resetAllBtn">Reset All Defaults</button>
                 </div>
               </div>
-              <p id="saveMsg" style="margin-top:0.6rem; font-size:0.85rem; display:none;"></p>
+              <p class="help" id="saveMsg" style="display:none;"></p>
             </div>
 
             <!-- ── Right column: live preview ── -->
@@ -317,39 +297,31 @@
                 <div class="card-header">
                   <p class="card-header-title">Live Preview</p>
                 </div>
-                <div class="card-content" style="padding: 0;">
+                <div class="card-content" style="padding: 1.1rem 0 0;">
                   <div class="preview-area" id="previewArea">
-
-                    <!-- Mock keg card -->
-                    <div class="preview-card" id="previewCard">
-                      <div class="preview-card-header">
-                        <div>
-                          <div class="preview-card-label" id="pvLabel">Keg 1 · IPA</div>
-                          <div class="preview-card-meta">West Coast IPA · 6.8% ABV</div>
+                    <p class="preview-caption">Tap list</p>
+                    <article class="tile" id="pvTile">
+                      <div class="tile-info">
+                        <div class="tile-meta"><span class="keg-name">Kegerator 1</span></div>
+                        <h2 class="beer">Pale Ale</h2>
+                        <div class="specs"><span class="style">American Pale Ale</span><span>5.4% ABV</span><span>32 IBU</span></div>
+                        <p class="desc">Bright citrus, soft malt, and a clean finish.</p>
+                        <div class="readings">
+                          <div class="reading">
+                            <span class="reading-value">38<small>°F</small></span>
+                            <span class="reading-label">Temp</span>
+                          </div>
+                          <div class="reading">
+                            <span class="reading-value">12 days</span>
+                            <span class="reading-label">Kegged Sep 20</span>
+                          </div>
                         </div>
-                        <div class="preview-card-temp" id="pvTemp">● 39.0°F</div>
                       </div>
-                      <div class="preview-card-vol">
-                        <span class="vol-num" id="pvVol">4.2</span><span class="vol-unit">L</span>
+                      <div class="tile-keg">
+                        <div id="pvKeg"></div>
+                        <span class="keg-amount">3.2<small>gal</small></span>
                       </div>
-                      <div>
-                        <div class="preview-bar-track">
-                          <div class="preview-bar-fill" id="pvBar"></div>
-                        </div>
-                        <div class="preview-bar-label">65.0% remaining</div>
-                      </div>
-                    </div>
-
-                    <!-- Mock tap list row -->
-                    <div class="preview-tap-row" id="previewTapRow">
-                      <div class="preview-tap-badge" id="pvBadge">1</div>
-                      <div class="preview-tap-copy">
-                        <div class="preview-tap-name" id="pvTapName">Pale Ale</div>
-                        <div class="preview-tap-sub">Homebrew · 5.4% ABV · 32 IBU</div>
-                        <div class="preview-tap-desc" id="pvTapDesc">Bright citrus, soft malt, and a clean finish.</div>
-                      </div>
-                    </div>
-
+                    </article>
                   </div>
                 </div>
               </div>
@@ -357,8 +329,8 @@
           </div>
         </div>
       </section>
-    </div>
 
+    <script src="/keg-graphic.js"></script>
     <script>
       // ── Defaults ────────────────────────────────────────
       const DEFAULTS = {
@@ -394,7 +366,6 @@
 
       // ── Preview update ───────────────────────────────────
       function updatePreview() {
-        const accent  = document.getElementById('accentHex').value  || DEFAULTS.accent_color;
         const bg      = document.getElementById('bgHex').value      || DEFAULTS.bg_color;
         const cardBg  = document.getElementById('cardBgHex').value  || DEFAULTS.card_bg;
         const text    = document.getElementById('textHex').value    || DEFAULTS.text_color;
@@ -402,39 +373,25 @@
         const taplistTitleFont = document.getElementById('taplistTitleFont').value;
         const taplistBodyFont = document.getElementById('taplistBodyFont').value;
 
-        const pa = document.getElementById('previewArea');
-        const pc = document.getElementById('previewCard');
-        const pt = document.getElementById('previewTapRow');
-        const badge = document.getElementById('pvBadge');
-        const tapName = document.getElementById('pvTapName');
-        const tapDesc = document.getElementById('pvTapDesc');
-
-        // Area background
-        pa.style.backgroundColor = bg;
-
-        // Card
-        pc.style.backgroundColor = cardBg;
-        pc.style.color = text;
-        document.getElementById('pvBar').style.backgroundColor = accent;
-
-        // Tap row
-        pt.style.backgroundColor = cardBg;
-        pt.style.color = text;
-        badge.style.backgroundColor = accent;
-        badge.style.color = bg;
-
-        // Font
         // Matches fontStack in internal/api/config.go, which builds the
         // stacks /theme.css serves.
         const SYSTEM_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
         const stackFor = name => !name || name === 'System' ? SYSTEM_STACK : `"${name}", ${SYSTEM_STACK}`;
         const fontStack = stackFor(font);
-        const tapTitleStack = taplistTitleFont ? stackFor(taplistTitleFont) : fontStack;
-        const tapBodyStack = taplistBodyFont ? stackFor(taplistBodyFont) : fontStack;
-        pa.style.fontFamily = fontStack;
-        tapName.style.fontFamily = tapTitleStack;
-        tapDesc.style.fontFamily = tapBodyStack;
+
+        const pa = document.getElementById('previewArea');
+        pa.style.setProperty('--bg', bg);
+        pa.style.setProperty('--tile', cardBg);
+        pa.style.setProperty('--text', text);
+        pa.style.setProperty('--sans', fontStack);
+        pa.style.setProperty('--title-font', taplistTitleFont ? stackFor(taplistTitleFont) : fontStack);
+        // The tap list's descriptions use their own face when one is set.
+        document.getElementById('pvTile').style.fontFamily =
+          taplistBodyFont ? stackFor(taplistBodyFont) : fontStack;
       }
+
+      document.getElementById('pvKeg').innerHTML = kegSvg();
+      document.querySelector('#pvKeg .liquid').style.transform = kegLevelTransform(65);
 
       // ── Reset buttons ────────────────────────────────────
       document.getElementById('resetColorsBtn').addEventListener('click', () => {
@@ -505,14 +462,14 @@
           });
           if (res.ok) {
             msg.textContent = 'Saved! Reload any open page to see changes.';
-            msg.style.color = '#22c55e';
+            msg.style.color = 'var(--pour)';
           } else {
             msg.textContent = 'Save failed.';
-            msg.style.color = '#ef4444';
+            msg.style.color = 'var(--danger)';
           }
         } catch (e) {
           msg.textContent = 'Error: ' + e.message;
-          msg.style.color = '#ef4444';
+          msg.style.color = 'var(--danger)';
         }
         btn.classList.remove('is-loading');
         msg.style.display = '';
