@@ -47,6 +47,9 @@ hr {
 /* A single column of settings, centred, for a page that reads top to bottom
    rather than as a grid. */
 .container.is-centered { max-width: 760px; margin: 0 auto; }
+/* Centred too, but wide enough for charts, which read badly stretched
+   across a large screen. */
+.container.is-centered.is-wide { max-width: 1120px; }
 
 .columns {
   display: flex;

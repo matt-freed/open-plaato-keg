@@ -154,7 +154,7 @@ redirects to whichever page is set as home — the tap list unless you change it
 | `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the description (up to two lines), the linked keg's name and temperature (to the nearest degree), the tap's kegged date and how many days ago that was, and a keg graphic filled to the percentage remaining in the drink's colour, with the amount left beneath it (a tap with no keg linked is drawn full); clear drinks are drawn as a faint tint. Amounts and temperatures are in the chosen display units. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. WebSocket updates and a full reload every minute. |
 | `/index.html` | **Kegs** — a tile per scale in the tap list's style, showing what is left, the percentage, temperature, last pour, the beer on the tap it feeds and a pouring indicator, drawn as a keg in the beer's colour or as a CO₂ cylinder depending on the mode. Drag the tiles to reorder them; the × forgets a scale and its history. |
 | `/keg-setup.html` | **Keg Setup** — a list of every scale the server knows, marked connected or offline; choose one to open its settings on their own view (the URL keeps the open scale, so Back and reload work). The settings cover everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information. Settings sent to the scale itself need it connected; an offline scale says so, and can still be relabelled or forgotten. |
-| `/history.html` | **History** — pick a keg and a range from 1h to 30d for a chart of its readings, with the same data as a CSV download. |
+| `/history.html` | **History** — pick a scale and a range from 1 hour to 30 days. A summary gives what was poured and how many pours (both estimated from drops in the amount left), what is left now and the temperature; below it, amount left (or percent) and temperature are charted on one time axis, with pours marked. The URL keeps the scale and range, and the same readings download as CSV. |
 | `/taplist-setup.html` | **Tap List Setup** — a list of your taps; choose one, or add a new one, to open the tap editor on its own view (the URL keeps the open tap, so Back and reload work). The editor covers the tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), and the keg the tap draws from. |
 | `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, 12- or 24-hour times and display units. Each change saves as it is made, and the page previews colours and fonts on itself as you choose them; screens already open pick a change up when they reload. |
 
@@ -292,7 +292,9 @@ The recording logs in as keg `00000000000000000000000000000001`. Pass
 
 `testdata/demo.sql` fills a database with six kegs on eight taps, enough to see
 the tap list and keg pages populated without any hardware, and sets the display
-units to US. It holds data only, so load it on top of the schema:
+units to US. It also generates 30 days of history for every keg, ending at the
+moment it is loaded, so the History page has pours, keg swaps and temperature
+to chart in every range. It holds data only, so load it on top of the schema:
 
 ```bash
 mkdir -p data
@@ -301,7 +303,8 @@ DATABASE_FILE_PATH=data/demo.db go run ./cmd/open-plaato-keg
 ```
 
 Then open <http://localhost:8085>. The readings are a snapshot and stay put
-until a keg reports new ones. `data/` is gitignored; delete `data/demo.db` and
+until a keg reports new ones, and the history ages with them: reload the demo
+to bring it up to date. `data/` is gitignored; delete `data/demo.db` and
 rerun the `cat` line to start over.
 
 To see live traffic on the tap list, replay the recording against the demo:
