@@ -184,6 +184,14 @@
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     }
 
+    // The scale a tap draws from, named as the editor's sensor list names it.
+    function linkedKegName(tap) {
+      if (!tap.keg_id) return 'No scale linked';
+      const index = allKegs.findIndex(k => k.id === tap.keg_id);
+      if (index < 0) return 'Scale not found';
+      return allKegs[index].label?.trim() || `Scale ${index + 1}`;
+    }
+
     function renderTapList() {
       const container = document.getElementById('tapListContainer');
       if (!allTaps.length) {
@@ -197,7 +205,7 @@
             <span class="list-row-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
             <span class="list-row-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
           </span>
-          <span class="list-row-aside">#${esc(tap.id)}</span>
+          <span class="list-row-aside${tap.keg_id ? '' : ' is-empty'}">${esc(linkedKegName(tap))}</span>
           <span class="list-row-go" aria-hidden="true">›</span>
         </a>`).join('');
     }

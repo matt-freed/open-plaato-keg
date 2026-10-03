@@ -424,7 +424,8 @@ hr {
 .list-row-text { flex: 1; min-width: 0; }
 .list-row-name { display: block; font-weight: 600; }
 .list-row-meta { display: block; font-size: 0.82rem; }
-.list-row-aside { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.list-row-aside { font-size: 0.82rem; text-align: right; }
+.list-row-aside.is-empty { color: var(--muted); }
 .list-row-go { font-size: 1.2rem; line-height: 1; color: var(--muted); }
 
 .back-link {
