@@ -193,7 +193,7 @@ path and the API never contend for SQLite's lock.
 |---|---|
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
-| `taps` | Tap list entries, optionally linked to a keg and to a display device |
+| `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap`) and to a display device |
 | `app_config` | Key/value settings: theme, display units, amount display, home page, time format |
 
 There are no foreign keys.
@@ -274,7 +274,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs` | List, connected ids, known ids, ordering |
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
+| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
 | `/api/config/…` | Home page, time format, display units, amount display, theme |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |

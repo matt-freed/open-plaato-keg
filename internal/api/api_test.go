@@ -674,3 +674,23 @@ func TestAmountDisplay(t *testing.T) {
 		t.Errorf("AmountDisplay = %q after an unknown value, want the default", cfg.AmountDisplay)
 	}
 }
+
+// Linking a scale that another tap already uses is a 409 that names that tap,
+// so Tap Setup can say where to unlink it.
+func TestTapKegConflict(t *testing.T) {
+	a := newTestAPI(t)
+	rec := a.do(http.MethodPost, "/api/taps/tap-1", map[string]any{
+		"tap_number": 3, "name": "Red Barn Amber", "keg_id": "keg-1",
+	})
+	assertStatus(t, rec, http.StatusOK)
+
+	rec = a.do(http.MethodPost, "/api/taps/tap-2", map[string]any{
+		"tap_number": 4, "name": "Pils", "keg_id": "keg-1",
+	})
+	assertStatus(t, rec, http.StatusConflict)
+	var body errorResponse
+	a.decode(rec, &body)
+	if body.Error != "keg_in_use" || !strings.Contains(body.Detail, "Tap 3 (Red Barn Amber)") {
+		t.Errorf("body = %+v, want keg_in_use naming Tap 3 (Red Barn Amber)", body)
+	}
+}

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -82,6 +84,12 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 		KegID:        strings.TrimSpace(req.KegID),
 	}
 	if err := s.store.SaveTap(tap); err != nil {
+		var inUse *store.KegInUseError
+		if errors.As(err, &inUse) {
+			writeError(w, http.StatusConflict, "keg_in_use",
+				"that scale is already linked to "+tapDescription(inUse.Tap)+"; unlink it there first")
+			return
+		}
 		writeStoreError(w, err, "tap")
 		return
 	}
@@ -134,4 +142,16 @@ func (s *Server) handleDeleteTap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "deleted": id})
+}
+
+// tapDescription names a tap the way the UI does: "Tap 3 (Red Barn Amber)".
+func tapDescription(t *store.Tap) string {
+	desc := "another tap"
+	if t.TapNumber != nil {
+		desc = fmt.Sprintf("Tap %d", *t.TapNumber)
+	}
+	if t.Name != "" {
+		desc += " (" + t.Name + ")"
+	}
+	return desc
 }

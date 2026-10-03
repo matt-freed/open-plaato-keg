@@ -210,7 +210,7 @@ Numeric values may be sent as JSON numbers or as strings.
 | `GET` | `/api/taps/{id}` | One tap |
 | `POST` | `/api/taps/new` | Create one; the response carries the generated id |
 | `POST` | `/api/taps/order` | `{"ordered_ids": [...]}` — renumber the named taps 1..n in that order; an unknown id changes nothing and is a 404 |
-| `POST` | `/api/taps/{id}` | Save one |
+| `POST` | `/api/taps/{id}` | Save one. A `keg_id` another tap already uses is a 409 (`keg_in_use`) naming that tap |
 | `POST` | `/api/taps/{id}/delete` | Delete one |
 
 A tap body takes these fields, all optional:
@@ -225,7 +225,7 @@ A tap body takes these fields, all optional:
 | `color` | string | Colour from before `srm` existed, used only when neither `srm` nor `color_preset` is set; defaults to `#c9a849` |
 | `description`, `tasting_notes` | string | |
 | `kegged_date` | string | When the beer was kegged, as `YYYY-MM-DD` or `DD.MM.YYYY`; stored as `YYYY-MM-DD`. Anything that is not a real date is a 400; empty means none |
-| `keg_id` | string | The keg this tap draws from, so the card can show what is left |
+| `keg_id` | string | The keg this tap draws from, so the card can show what is left. A keg feeds at most one tap |
 
 ### Settings
 

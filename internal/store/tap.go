@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 )
 
 // Tap is one configured tap on the tap list.
@@ -93,16 +94,55 @@ func (s *Store) GetTap(id string) (*Tap, error) {
 	return t, err
 }
 
-// SaveTap inserts or replaces a tap.
+// KegInUseError is returned when a tap is given a keg that another tap already
+// draws from. A keg feeds one tap; it has to be unlinked from that tap before
+// it can be linked to another.
+type KegInUseError struct {
+	Tap *Tap
+}
+
+func (e *KegInUseError) Error() string {
+	return fmt.Sprintf("keg is already linked to tap %s", e.Tap.ID)
+}
+
+// SaveTap inserts or replaces a tap, refusing a keg another tap already uses.
+//
+// The check and the write share a transaction, and the store has a single
+// connection, so two saves cannot both claim the same keg. It is enforced
+// here rather than by a unique index so a database that already has a keg on
+// two taps still opens.
 func (s *Store) SaveTap(t *Tap) error {
 	if t.Color == "" {
 		t.Color = DefaultTapColor
 	}
-	_, err := s.db.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if t.KegID != "" {
+		other := &Tap{}
+		err := tx.QueryRow(
+			"SELECT id, tap_number, name FROM taps WHERE keg_id = ? AND id != ? ORDER BY tap_number LIMIT 1",
+			t.KegID, t.ID,
+		).Scan(&other.ID, &other.TapNumber, &other.Name)
+		switch {
+		case err == nil:
+			return &KegInUseError{Tap: other}
+		case !errors.Is(err, sql.ErrNoRows):
+			return err
+		}
+	}
+
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
-		t.Description, t.TastingNotes, t.KeggedDate, t.KegID)
-	return err
+		t.Description, t.TastingNotes, t.KeggedDate, t.KegID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // OrderTaps renumbers taps 1..n in the order given, which is how the tap list
