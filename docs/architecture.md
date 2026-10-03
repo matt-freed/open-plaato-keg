@@ -320,7 +320,9 @@ connected, polling `/api/kegs/connected` since connections publish no event.
 The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
 the chosen range. Amount and temperature are two charts sharing a time axis
 rather than one chart with two y-axes, and a line breaks where readings stop
-for more than ten minutes. Its summary works out poured and pours in the
+for more than ten minutes. The amount chart's Fit/Full toggle (`axisScale`) picks its
+y-axis: Fit, the default, pads the range's lowest and highest value by 15%
+in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero. Its summary works out poured and pours in the
 browser, in `findPours`, from drops in the amount left larger than the scale's
 jitter: the logged `is_pouring` flag is sampled once a minute, which misses
 most pours, so it is not used.

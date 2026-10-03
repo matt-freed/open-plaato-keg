@@ -40,6 +40,8 @@
 
       .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
       .box > div.chart-head > .title { margin: 0; }
+      .chart-toggles { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+      .chart-toggles .buttons { margin-bottom: 0; }
       .chart-key { display: flex; gap: 1rem; font-size: 0.8rem; }
       .chart-key span { display: inline-flex; align-items: center; gap: 0.4rem; }
       .key-line { width: 14px; height: 2px; border-radius: 1px; background: var(--action); }
@@ -122,9 +124,16 @@
                 <span><span class="key-line"></span><span id="amountKey">Amount left</span></span>
                 <span><span class="key-dot"></span>Pour</span>
               </div>
-              <div class="buttons has-addons" id="measureChoice">
-                <button class="button is-small" type="button" data-value="amount">Amount</button>
-                <button class="button is-small" type="button" data-value="percent">%</button>
+              <div class="chart-toggles">
+                <div class="buttons has-addons" id="measureChoice">
+                  <button class="button is-small" type="button" data-value="amount">Amount</button>
+                  <button class="button is-small" type="button" data-value="percent">%</button>
+                </div>
+                <div class="buttons has-addons" id="axisChoice"
+                     title="Fit zooms the axis to this range so small pours show; Full starts it at zero.">
+                  <button class="button is-small" type="button" data-value="fit">Fit</button>
+                  <button class="button is-small" type="button" data-value="full">Full</button>
+                </div>
               </div>
             </div>
             <div class="chart-wrap"><canvas id="amountChart"></canvas></div>
@@ -164,6 +173,9 @@
     const tapsByKeg = {};
     let timeFormat = '12h';
     let measure = 'amount';
+    // Fit zooms the amount axis to the range shown, so a pour from a nearly
+    // full keg is a visible step; full starts it at zero.
+    let axisScale = 'fit';
     let entries = [];
     let pourPoints = [];
     let charts = [];
@@ -334,6 +346,21 @@
       };
     }
 
+    // fitAxis pads the lowest and highest value shown by 15% (with a floor, so
+    // a flat line still has room) and hands them to Chart.js as suggestions,
+    // which it rounds out to tidy ticks.
+    function fitAxis(values, pct) {
+      const v = values.filter(Number.isFinite);
+      if (!v.length) return pct ? { min: 0, max: 100 } : { beginAtZero: true };
+      const lo = Math.min(...v), hi = Math.max(...v);
+      const pad = Math.max((hi - lo) * 0.15, pct ? 1 : Math.max(hi * 0.01, 0.05));
+      return {
+        suggestedMin: Math.max(0, lo - pad),
+        suggestedMax: pct ? Math.min(100, hi + pad) : hi + pad,
+        ...(pct && { max: 100 }),
+      };
+    }
+
     function destroyCharts() {
       charts.forEach(c => c.destroy());
       charts = [];
@@ -356,6 +383,8 @@
 
       const value = e => pct ? e.percent_of_beer_left : e.amount_left;
       const line = list => list.map(e => ({ x: e.timestamp * 1000, y: value(e) ?? null }));
+      const fit = axisScale === 'fit';
+      const fullY = pct ? { min: 0, max: 100 } : { beginAtZero: true };
 
       charts.push(new Chart($('amountChart'), {
         type: 'line',
@@ -368,7 +397,8 @@
               borderWidth: 2,
               borderJoinStyle: 'round',
               borderCapStyle: 'round',
-              fill: 'origin',
+              // Shaded down to the bottom of the axis, which is zero on Full.
+              fill: 'start',
               pointRadius: 0,
               tension: 0.15,
               spanGaps: GAP_MS,
@@ -384,7 +414,7 @@
             },
           ],
         },
-        options: chartOptions(range, amountLabel, pct ? { min: 0, max: 100 } : { beginAtZero: true }),
+        options: chartOptions(range, amountLabel, fit ? fitAxis(entries.map(value), pct) : fullY),
         plugins: [crosshair],
       }));
 
@@ -548,6 +578,14 @@
       const b = e.target.closest('.button');
       if (b) setHash({ range: b.dataset.value });
     });
+    $('axisChoice').addEventListener('click', e => {
+      const b = e.target.closest('.button');
+      if (!b || b.dataset.value === axisScale) return;
+      axisScale = b.dataset.value;
+      select('axisChoice', axisScale);
+      const { keg: id, range } = readHash();
+      if (entries.length) renderCharts(kegs.find(k => k.id === id), range);
+    });
     $('measureChoice').addEventListener('click', e => {
       const b = e.target.closest('.button');
       if (!b || b.dataset.value === measure) return;
@@ -595,6 +633,7 @@
 
     async function init() {
       select('measureChoice', measure);
+      select('axisChoice', axisScale);
       try {
         const [kegsRes, tf, tapList] = await Promise.all([
           fetch('/api/kegs'),
