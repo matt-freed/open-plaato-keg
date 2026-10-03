@@ -21,13 +21,13 @@ site-header { display: block; }
   letter-spacing: -0.01em;
   color: inherit;
 }
-.site-header-count { color: var(--muted); font-size: 0.95rem; }
+.site-header-count { color: var(--text); font-size: 0.95rem; }
 
 .site-nav { display: flex; gap: 0.25rem; align-items: center; }
 .site-nav a, .site-nav button {
   font: inherit;
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--text);
   background: none;
   border: 0;
   border-radius: 8px;
@@ -37,7 +37,12 @@ site-header { display: block; }
   transition: background 0.15s, color 0.15s;
 }
 .site-nav a:hover, .site-nav button:hover { background: var(--tile-2); color: var(--text); }
-.site-nav [aria-current="page"], .site-nav .is-current { color: var(--text); }
+/* Every link is full contrast, so the current page is marked by a fill
+   rather than by being the brightest. */
+.site-nav [aria-current="page"], .site-nav .is-current {
+  background: var(--tile-2);
+  font-weight: 600;
+}
 
 .site-menu { position: relative; }
 .site-menu-list {
@@ -55,12 +60,16 @@ site-header { display: block; }
 }
 .site-menu.is-open .site-menu-list { display: block; }
 .site-menu-list a { display: block; }
+/* The menu is already the raised colour, so its hover and current page take
+   a lighter fill to show. */
+.site-menu-list a:hover,
+.site-menu-list [aria-current="page"] { background: rgba(255, 255, 255, 0.08); }
 .site-version {
   margin: 0.3rem 0.3rem 0;
   padding: 0.4rem 0.35rem 0.1rem;
   border-top: 1px solid var(--line);
   font-size: 0.7rem;
-  color: var(--faint);
+  color: var(--muted);
 }
 .site-version:empty { display: none; }
 
