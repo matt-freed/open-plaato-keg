@@ -89,7 +89,7 @@
             </div>
             <div class="tile-keg">
               <div id="pvKeg"></div>
-              <span class="keg-amount">3.2<small>gal</small></span>
+              <span class="keg-amount">3.20<small>gal</small></span>
             </div>
           </article>
         </div>
@@ -256,6 +256,18 @@
               always shown by weight. To change the scale itself, use Keg Setup.
             </p>
           </div>
+          <div class="field">
+            <label class="label">Keg graphic shows</label>
+            <div class="buttons has-addons" data-choice="amountDisplay">
+              <button class="button" type="button" data-value="amount">Amount left</button>
+              <button class="button" type="button" data-value="percent">Percent left</button>
+            </div>
+            <p class="help">
+              The figure shown large under each keg, on the tap list and the Kegs page,
+              for every scale. The Kegs page shows the other figure with each tile&rsquo;s
+              readings. CO&#8322; cylinders always show the amount left.
+            </p>
+          </div>
         </div>
         </div>
       </div>
@@ -278,6 +290,7 @@
       };
       const PREFERENCE_DEFAULTS = {
         homePage: 'taplist', timeFormat: '12h', unitSystem: 'device', unitMeasure: 'device',
+        amountDisplay: 'amount',
       };
 
       const $ = id => document.getElementById(id);
@@ -420,6 +433,7 @@
       function savePreference(name) {
         if (name === 'homePage') return post('/api/config/home-page', { home_page: choice('homePage') });
         if (name === 'timeFormat') return post('/api/config/time-format', { time_format: choice('timeFormat') });
+        if (name === 'amountDisplay') return post('/api/config/amount-display', { amount_display: choice('amountDisplay') });
         return post('/api/config/display-units', { system: choice('unitSystem'), measure: choice('unitMeasure') });
       }
 
@@ -428,15 +442,27 @@
           const button = e.target.closest('.button');
           if (!button || button.classList.contains('is-selected')) return;
           select(group.dataset.choice, button.dataset.value);
+          if (group.dataset.choice === 'amountDisplay') showPreviewAmount();
           savePreference(group.dataset.choice);
         });
       });
 
       $('resetPreferences').addEventListener('click', async () => {
-        if (!confirm('Restore the default home page, time format and display units?')) return;
+        if (!confirm('Restore the default home page, time format, display units and keg graphic figure?')) return;
         for (const [name, value] of Object.entries(PREFERENCE_DEFAULTS)) select(name, value);
-        await Promise.all([savePreference('homePage'), savePreference('timeFormat'), savePreference('unitSystem')]);
+        showPreviewAmount();
+        await Promise.all([
+          savePreference('homePage'), savePreference('timeFormat'), savePreference('unitSystem'),
+          savePreference('amountDisplay'),
+        ]);
       });
+
+      // The preview keg is drawn 65% full, so either figure matches it.
+      function showPreviewAmount() {
+        document.querySelector('#pvTile .keg-amount').innerHTML = choice('amountDisplay') === 'percent'
+          ? '65.0<small>%</small>'
+          : '3.20<small>gal</small>';
+      }
 
       // ── Load ────────────────────────────────────────────
       async function load() {
@@ -447,6 +473,7 @@
           select('timeFormat', cfg.time_format || PREFERENCE_DEFAULTS.timeFormat);
           select('unitSystem', cfg.display_units?.system || PREFERENCE_DEFAULTS.unitSystem);
           select('unitMeasure', cfg.display_units?.measure || PREFERENCE_DEFAULTS.unitMeasure);
+          select('amountDisplay', cfg.amount_display || PREFERENCE_DEFAULTS.amountDisplay);
 
           const t = cfg.theme || {};
           for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);
@@ -457,6 +484,7 @@
           showToast('Could not load the current settings', 'danger');
         }
         applyAppearance();
+        showPreviewAmount();
       }
 
       $('pvKeg').innerHTML = kegSvg();

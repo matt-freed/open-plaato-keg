@@ -54,7 +54,6 @@ CREATE TABLE IF NOT EXISTS kegs (
     -- Values set through the API and held only here. The device has no pin for
     -- any of these.
     label                     TEXT    NOT NULL DEFAULT '',
-    display_mode              TEXT    NOT NULL DEFAULT 'weight_primary',
     sort_order                INTEGER NOT NULL DEFAULT 0,
     co2_capacity              REAL,
 

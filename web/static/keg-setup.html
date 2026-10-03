@@ -115,21 +115,6 @@
                 <span class="req">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
               </p>
             </div>
-
-            <div class="field">
-              <label class="label">Dashboard Display</label>
-              <p class="help">Choose whether the home card emphasizes weight or percent left</p>
-              <div class="control">
-                <div class="buttons has-addons">
-                  <button class="button displaymode-btn" id="displayModeWeightPrimary" data-value="weight_primary" onclick="setDisplayMode('weight_primary')">
-                    <span>Big weight</span>
-                  </button>
-                  <button class="button displaymode-btn" id="displayModePercentPrimary" data-value="percent_primary" onclick="setDisplayMode('percent_primary')">
-                    <span>Big percent</span>
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
 
           <!-- Calibration Section -->
@@ -495,10 +480,6 @@
           updateFieldIfNotFocused("kegLabel", data.label);
         }
 
-        if (data.display_mode) {
-          currentKegData.display_mode = data.display_mode;
-        }
-
         // Known weight - only update if not focused
         if (data.known_weight) {
           updateFieldIfNotFocused("knownWeight", data.known_weight);
@@ -537,10 +518,6 @@
               <tr>
                 <td><strong>Sensitivity</strong></td>
                 <td>${sensMap[data.sensitivity] || data.sensitivity || "Not set"}</td>
-              </tr>
-              <tr>
-                <td><strong>Dashboard Display</strong></td>
-                <td>${data.display_mode === "percent_primary" ? "Big percent / small weight" : "Big weight / small percent"}</td>
               </tr>
               <tr>
                 <td><strong>Temperature</strong></td>
@@ -614,7 +591,7 @@
       }
 
       function clearActiveButtons() {
-        document.querySelectorAll(".unit-btn, .measure-btn, .kegmode-btn, .sensitivity-btn, .displaymode-btn")
+        document.querySelectorAll(".unit-btn, .measure-btn, .kegmode-btn, .sensitivity-btn")
           .forEach(btn => btn.classList.remove("is-primary", "is-selected"));
       }
 
@@ -654,10 +631,6 @@
         // Sensitivity
         const sensId = `sens${data.sensitivity}`;
         document.getElementById(sensId)?.classList.add("is-primary", "is-selected");
-
-        const displayMode = data.display_mode === "percent_primary" ? "percent_primary" : "weight_primary";
-        const displayModeId = displayMode === "percent_primary" ? "displayModePercentPrimary" : "displayModeWeightPrimary";
-        document.getElementById(displayModeId)?.classList.add("is-primary", "is-selected");
       }
 
       // WebSocket connection for real-time updates
@@ -861,10 +834,6 @@
           .catch((err) => {
             showToast(`Error: ${err.message}`, "danger");
           });
-      }
-
-      function setDisplayMode(value) {
-        sendCommand("display-mode", { value });
       }
 
       // Settings commands

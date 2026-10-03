@@ -194,7 +194,7 @@ path and the API never contend for SQLite's lock.
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `taps` | Tap list entries, optionally linked to a keg and to a display device |
-| `app_config` | Key/value settings: theme, display units, home page, time format |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format |
 
 There are no foreign keys.
 
@@ -203,7 +203,7 @@ There are no foreign keys.
 - **Device-reported columns** are nullable, and pointers in Go, so "never
   reported" stays distinct from a genuine zero — an uncalibrated scale really
   does report 0.
-- **App-only columns** (label, display mode, sort order, CO2 capacity)
+- **App-only columns** (label, sort order, CO2 capacity)
   are set through the UI and never overwritten by the device.
 - **`internal`** and **`extra`** hold metadata and unknown pins as JSON.
 - **Timestamps.** `first_seen` is set when the row is created. `last_seen` is
@@ -275,7 +275,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
-| `/api/config/…` | Home page, time format, display units, theme |
+| `/api/config/…` | Home page, time format, display units, amount display, theme |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -373,6 +373,16 @@ reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
 paths and the history JSON. The converted values go in a `display` block
 alongside the original fields; it is never stored. BarHelper, the CSV export
 and the Keg Setup page all use device units.
+
+### Amount display
+
+One app-wide setting, `amount_display` (`store.SetAmountDisplay`), chooses
+whether every keg graphic shows the amount left or the percentage left as its
+large figure, on both the tap list and the Kegs page; the Kegs page shows the
+other figure among the tile's readings. CO₂ cylinders always show the amount.
+It is a presentation choice only and is not sent to the device. Both pages
+read it from `/api/config/amount-display` when they load and on their minute
+reload, so a change reaches an open screen within a minute.
 
 ## BarHelper — `internal/barhelper`
 

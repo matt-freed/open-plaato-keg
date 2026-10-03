@@ -163,7 +163,6 @@ func (s *Server) mountKegCommands(r chi.Router) {
 
 	// Settings the device has no pin for at all.
 	r.Post("/label", s.handleSetLabel)
-	r.Post("/display-mode", s.handleSetDisplayMode)
 	r.Post("/co2-capacity", s.handleSetCO2Capacity)
 	r.Post("/reset-last-pour", s.handleResetLastPour)
 }
@@ -243,23 +242,6 @@ func (s *Server) handleSetLabel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": "label", "value": label})
-}
-
-func (s *Server) handleSetDisplayMode(w http.ResponseWriter, r *http.Request) {
-	var req stringCommandRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	mode := strings.TrimSpace(req.Value)
-	if mode != store.DisplayWeightPrimary && mode != store.DisplayPercentPrimary {
-		writeError(w, http.StatusBadRequest, "invalid_value",
-			"display mode must be "+store.DisplayWeightPrimary+" or "+store.DisplayPercentPrimary)
-		return
-	}
-	if _, ok := s.updateKeg(w, chi.URLParam(r, "id"), func(k *store.Keg) { k.DisplayMode = mode }); !ok {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": "display_mode", "value": mode})
 }
 
 func (s *Server) handleSetCO2Capacity(w http.ResponseWriter, r *http.Request) {
