@@ -52,14 +52,10 @@ CREATE TABLE IF NOT EXISTS kegs (
     device_date               TEXT,
 
     -- Values set through the API and held only here. The device has no pin for
-    -- most of these, and does not report back the ones it does.
+    -- any of these.
     label                     TEXT    NOT NULL DEFAULT '',
     display_mode              TEXT    NOT NULL DEFAULT 'weight_primary',
     sort_order                INTEGER NOT NULL DEFAULT 0,
-    beer_style                TEXT    NOT NULL DEFAULT '',
-    og                        REAL,
-    fg                        REAL,
-    abv                       REAL,
     co2_capacity              REAL,
 
     -- internal: the device metadata map (ver, fw, dev, build, tmpl, ...).

@@ -196,12 +196,9 @@ where noted.
 | `/api/kegs/{id}/measure-unit` | `{"value": "weight"\|"volume"}` | |
 | `/api/kegs/{id}/keg-mode` | `{"value": "beer"\|"co2"}` | |
 | `/api/kegs/{id}/sensitivity` | `{"value": "very_low"\|"low"\|"medium"\|"high"}` | |
-| `/api/kegs/{id}/beer-style` | `{"value": "Saison"}` | Stored locally too; the device never reports this back |
-| `/api/kegs/{id}/date` | `{"value": "25.03.2025"}` | The date shown on the device, as `DD.MM.YYYY` or `YYYY-MM-DD`; stored and sent as `DD.MM.YYYY`. Anything that is not a real date is a 400; an empty value clears it. The tap list does not use it: a tap's kegged date is its own `kegged_date` |
 | `/api/kegs/{id}/label` | `{"value": "Kitchen tap"}` | Stored here only |
 | `/api/kegs/{id}/display-mode` | `{"value": "weight_primary"\|"percent_primary"}` | Stored here only |
-| `/api/kegs/{id}/og`, `/fg`, `/co2-capacity` | `{"value": 1.050}` | Stored here only |
-| `/api/kegs/{id}/abv` | `{"og": 1.050, "fg": 1.010}` | Computes and stores the strength |
+| `/api/kegs/{id}/co2-capacity` | `{"value": 1.050}` | Stored here only |
 | `/api/kegs/{id}/reset-last-pour` | — | Stored here only |
 
 Numeric values may be sent as JSON numbers or as strings.

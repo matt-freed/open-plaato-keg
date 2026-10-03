@@ -219,7 +219,7 @@ func TestCommandWithoutValueIsRejected(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
-	for _, path := range []string{"og", "fg", "co2-capacity", "max-keg-volume", "temperature-offset"} {
+	for _, path := range []string{"co2-capacity", "max-keg-volume", "temperature-offset"} {
 		rec := a.do(http.MethodPost, "/api/kegs/keg-1/"+path, map[string]any{})
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s without a value: status = %d, want 400", path, rec.Code)
@@ -233,44 +233,17 @@ func TestCommandAcceptsNumberOrString(t *testing.T) {
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
 	for _, value := range []any{1.052, "1.052"} {
-		rec := a.do(http.MethodPost, "/api/kegs/keg-1/og", map[string]any{"value": value})
+		rec := a.do(http.MethodPost, "/api/kegs/keg-1/co2-capacity", map[string]any{"value": value})
 		assertStatus(t, rec, http.StatusOK)
 
 		k, _ := a.store.GetKeg("keg-1")
-		if k.OG == nil || *k.OG != 1.052 {
-			t.Errorf("value %#v: OG = %v, want 1.052", value, k.OG)
+		if k.CO2Capacity == nil || *k.CO2Capacity != 1.052 {
+			t.Errorf("value %#v: CO2Capacity = %v, want 1.052", value, k.CO2Capacity)
 		}
-		if _, err := a.store.UpdateKeg("keg-1", func(k *store.Keg) { k.OG = nil }); err != nil {
+		if _, err := a.store.UpdateKeg("keg-1", func(k *store.Keg) { k.CO2Capacity = nil }); err != nil {
 			t.Fatalf("reset: %v", err)
 		}
 	}
-}
-
-func TestSetABVComputesFromGravities(t *testing.T) {
-	a := newTestAPI(t)
-	a.storeKeg("keg-1", "vw\x0051\x001.000")
-
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/abv",
-		map[string]any{"og": "1.050", "fg": "1.010"})
-	assertStatus(t, rec, http.StatusOK)
-
-	var body map[string]any
-	a.decode(rec, &body)
-	abv, ok := body["value"].(float64)
-	if !ok {
-		t.Fatalf("value = %#v, want a number", body["value"])
-	}
-	if diff := abv - 5.25; diff > 0.001 || diff < -0.001 {
-		t.Errorf("abv = %v, want 5.25", abv)
-	}
-
-	k, _ := a.store.GetKeg("keg-1")
-	if k.ABV == nil || k.OG == nil || k.FG == nil {
-		t.Errorf("gravities were not stored: %+v", k)
-	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/keg-1/abv", map[string]any{"og": "1.050"})
-	assertStatus(t, rec, http.StatusBadRequest)
 }
 
 // A command for a keg with no live connection is a 503, so the UI can say the
@@ -303,26 +276,6 @@ func TestEnumCommandValidation(t *testing.T) {
 	// A valid value gets as far as the disconnected keg.
 	rec = a.do(http.MethodPost, "/api/kegs/keg-1/unit", map[string]string{"value": "metric"})
 	assertStatus(t, rec, http.StatusServiceUnavailable)
-}
-
-// Beer style is kept locally because the device never reports the pin back.
-func TestBeerStyleIsStoredEvenWhenOffline(t *testing.T) {
-	a := newTestAPI(t)
-	a.storeKeg("keg-1", "vw\x0051\x001.000")
-
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/beer-style", map[string]string{"value": "Saison"})
-	assertStatus(t, rec, http.StatusOK)
-
-	var body map[string]any
-	a.decode(rec, &body)
-	if body["sent_to_device"] != false {
-		t.Errorf("sent_to_device = %v, want false for an offline keg", body["sent_to_device"])
-	}
-
-	k, _ := a.store.GetKeg("keg-1")
-	if k.BeerStyle != "Saison" {
-		t.Errorf("BeerStyle = %q, want it stored locally", k.BeerStyle)
-	}
 }
 
 func TestKegOrder(t *testing.T) {

@@ -173,7 +173,7 @@ anything outside a device's own goroutine reaches that device.
   and commands from HTTP handlers share one socket.
 
 **`Commander`** builds Blynk pin writes — tare, empty-keg weight, max volume,
-calibration, units, keg mode, sensitivity, beer style — and sends them via
+calibration, units, keg mode, sensitivity — and sends them via
 `Registry.Lookup`. Outbound message ids are random in `1..65535`.
 
 ### Protocol rules the hardware depends on
@@ -181,7 +181,6 @@ calibration, units, keg mode, sensitivity, beer style — and sends them via
 - One acknowledgement per TCP read, not per frame.
 - The acknowledgement echoes the first frame's message id.
 - Outbound message ids are never 0.
-- `beer_style` writes are prefixed with a space.
 - A device is only a keg once it sends a keg-identifying pin.
 
 ## Persistence — `internal/store`
@@ -204,7 +203,7 @@ There are no foreign keys.
 - **Device-reported columns** are nullable, and pointers in Go, so "never
   reported" stays distinct from a genuine zero — an uncalibrated scale really
   does report 0.
-- **App-only columns** (label, beer style, OG/FG/ABV, sort order, display mode)
+- **App-only columns** (label, display mode, sort order, CO2 capacity)
   are set through the UI and never overwritten by the device.
 - **`internal`** and **`extra`** hold metadata and unknown pins as JSON.
 

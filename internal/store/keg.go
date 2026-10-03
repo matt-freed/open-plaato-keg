@@ -70,10 +70,6 @@ type Keg struct {
 	Label       string   `json:"label"`
 	DisplayMode string   `json:"display_mode"`
 	SortOrder   int      `json:"sort_order"`
-	BeerStyle   string   `json:"beer_style"`
-	OG          *float64 `json:"og"`
-	FG          *float64 `json:"fg"`
-	ABV         *float64 `json:"abv"`
 	CO2Capacity *float64 `json:"co2_capacity"`
 
 	Internal map[string]string `json:"internal"`
@@ -160,10 +156,6 @@ var kegColumns = []kegColumn{
 	{"label", func(k *Keg) any { return k.Label }, func(k *Keg) any { return &k.Label }},
 	{"display_mode", func(k *Keg) any { return k.DisplayMode }, func(k *Keg) any { return &k.DisplayMode }},
 	{"sort_order", func(k *Keg) any { return k.SortOrder }, func(k *Keg) any { return &k.SortOrder }},
-	{"beer_style", func(k *Keg) any { return k.BeerStyle }, func(k *Keg) any { return &k.BeerStyle }},
-	{"og", func(k *Keg) any { return k.OG }, func(k *Keg) any { return &k.OG }},
-	{"fg", func(k *Keg) any { return k.FG }, func(k *Keg) any { return &k.FG }},
-	{"abv", func(k *Keg) any { return k.ABV }, func(k *Keg) any { return &k.ABV }},
 	{"co2_capacity", func(k *Keg) any { return k.CO2Capacity }, func(k *Keg) any { return &k.CO2Capacity }},
 	{"internal", func(k *Keg) any { return encodeMap(k.Internal) }, nil},
 	{"extra", func(k *Keg) any { return encodeMap(k.Extra) }, nil},

@@ -161,16 +161,9 @@ func (s *Server) mountKegCommands(r chi.Router) {
 		"high": 4, "4": 4,
 	}, func(id string, v int) error { return s.commander.SetSensitivity(id, v) }))
 
-	// Settings the device shows but never reports back, so they are also kept
-	// here to survive a restart.
-	r.Post("/beer-style", s.handleSetBeerStyle)
-
 	// Settings the device has no pin for at all.
 	r.Post("/label", s.handleSetLabel)
 	r.Post("/display-mode", s.handleSetDisplayMode)
-	r.Post("/og", s.handleSetOG)
-	r.Post("/fg", s.handleSetFG)
-	r.Post("/abv", s.handleSetABV)
 	r.Post("/co2-capacity", s.handleSetCO2Capacity)
 	r.Post("/reset-last-pour", s.handleResetLastPour)
 }
@@ -269,34 +262,6 @@ func (s *Server) handleSetDisplayMode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": "display_mode", "value": mode})
 }
 
-// handleSetBeerStyle writes the style to the device's display and keeps a copy,
-// because the device never reports this pin back.
-func (s *Server) handleSetBeerStyle(w http.ResponseWriter, r *http.Request) {
-	var req stringCommandRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	id := chi.URLParam(r, "id")
-	style := strings.TrimSpace(req.Value)
-
-	if _, ok := s.updateKeg(w, id, func(k *store.Keg) { k.BeerStyle = style }); !ok {
-		return
-	}
-	// The device may be offline; the stored value is still worth keeping.
-	sent := s.commander.SetBeerStyle(id, style) == nil
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok", "command": "beer_style", "value": style, "sent_to_device": sent,
-	})
-}
-
-func (s *Server) handleSetOG(w http.ResponseWriter, r *http.Request) {
-	s.storeNumber(w, r, "og", func(k *store.Keg, v *float64) { k.OG = v })
-}
-
-func (s *Server) handleSetFG(w http.ResponseWriter, r *http.Request) {
-	s.storeNumber(w, r, "fg", func(k *store.Keg, v *float64) { k.FG = v })
-}
-
 func (s *Server) handleSetCO2Capacity(w http.ResponseWriter, r *http.Request) {
 	s.storeNumber(w, r, "co2_capacity", func(k *store.Keg, v *float64) { k.CO2Capacity = v })
 }
@@ -315,34 +280,6 @@ func (s *Server) storeNumber(w http.ResponseWriter, r *http.Request, name string
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": name, "value": value})
-}
-
-type abvRequest struct {
-	OG numberOrString `json:"og"`
-	FG numberOrString `json:"fg"`
-}
-
-// handleSetABV computes and stores alcohol by volume from the two gravities.
-func (s *Server) handleSetABV(w http.ResponseWriter, r *http.Request) {
-	var req abvRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	og, okOG := req.OG.Value()
-	fg, okFG := req.FG.Value()
-	if !okOG || !okFG {
-		writeError(w, http.StatusBadRequest, "missing_value", "og and fg are both required and must be numbers")
-		return
-	}
-
-	abv := store.EstimateABV(og, fg)
-	_, ok := s.updateKeg(w, chi.URLParam(r, "id"), func(k *store.Keg) {
-		k.OG, k.FG, k.ABV = req.OG.Ptr(), req.FG.Ptr(), &abv
-	})
-	if !ok {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": "abv", "value": abv})
 }
 
 // handleResetLastPour clears the last pour reading, which is otherwise only

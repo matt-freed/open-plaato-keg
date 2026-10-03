@@ -95,7 +95,6 @@
             <span class="pouring">Pouring</span>
           </div>
           <h2 class="beer"></h2>
-          <div class="specs"></div>
           <div class="readings"></div>
         </div>
         <div class="tile-keg">
@@ -138,12 +137,6 @@
         : tap ? esc(tap.name || 'Unnamed beer') : 'Not on tap';
       tile.querySelector('.beer').textContent =
         keg.label?.trim() || `Scale ${(index ?? 0) + 1}`;
-
-      const abv = Number.isFinite(keg.abv) ? `${Math.round(keg.abv * 10) / 10}% ABV` : '';
-      tile.querySelector('.specs').innerHTML = [
-        keg.beer_style?.trim() && `<span class="style">${esc(keg.beer_style.trim())}</span>`,
-        abv && `<span>${abv}</span>`,
-      ].filter(Boolean).join('');
 
       const readings = [
         `<div class="reading">

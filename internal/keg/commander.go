@@ -110,14 +110,6 @@ func (c *Commander) CalibrateKnownWeight(kegID string, weight float64) error {
 	return c.WritePin(kegID, plaato.PinKnownWeight, formatFloat(weight))
 }
 
-// SetBeerStyle sets the style shown on the device.
-//
-// The leading space matches what the Plaato app sends; the device's display
-// clips the first character without it.
-func (c *Commander) SetBeerStyle(kegID, style string) error {
-	return c.WritePin(kegID, plaato.PinBeerStyle, " "+style)
-}
-
 // Unit selects the metric or US unit system.
 const (
 	UnitMetric = 1
