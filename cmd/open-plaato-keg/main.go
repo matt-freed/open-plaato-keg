@@ -87,7 +87,7 @@ func run() error {
 	kegServer := keg.NewServer(st, bus, cfg.IncludeUnknownData, consumers...)
 	commander := keg.NewCommander(kegServer.Registry())
 
-	hub := ws.NewHub(st)
+	hub := ws.NewHub(st, commander.Connected)
 	go hub.Run(ctx, bus)
 
 	go prune(ctx, st)

@@ -335,7 +335,12 @@ and to fill the keg in that beer's colour. The specs row under each
 tile's name shows how long ago the device last sent data (`last_seen`), how long ago
 BarHelper last accepted a reading (`barhelper_last_sent`, left out when 0) and
 the Wi-Fi strength; the page re-renders every 15 seconds to keep those times
-current.
+current. Badges beside "Pouring" in the top row mark a scale reporting a leak
+(`leak_detection` is 1), which also reddens the tile's border, and a scale
+with no live connection (`connected` is false), whose readings and graphic are
+dimmed. A disconnect publishes a keg update, so the offline badge appears as
+soon as the server notices: at once for a clean close, and within
+`ReadTimeout` (60 seconds) for a scale that drops off the network.
 
 `beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,

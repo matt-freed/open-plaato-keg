@@ -518,6 +518,39 @@ hr {
 .keg-tile .keg-graphic { width: 100%; }
 .reading.is-low .reading-value { color: var(--danger); }
 
+/* Status badges beside "Pouring" in the tile's top row, drawn the same way. */
+.keg-tile .leak,
+.keg-tile .offline {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.keg-tile .leak::before,
+.keg-tile .offline::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.keg-tile .leak { color: var(--danger); }
+.keg-tile .leak::before { animation: pulse 1.2s ease-in-out infinite; }
+.keg-tile .offline { color: var(--muted); }
+.keg-tile .offline::before { background: transparent; border: 1.5px solid currentColor; }
+.keg-tile.is-leaking .leak,
+.keg-tile.is-offline .offline { display: inline-flex; }
+
+/* A leak outranks everything else on the tile, pouring included. */
+.tile.keg-tile.is-leaking { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+/* An offline scale's readings are its last known ones, so they recede. */
+.keg-tile.is-offline .readings,
+.keg-tile.is-offline .tile-keg { opacity: 0.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .keg-tile .leak::before { animation: none; }
+}
+
 .co2-badge {
   padding: 0.05rem 0.4rem;
   border-radius: 4px;

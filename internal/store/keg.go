@@ -87,7 +87,8 @@ type Keg struct {
 	// rather than trusted from the device, so the displayed label cannot
 	// disagree with the configured mode.
 	BeerLeftUnit string `json:"beer_left_unit"`
-	// Connected is filled in by the API from the live connection registry.
+	// Connected is filled in from the live connection registry by the API
+	// handlers and the WebSocket hub, wherever a browser reads a keg.
 	Connected bool `json:"connected"`
 	// Display is filled in at the JSON boundaries the browser reads, from the
 	// user's display-unit preference. It is nil everywhere else, which is what

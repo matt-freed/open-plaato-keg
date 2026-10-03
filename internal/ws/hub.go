@@ -48,6 +48,9 @@ type client struct {
 // Hub holds the connected clients and broadcasts to them.
 type Hub struct {
 	store *store.Store
+	// connected reports whether a keg has a live connection, so each frame
+	// carries the same "connected" the REST API returns. It may be nil.
+	connected func(kegID string) bool
 
 	mu      sync.RWMutex
 	clients map[*client]struct{}
@@ -61,13 +64,15 @@ type Hub struct {
 	wake chan struct{}
 }
 
-// NewHub returns a hub that reads records from st.
-func NewHub(st *store.Store) *Hub {
+// NewHub returns a hub that reads records from st and asks connected whether
+// each keg is online. connected may be nil, in which case none are.
+func NewHub(st *store.Store, connected func(kegID string) bool) *Hub {
 	return &Hub{
-		store:   st,
-		clients: map[*client]struct{}{},
-		pending: map[string]events.Kind{},
-		wake:    make(chan struct{}, 1),
+		store:     st,
+		connected: connected,
+		clients:   map[*client]struct{}{},
+		pending:   map[string]events.Kind{},
+		wake:      make(chan struct{}, 1),
 	}
 }
 
@@ -165,11 +170,20 @@ func (h *Hub) flush(pending map[string]events.Kind) {
 					"keg", kegID, "error", err)
 				continue
 			}
-			k.SetDisplay(display)
+			h.fill(k, display)
 			h.Broadcast(Message{Type: TypeKeg, Data: k})
 		}
 	}
 	clear(pending)
+}
+
+// fill adds what a browser reads but the store does not hold: the live
+// connection state and the readings in the chosen display units.
+func (h *Hub) fill(k *store.Keg, display store.DisplayUnits) {
+	if h.connected != nil {
+		k.Connected = h.connected(k.ID)
+	}
+	k.SetDisplay(display)
 }
 
 // displayUnits reads the presentation preference.
@@ -253,8 +267,9 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Send the current state immediately, so a page that connects between
 	// updates is not blank until the next one.
 	if kegs, err := h.store.ListKegs(); err == nil {
-		store.SetDisplayAll(kegs, h.displayUnits())
+		display := h.displayUnits()
 		for _, k := range kegs {
+			h.fill(k, display)
 			select {
 			case c.send <- Message{Type: TypeKeg, Data: k}:
 			default:

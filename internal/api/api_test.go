@@ -37,7 +37,7 @@ func newTestAPI(t *testing.T) *testAPI {
 
 	bus := events.NewBus()
 	commander := keg.NewCommander(keg.NewRegistry())
-	hub := ws.NewHub(st)
+	hub := ws.NewHub(st, nil)
 	srv := NewServer(st, commander, hub, bus, "test", web.Static())
 
 	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus}
