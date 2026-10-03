@@ -19,6 +19,10 @@
       }
       .controls .field { margin: 0; }
       .controls .buttons.has-addons { flex-wrap: wrap; }
+      /* A scale's beer, with the scale's own name beneath it. */
+      .scale-option { flex-direction: column; justify-content: center; gap: 0.1rem; line-height: 1.15; }
+      .scale-option .scale-name { font-size: 0.72rem; font-weight: 500; color: var(--faint); }
+      .scale-option.is-selected .scale-name { color: var(--muted); }
       .page-actions { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }
 
       /* The range's figures, set like the tap list's readings. */
@@ -155,6 +159,7 @@
     const GAP_MS = 10 * 60e3;
 
     let kegs = [];
+    const tapsByKeg = {};
     let timeFormat = '12h';
     let measure = 'amount';
     let entries = [];
@@ -554,13 +559,20 @@
     async function init() {
       select('measureChoice', measure);
       try {
-        const [kegsRes, tf] = await Promise.all([
+        const [kegsRes, tf, tapList] = await Promise.all([
           fetch('/api/kegs'),
           fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
+          // Only for labelling the scales, so a failure just leaves them
+          // named by scale.
+          fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
         ]);
         if (!kegsRes.ok) throw new Error(kegsRes.status);
         kegs = await kegsRes.json();
         timeFormat = tf.time_format || '12h';
+        // The first tap, by tap number, that draws from each scale.
+        for (const tap of tapList) {
+          if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;
+        }
       } catch (_) {
         $('pageStatus').textContent = 'Could not load the scales. Is the server running?';
         return;
@@ -570,8 +582,15 @@
         $('downloadBtn').hidden = true;
         return;
       }
-      $('scaleChoice').innerHTML = kegs.map((k, i) =>
-        `<button class="button" type="button" data-value="${esc(k.id)}">${esc(kegName(k, i))}</button>`).join('');
+      // A scale that feeds a tap is labelled by its beer, which is what the
+      // reader is looking for, with the scale's own name beneath it.
+      $('scaleChoice').innerHTML = kegs.map((k, i) => {
+        const beer = tapsByKeg[k.id]?.name?.trim();
+        const label = beer
+          ? `<span class="scale-beer">${esc(beer)}</span><span class="scale-name">${esc(kegName(k, i))}</span>`
+          : `<span class="scale-beer">${esc(kegName(k, i))}</span>`;
+        return `<button class="button scale-option" type="button" data-value="${esc(k.id)}">${label}</button>`;
+      }).join('');
       show();
     }
 
