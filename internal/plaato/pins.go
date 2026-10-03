@@ -96,7 +96,6 @@ const (
 	PinKnownWeight       = "61"
 	PinEmptyKegWeight    = "62"
 	PinBeerStyle         = "64"
-	PinDate              = "67"
 	PinUnit              = "71"
 	PinMeasureUnit       = "75"
 	PinMaxKegVolume      = "76"

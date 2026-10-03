@@ -62,7 +62,7 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
 - **The acknowledgement echoes the first frame's message id.** Older firmware
   validates this before it considers itself connected.
 - Outbound message ids are `1..65535`; the device treats 0 as unset.
-- `beer_style` and `date` writes are prefixed with a space, matching what the
+- `beer_style` writes are prefixed with a space, matching what the
   Plaato app sends.
 - A device is only treated as a keg once it sends a keg-identifying pin. Device
   metadata alone is not enough — a Plaato Airlock sends indistinguishable

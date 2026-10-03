@@ -118,11 +118,6 @@ func (c *Commander) SetBeerStyle(kegID, style string) error {
 	return c.WritePin(kegID, plaato.PinBeerStyle, " "+style)
 }
 
-// SetDate sets the date shown on the device, with the same leading space.
-func (c *Commander) SetDate(kegID, date string) error {
-	return c.WritePin(kegID, plaato.PinDate, " "+date)
-}
-
 // Unit selects the metric or US unit system.
 const (
 	UnitMetric = 1

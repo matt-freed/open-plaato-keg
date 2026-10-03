@@ -57,7 +57,6 @@ CREATE TABLE IF NOT EXISTS kegs (
     display_mode              TEXT    NOT NULL DEFAULT 'weight_primary',
     sort_order                INTEGER NOT NULL DEFAULT 0,
     beer_style                TEXT    NOT NULL DEFAULT '',
-    keg_date                  TEXT    NOT NULL DEFAULT '',
     og                        REAL,
     fg                        REAL,
     abv                       REAL,

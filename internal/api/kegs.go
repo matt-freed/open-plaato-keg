@@ -164,7 +164,6 @@ func (s *Server) mountKegCommands(r chi.Router) {
 	// Settings the device shows but never reports back, so they are also kept
 	// here to survive a restart.
 	r.Post("/beer-style", s.handleSetBeerStyle)
-	r.Post("/date", s.handleSetKegDate)
 
 	// Settings the device has no pin for at all.
 	r.Post("/label", s.handleSetLabel)
@@ -287,27 +286,6 @@ func (s *Server) handleSetBeerStyle(w http.ResponseWriter, r *http.Request) {
 	sent := s.commander.SetBeerStyle(id, style) == nil
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status": "ok", "command": "beer_style", "value": style, "sent_to_device": sent,
-	})
-}
-
-func (s *Server) handleSetKegDate(w http.ResponseWriter, r *http.Request) {
-	var req stringCommandRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	id := chi.URLParam(r, "id")
-	date, err := store.NormalizeDate(req.Value, store.KegDateLayout)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_value", err.Error())
-		return
-	}
-
-	if _, ok := s.updateKeg(w, id, func(k *store.Keg) { k.KegDate = date }); !ok {
-		return
-	}
-	sent := s.commander.SetDate(id, date) == nil
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok", "command": "date", "value": date, "sent_to_device": sent,
 	})
 }
 

@@ -71,7 +71,6 @@ type Keg struct {
 	DisplayMode string   `json:"display_mode"`
 	SortOrder   int      `json:"sort_order"`
 	BeerStyle   string   `json:"beer_style"`
-	KegDate     string   `json:"keg_date"`
 	OG          *float64 `json:"og"`
 	FG          *float64 `json:"fg"`
 	ABV         *float64 `json:"abv"`
@@ -162,7 +161,6 @@ var kegColumns = []kegColumn{
 	{"display_mode", func(k *Keg) any { return k.DisplayMode }, func(k *Keg) any { return &k.DisplayMode }},
 	{"sort_order", func(k *Keg) any { return k.SortOrder }, func(k *Keg) any { return &k.SortOrder }},
 	{"beer_style", func(k *Keg) any { return k.BeerStyle }, func(k *Keg) any { return &k.BeerStyle }},
-	{"keg_date", func(k *Keg) any { return k.KegDate }, func(k *Keg) any { return &k.KegDate }},
 	{"og", func(k *Keg) any { return k.OG }, func(k *Keg) any { return &k.OG }},
 	{"fg", func(k *Keg) any { return k.FG }, func(k *Keg) any { return &k.FG }},
 	{"abv", func(k *Keg) any { return k.ABV }, func(k *Keg) any { return &k.ABV }},

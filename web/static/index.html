@@ -143,7 +143,6 @@
       tile.querySelector('.specs').innerHTML = [
         keg.beer_style?.trim() && `<span class="style">${esc(keg.beer_style.trim())}</span>`,
         abv && `<span>${abv}</span>`,
-        keg.keg_date?.trim() && `<span>${esc(keg.keg_date.trim())}</span>`,
       ].filter(Boolean).join('');
 
       const readings = [

@@ -173,7 +173,7 @@ anything outside a device's own goroutine reaches that device.
   and commands from HTTP handlers share one socket.
 
 **`Commander`** builds Blynk pin writes — tare, empty-keg weight, max volume,
-calibration, units, keg mode, sensitivity, beer style, date — and sends them via
+calibration, units, keg mode, sensitivity, beer style — and sends them via
 `Registry.Lookup`. Outbound message ids are random in `1..65535`.
 
 ### Protocol rules the hardware depends on
@@ -181,7 +181,7 @@ calibration, units, keg mode, sensitivity, beer style, date — and sends them v
 - One acknowledgement per TCP read, not per frame.
 - The acknowledgement echoes the first frame's message id.
 - Outbound message ids are never 0.
-- `beer_style` and `date` writes are prefixed with a space.
+- `beer_style` writes are prefixed with a space.
 - A device is only a keg once it sends a keg-identifying pin.
 
 ## Persistence — `internal/store`

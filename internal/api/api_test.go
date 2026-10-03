@@ -306,32 +306,6 @@ func TestEnumCommandValidation(t *testing.T) {
 }
 
 // Beer style is kept locally because the device never reports the pin back.
-// The kegged date must be a real date, and is stored day first whichever
-// accepted form it arrives in.
-func TestKegDateIsValidated(t *testing.T) {
-	a := newTestAPI(t)
-	const id = "00000000000000000000000000000001"
-	a.storeKeg(id, "vw\x0051\x001.000")
-
-	rec := a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": "2026-09-03"})
-	assertStatus(t, rec, http.StatusOK)
-	if k, _ := a.store.GetKeg(id); k.KegDate != "03.09.2026" {
-		t.Errorf("keg_date = %q, want 03.09.2026", k.KegDate)
-	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": "Labor Day"})
-	assertStatus(t, rec, http.StatusBadRequest)
-	if k, _ := a.store.GetKeg(id); k.KegDate != "03.09.2026" {
-		t.Errorf("keg_date = %q after a rejected value, want it unchanged", k.KegDate)
-	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": ""})
-	assertStatus(t, rec, http.StatusOK)
-	if k, _ := a.store.GetKeg(id); k.KegDate != "" {
-		t.Errorf("keg_date = %q, want it cleared", k.KegDate)
-	}
-}
-
 func TestBeerStyleIsStoredEvenWhenOffline(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
