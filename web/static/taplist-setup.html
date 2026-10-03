@@ -4,75 +4,39 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tap List Setup - Open Plaato</title>
-  <style>@import url("style.css");</style>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/theme.css">
-  <style>
-    .tap-list-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0.6rem 0.8rem; border-radius: 6px; margin-bottom: 0.4rem;
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-      cursor: pointer; transition: background 0.15s;
-    }
-    .tap-list-item:hover { background: rgba(255,255,255,0.08); }
-    .tap-list-item.active { border-color: #3273dc; background: rgba(50,115,220,0.1); }
-    .tap-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    .tap-list-left { display: flex; align-items: center; gap: 0.6rem; }
-    .tap-list-name { font-weight: 600; }
-    .tap-list-meta { font-size: 0.8rem; color: #888; }
-  </style>
+  <link rel="stylesheet" href="/site-header.css">
+  <script src="/site-header.js"></script>
 </head>
 <body>
-  <div id="header_container">
-    <nav class="navbar" role="navigation" aria-label="main navigation">
-      <div class="navbar-brand">
-        <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarMenu">
-          <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
-        </a>
-      </div>
-      <div id="navbarMenu" class="navbar-menu">
-        <div class="navbar-start">
-          <a class="navbar-item" href="/">Home</a>
-          <a class="navbar-item" href="/index.html">Kegs</a>
-          <a class="navbar-item" href="/history.html">History</a>
-          <div class="navbar-item has-dropdown" id="configureDropdown">
-            <a class="navbar-link" onclick="toggleDropdown(event)">Configure</a>
-            <div class="navbar-dropdown">
-              <a class="navbar-item" href="/taplist-setup.html">Tap Setup</a>
-              <a class="navbar-item" href="/setup.html">Scale Setup</a>
-              <a class="navbar-item" href="/dashboard-setup.html">Dashboard Setup</a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </nav>
-  </div>
+  <site-header heading="Tap List Setup"></site-header>
 
-  <div class="container" style="padding:1.5rem 1rem 3rem;">
-    <h1 class="title is-2">Tap List Setup</h1>
+  <section class="section">
+  <div class="container is-centered">
     <p class="subtitle">Configure beer info and tasting notes for each tap. Data is stored in the beer database.</p>
 
-    <div class="columns">
-      <!-- LEFT: tap list -->
-      <div class="column is-4">
-        <div class="box" style="position:sticky;top:1rem;">
+    <!-- List view -->
+    <div id="listView">
+      <div class="box">
+        <div class="list-head">
           <h2 class="title is-5">Taps</h2>
-
-          <div id="tapListContainer">
-            <p class="has-text-grey">Loading…</p>
-          </div>
-
-          <button class="button is-primary is-fullwidth" style="margin-top:1rem;" onclick="addNewTap()">
-            + Add Tap
-          </button>
+          <a class="button is-primary is-small" href="#new">+ Add Tap</a>
+        </div>
+        <div id="tapListContainer">
+          <p class="has-text-grey">Loading…</p>
         </div>
       </div>
+    </div>
 
-      <!-- RIGHT: edit form -->
-      <div class="column is-8">
-        <div class="box" id="editBox" style="display:none;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-            <h2 class="title is-5" style="margin:0;" id="formTitle">New Tap</h2>
-            <button class="button is-danger is-light is-small" onclick="deleteTap()">Delete Tap</button>
+    <!-- Editor view -->
+    <div id="editView" hidden>
+      <a class="back-link" href="#">← All taps</a>
+        <div class="box">
+          <div class="form-head">
+            <h2 class="title is-5" id="formTitle">New Tap</h2>
+            <button class="button is-danger is-light is-small" id="deleteBtn" onclick="deleteTap()">Delete Tap</button>
           </div>
 
           <div class="columns">
@@ -179,41 +143,19 @@
 
           <hr />
 
-          <div class="field" style="margin-top:1.5rem;">
-            <div class="control">
-              <button class="button is-primary is-medium" onclick="saveTap()">Save Tap</button>
-              <button class="button is-light" style="margin-left:0.5rem;" onclick="closeForm()">Cancel</button>
-            </div>
+          <div class="form-actions">
+            <button class="button is-primary" onclick="saveTap()">Save Tap</button>
+            <a class="button" href="#">Cancel</a>
           </div>
         </div>
-
-        <div id="emptyState" style="text-align:center;padding:3rem;color:#888;">
-          <p style="font-size:1.2rem;">Select a tap to edit, or click <strong>+ Add Tap</strong></p>
-        </div>
-      </div>
     </div>
   </div>
+  </section>
 
   <div id="toast" class="notification toast is-hidden"></div>
 
   <script src="/beer-color.js"></script>
   <script>
-    // navbar burger
-    document.querySelectorAll('.navbar-burger').forEach(el =>
-      el.addEventListener('click', () => {
-        document.getElementById(el.dataset.target).classList.toggle('is-active');
-        el.classList.toggle('is-active');
-      })
-    );
-    function toggleDropdown(e) {
-      e.preventDefault();
-      document.getElementById('configureDropdown').classList.toggle('is-open');
-    }
-    document.addEventListener('click', e => {
-      if (!e.target.closest('#configureDropdown'))
-        document.getElementById('configureDropdown')?.classList.remove('is-open');
-    });
-
     let currentTapId = null;
     let allTaps = [];
     let allKegs = [];
@@ -237,28 +179,64 @@
       populateDropdowns();
     }
 
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    // The scale a tap draws from, named as the editor's sensor list names it.
+    function linkedKegName(tap) {
+      if (!tap.keg_id) return 'No scale linked';
+      const index = allKegs.findIndex(k => k.id === tap.keg_id);
+      if (index < 0) return 'Scale not found';
+      return allKegs[index].label?.trim() || `Scale ${index + 1}`;
+    }
+
     function renderTapList() {
       const container = document.getElementById('tapListContainer');
       if (!allTaps.length) {
-        container.innerHTML = '<p class="has-text-grey" style="font-size:0.9rem;">No taps yet — click Add Tap</p>';
+        container.innerHTML = '<p class="has-text-grey">No taps yet. Add one to start your tap list.</p>';
         return;
       }
-      container.innerHTML = '';
-      allTaps.forEach(tap => {
-        const item = document.createElement('div');
-        item.className = 'tap-list-item' + (tap.id === currentTapId ? ' active' : '');
-        item.onclick = () => editTap(tap.id);
-        item.innerHTML = `
-          <div class="tap-list-left">
-            <div class="tap-color-dot" style="background:${beerColor(tap)};"></div>
-            <div>
-              <div class="tap-list-name">Tap ${tap.tap_number || '?'} — ${tap.name || 'Unnamed'}</div>
-              <div class="tap-list-meta">${tap.style || ''}${tap.abv ? ' · '+tap.abv+'%' : ''}</div>
-            </div>
-          </div>
-          <span style="font-size:0.75rem;color:#666;">#${tap.id}</span>`;
-        container.appendChild(item);
-      });
+      container.innerHTML = allTaps.map(tap => `
+        <a class="list-row" href="#tap=${encodeURIComponent(tap.id)}">
+          <span class="list-row-dot" style="background:${esc(beerColor(tap))};"></span>
+          <span class="list-row-text">
+            <span class="list-row-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
+            <span class="list-row-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
+          </span>
+          <span class="list-row-aside${tap.keg_id ? '' : ' is-empty'}">${esc(linkedKegName(tap))}</span>
+          <span class="list-row-go" aria-hidden="true">›</span>
+        </a>`).join('');
+    }
+
+    // ── Views ─────────────────────────────────────
+    // The URL hash says which view is open: empty for the list, #new for a
+    // new tap, #tap=<id> for an existing one. Links change the hash and
+    // showView follows it, so Back returns to the list and a reload keeps
+    // the tap that was open.
+    function showView() {
+      const hash = location.hash.slice(1);
+      const editing = hash === 'new' || hash.startsWith('tap=');
+      if (editing && hash !== 'new') {
+        const tap = allTaps.find(t => t.id === decodeURIComponent(hash.slice(4)));
+        if (!tap) { location.replace('#'); return; }
+        currentTapId = tap.id;
+        openForm(tap);
+      } else if (editing) {
+        startNewTap();
+      } else {
+        currentTapId = null;
+      }
+      document.getElementById('listView').hidden = editing;
+      document.getElementById('editView').hidden = !editing;
+      window.scrollTo(0, 0);
+    }
+
+    // backToList returns to the list, as the editor's Back link does.
+    function backToList() {
+      if (location.hash) location.hash = '';
+      else showView();
     }
 
     function populateDropdowns() {
@@ -277,7 +255,7 @@
     }
 
     // ── Add new tap ───────────────────────────────
-    function addNewTap() {
+    function startNewTap() {
       currentTapId = 'tap_' + Date.now();
       const maxNum = allTaps.reduce((m, t) => Math.max(m, t.tap_number || 0), 0);
       openForm({
@@ -289,18 +267,11 @@
       });
     }
 
-    // ── Edit existing tap ─────────────────────────
-    function editTap(id) {
-      currentTapId = id;
-      const tap = allTaps.find(t => t.id === id);
-      if (tap) openForm(tap);
-      renderTapList();
-    }
-
     function openForm(tap) {
-      document.getElementById('editBox').style.display = '';
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('formTitle').textContent = tap.name ? `Editing: ${tap.name}` : 'New Tap';
+      const isNew = !allTaps.some(t => t.id === tap.id);
+      document.getElementById('formTitle').textContent = isNew ? 'New Tap' : `Editing: ${tap.name || 'Unnamed'}`;
+      // A tap that has never been saved has nothing to delete.
+      document.getElementById('deleteBtn').hidden = isNew;
 
       document.getElementById('tapNumber').value    = tap.tap_number || '';
       document.getElementById('beerName').value     = tap.name || '';
@@ -314,13 +285,6 @@
       document.getElementById('kegDate').value      = tap.kegged_date || '';
 
       color.set(tap);
-    }
-
-    function closeForm() {
-      currentTapId = null;
-      document.getElementById('editBox').style.display = 'none';
-      document.getElementById('emptyState').style.display = '';
-      renderTapList();
     }
 
     // ── Save ──────────────────────────────────────
@@ -354,10 +318,7 @@
         if (!res.ok) throw new Error(await res.text());
         showToast('Tap saved!', 'success');
         await loadAll();
-        // re-select to refresh form title
-        const saved = allTaps.find(t => t.id === currentTapId);
-        if (saved) document.getElementById('formTitle').textContent = `Editing: ${saved.name}`;
-        renderTapList();
+        backToList();
       } catch (e) {
         showToast('Save failed: ' + e.message, 'danger');
       }
@@ -370,17 +331,16 @@
       try {
         await fetch(`/api/taps/${currentTapId}/delete`, {method: 'POST'});
         showToast('Tap deleted', 'success');
-        currentTapId = null;
-        document.getElementById('editBox').style.display = 'none';
-        document.getElementById('emptyState').style.display = '';
         await loadAll();
+        backToList();
       } catch (e) {
         showToast('Delete failed', 'danger');
       }
     }
 
     const color = colorPicker(document.getElementById('colorField'));
-    loadAll();
+    window.addEventListener('hashchange', showView);
+    loadAll().then(showView);
   </script>
 </body>
 </html>

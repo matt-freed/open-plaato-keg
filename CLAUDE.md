@@ -62,8 +62,6 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
 - **The acknowledgement echoes the first frame's message id.** Older firmware
   validates this before it considers itself connected.
 - Outbound message ids are `1..65535`; the device treats 0 as unset.
-- `beer_style` and `date` writes are prefixed with a space, matching what the
-  Plaato app sends.
 - A device is only treated as a keg once it sends a keg-identifying pin. Device
   metadata alone is not enough — a Plaato Airlock sends indistinguishable
   metadata, and accepting it would create phantom kegs.
@@ -79,7 +77,7 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   reads a keg: the two `internal/api` keg handlers and the two `internal/ws`
   send paths, plus the history JSON. Everything else stays in the units the
   device reported — the stored columns, BarHelper, the log CSV export and
-  every value on the scale setup page. The converted values
+  every value on the Keg Setup page. The converted values
   live in a `display` block that is deliberately absent from `kegColumns`.
 - Every WebSocket frame carries a `type`.
 - `testdata/capture` is a recording of a real keg session. It is the reference

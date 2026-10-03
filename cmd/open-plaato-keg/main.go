@@ -67,7 +67,7 @@ func run() error {
 
 	bus := events.NewBus()
 
-	bar := barhelper.New(cfg.BarHelper)
+	bar := barhelper.New(cfg.BarHelper, st)
 	bar.Start(ctx)
 	// The worker only stops when the context is cancelled, so cancel before
 	// waiting — otherwise an early return from this function would deadlock.
@@ -87,7 +87,7 @@ func run() error {
 	kegServer := keg.NewServer(st, bus, cfg.IncludeUnknownData, consumers...)
 	commander := keg.NewCommander(kegServer.Registry())
 
-	hub := ws.NewHub(st)
+	hub := ws.NewHub(st, commander.Connected)
 	go hub.Run(ctx, bus)
 
 	go prune(ctx, st)

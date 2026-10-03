@@ -1,0 +1,78 @@
+/* The header bar every page shares, rendered by site-header.js. Uses the
+   tokens from tokens.css. */
+site-header { display: block; }
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem clamp(1rem, 3vw, 2.5rem);
+  color: var(--text);
+  line-height: normal;
+}
+
+.site-header-title { display: flex; align-items: baseline; gap: 0.75rem; min-width: 0; }
+.site-header-title h1 {
+  margin: 0;
+  font-family: var(--title-font);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: inherit;
+}
+.site-header-count { color: var(--text); font-size: 0.95rem; }
+
+.site-nav { display: flex; gap: 0.25rem; align-items: center; }
+.site-nav a, .site-nav button {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.4rem 0.65rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.site-nav a:hover, .site-nav button:hover { background: var(--tile-2); color: var(--text); }
+/* Every link is full contrast, so the current page is marked by a fill
+   rather than by being the brightest. */
+.site-nav [aria-current="page"], .site-nav .is-current {
+  background: var(--tile-2);
+  font-weight: 600;
+}
+
+.site-menu { position: relative; }
+.site-menu-list {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.4rem);
+  min-width: 170px;
+  padding: 0.35rem;
+  background: var(--tile-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  z-index: 50;
+}
+.site-menu.is-open .site-menu-list { display: block; }
+.site-menu-list a { display: block; }
+/* The menu is already the raised colour, so its hover and current page take
+   a lighter fill to show. */
+.site-menu-list a:hover,
+.site-menu-list [aria-current="page"] { background: rgba(255, 255, 255, 0.08); }
+.site-version {
+  margin: 0.3rem 0.3rem 0;
+  padding: 0.4rem 0.35rem 0.1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.site-version:empty { display: none; }
+
+@media (max-width: 640px) {
+  .site-header { flex-wrap: wrap; }
+}

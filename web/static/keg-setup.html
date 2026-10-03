@@ -3,66 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Scale Setup - Open Plaato</title>
-    <style>
-      @import url("style.css");
-
-    </style>
+    <title>Keg Setup - Open Plaato</title>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
+    <style>
+      /* The open scale's name, with whether it is connected. */
+      .edit-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+      .edit-head h2 {
+        margin: 0;
+        font-family: var(--title-font);
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      #offlineNotice { margin-bottom: 1.25rem; }
+    </style>
   </head>
   <body>
-    <div id="header_container">
-      <nav class="navbar" role="navigation" aria-label="main navigation">
-        <div class="navbar-brand">
-          <a
-            role="button"
-            class="navbar-burger burger"
-            aria-label="menu"
-            aria-expanded="false"
-            data-target="navbarMenu"
-          >
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-          </a>
-        </div>
+    <site-header heading="Keg Setup"></site-header>
 
-        <div id="navbarMenu" class="navbar-menu">
-          <div class="navbar-start">
-            <a class="navbar-item" href="/">Home</a>
-            <a class="navbar-item" href="/index.html">Kegs</a>
-            <a class="navbar-item" href="/history.html">History</a>
-            <div class="navbar-item has-dropdown" id="configureDropdown">
-              <a class="navbar-link" onclick="toggleDropdown(event)">Configure</a>
-              <div class="navbar-dropdown">
-                <a class="navbar-item" href="/taplist-setup.html">Tap Setup</a>
-                <a class="navbar-item" href="/setup.html">Scale Setup</a>
-                <a class="navbar-item" href="/dashboard-setup.html">Dashboard Setup</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
-    </div>
-
-    <div id="page_container" class="container pageEntry">
-      <section class="section">
-        <div class="container">
-          <h1 class="title is-2">Scale Setup</h1>
+    <section class="section">
+        <div class="container is-centered">
           <p class="subtitle">Configure and calibrate your scale</p>
 
-          <!-- Scale Selector -->
-          <div class="field">
-            <label class="label" for="kegId">Select Scale</label>
-            <div class="control">
-              <div class="select is-fullwidth">
-                <select id="kegId" name="kegId">
-                  <option value="">Select a connected scale...</option>
-                </select>
+          <!-- List view -->
+          <div id="listView">
+            <div class="box">
+              <div class="list-head">
+                <h2 class="title is-5">Scales</h2>
+                <span class="help" id="connectionStatus"></span>
+              </div>
+              <div id="kegListContainer">
+                <p class="has-text-grey">Loading…</p>
               </div>
             </div>
-            <p class="help" id="connectionStatus">Loading connected scales...</p>
           </div>
+
+          <!-- Editor view -->
+          <div id="editView" hidden>
+          <a class="back-link" href="#">← All scales</a>
+          <div class="edit-head">
+            <h2 id="editTitle"></h2>
+            <span class="status-pill" id="editStatus"></span>
+          </div>
+          <p class="notification is-warning" id="offlineNotice" hidden>
+            This scale is not connected. Changes that are sent to the scale itself
+            will fail until it reconnects.
+          </p>
 
           <!-- Units Section -->
           <div class="box section-box">
@@ -82,11 +72,9 @@
                   <div class="control">
                     <div class="buttons has-addons">
                       <button class="button unit-btn" id="unitMetric" data-value="metric" onclick="setUnit('metric')">
-                        <span class="icon">🌍</span>
                         <span>Metric</span>
                       </button>
                       <button class="button unit-btn" id="unitUS" data-value="us" onclick="setUnit('us')">
-                        <span class="icon">🇺🇸</span>
                         <span>US</span>
                       </button>
                     </div>
@@ -101,11 +89,9 @@
                   <div class="control">
                     <div class="buttons has-addons">
                       <button class="button measure-btn" id="measureWeight" data-value="weight" onclick="setMeasureUnit('weight')">
-                        <span class="icon">⚖️</span>
                         <span>Weight</span>
                       </button>
                       <button class="button measure-btn" id="measureVolume" data-value="volume" onclick="setMeasureUnit('volume')">
-                        <span class="icon">🧪</span>
                         <span>Volume</span>
                       </button>
                     </div>
@@ -115,7 +101,7 @@
             </div>
 
             <div class="field">
-              <label class="label">Scale Sensitivity <span style="color: #ff3860;">*</span></label>
+              <label class="label">Scale Sensitivity <span class="req">*</span></label>
               <p class="help">Higher = detects smaller pours</p>
               <div class="control">
                 <div class="sensitivity-buttons">
@@ -126,7 +112,7 @@
                 </div>
               </div>
               <p class="help has-text-warning-dark" style="margin-top: 0.5rem;">
-                <span style="color: #ff3860;">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
+                <span class="req">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
               </p>
             </div>
 
@@ -157,7 +143,6 @@
                   <p class="help">Zero the scale with an empty keg on it</p>
                   <div class="control">
                     <button class="button is-warning" id="tareBtn" onclick="sendTare()">
-                      <span class="icon">⚖️</span>
                       <span>Tare</span>
                     </button>
                   </div>
@@ -170,7 +155,6 @@
                   <p class="help">Store the current weight as empty keg reference</p>
                   <div class="control">
                     <button class="button is-info" id="emptyKegBtn" onclick="sendEmptyKeg()">
-                      <span class="icon">🍺</span>
                       <span>Set Empty</span>
                     </button>
                   </div>
@@ -183,7 +167,6 @@
                   <p class="help">Clear a spurious last pour reading (e.g. from vibration)</p>
                   <div class="control">
                     <button class="button is-danger is-light" onclick="resetLastPour()">
-                      <span class="icon">✖</span>
                       <span>Reset</span>
                     </button>
                   </div>
@@ -251,7 +234,7 @@
             <h2 class="title is-4">Scale Information</h2>
 
             <div class="field">
-              <label class="label">Scale Label <span style="color: #ff3860;">*</span></label>
+              <label class="label">Scale Label <span class="req">*</span></label>
               <p class="help">Friendly name shown on the dashboard (e.g. "Basement Tap", "Fridge #1")</p>
               <div class="control">
                 <div class="field has-addons">
@@ -267,7 +250,7 @@
 
             <div class="field">
               <label class="label">Forget Saved Scale</label>
-              <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID and local settings. The scale can reconnect and create a fresh record later.</p>
+              <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID, local settings and all of its history. This cannot be undone. The scale can reconnect and create a fresh record later, with empty history. To keep the scale and only remove its readings, use Clear history on the <a href="/history.html">History</a> page.</p>
               <div class="control">
                 <button class="button is-danger is-light" type="button" onclick="forgetSelectedScale()">
                   Forget Scale
@@ -307,11 +290,9 @@
               <div class="control">
                 <div class="buttons has-addons">
                   <button class="button kegmode-btn" id="kegModeBeer" data-value="beer" onclick="setKegMode('beer')">
-                    <span class="icon">🍺</span>
                     <span>Beer</span>
                   </button>
                   <button class="button kegmode-btn" id="kegModeCO2" data-value="co2" onclick="setKegMode('co2')">
-                    <span class="icon">💨</span>
                     <span>CO₂</span>
                   </button>
                 </div>
@@ -338,91 +319,135 @@
           <div class="box section-box" id="currentSettingsBox">
             <h2 class="title is-4">Current Status</h2>
             <div id="currentSettings" class="content">
-              <p class="has-text-grey">Select a keg to view current settings</p>
+              <p class="has-text-grey">Loading…</p>
             </div>
           </div>
 
+          <!-- The settings run long, so the way back is at the bottom too. -->
+          <a class="button" href="#">← All scales</a>
+          </div>
         </div>
-      </section>
-    </div>
+    </section>
 
     <!-- Toast notification -->
     <div id="toast" class="notification toast is-hidden"></div>
 
     <script>
-      // Navbar
-      document.querySelectorAll('.navbar-burger').forEach(el =>
-        el.addEventListener('click', () => {
-          document.getElementById(el.dataset.target).classList.toggle('is-active');
-          el.classList.toggle('is-active');
-        })
-      );
-      function toggleDropdown(e) {
-        e.preventDefault();
-        document.getElementById('configureDropdown').classList.toggle('is-open');
-      }
-      document.addEventListener('click', e => {
-        if (!e.target.closest('#configureDropdown'))
-          document.getElementById('configureDropdown')?.classList.remove('is-open');
-      });
-
-      const kegIdSelect = document.getElementById("kegId");
       const connectionStatus = document.getElementById("connectionStatus");
       let currentKegData = {};
+      // The scale whose settings are open, from the URL hash; null on the list.
+      let selectedKegId = null;
+      let allKegs = [];
+      let connectedIds = new Set();
 
-      function getFallbackScaleName(index) {
-        return `Scale ${index + 1}`;
+      function esc(v) {
+        return String(v ?? "").replace(/[&<>"']/g, c =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
       }
 
-      // Load connected scales
-      function loadConnectedKegs() {
-        const currentValue = kegIdSelect.value; // Preserve current selection
+      function kegName(keg) {
+        const index = allKegs.findIndex(k => k.id === keg.id);
+        return keg.label?.trim() || `Scale ${index + 1}`;
+      }
 
-        fetch("/api/kegs/connected")
-          .then((response) => response.json())
-          .then(async (kegs) => {
-            let labelMap = {};
-            try {
-              const allKegsResponse = await fetch("/api/kegs");
-              if (allKegsResponse.ok) {
-                const allKegs = await allKegsResponse.json();
-                allKegs.forEach((keg, index) => {
-                  labelMap[keg.id] = keg.label || `Scale ${index + 1}`;
-                });
-              }
-            } catch (_) {
-              // Fall back to generic names below if lookup fails.
-            }
+      // Every scale the server knows, with whether it is connected now.
+      // Settings that go to the scale itself need it connected, but its
+      // label, display and record can be changed either way.
+      async function loadKegs() {
+        try {
+          const [kegsRes, connectedRes] = await Promise.all([
+            fetch("/api/kegs"),
+            fetch("/api/kegs/connected"),
+          ]);
+          if (!kegsRes.ok || !connectedRes.ok) throw new Error("bad response");
+          allKegs = await kegsRes.json();
+          connectedIds = new Set(await connectedRes.json());
+          renderKegList();
+          updateEditHead();
+        } catch (_) {
+          connectionStatus.textContent = "Could not load the scales";
+          connectionStatus.className = "help is-danger";
+        }
+      }
 
-            kegIdSelect.innerHTML = '<option value="">Select a connected scale...</option>';
+      function renderKegList() {
+        const n = connectedIds.size;
+        connectionStatus.textContent = allKegs.length
+          ? `${n} of ${allKegs.length} connected`
+          : "";
+        connectionStatus.className = "help";
 
-            if (kegs.length === 0) {
-              connectionStatus.textContent = "No scales connected";
-              connectionStatus.className = "help is-warning";
-            } else {
-              kegs.forEach((keg, index) => {
-                const option = document.createElement("option");
-                option.value = keg;
-                option.text = labelMap[keg] || `Scale ${index + 1}`;
-                // Restore selection or auto-select first keg if none selected
-                if (keg === currentValue || (!currentValue && index === 0)) {
-                  option.selected = true;
-                }
-                kegIdSelect.appendChild(option);
-              });
-              connectionStatus.textContent = `${kegs.length} scale(s) connected`;
-              connectionStatus.className = "help is-success";
+        const container = document.getElementById("kegListContainer");
+        if (!allKegs.length) {
+          container.innerHTML = '<p class="has-text-grey">No scales yet. Once a Plaato Keg connects, it appears here.</p>';
+          return;
+        }
+        container.innerHTML = allKegs.map(keg => {
+          const online = connectedIds.has(keg.id);
+          const d = keg.display ?? {};
+          const amount = d.amount_left ?? keg.amount_left;
+          const rawUnit = d.amount_unit ?? keg.beer_left_unit ?? "";
+          const unit = rawUnit === "litre" ? "L" : rawUnit;
+          const left = Number.isFinite(amount) ? ` · ${amount.toFixed(1)} ${esc(unit)} left` : "";
+          return `
+            <a class="list-row" href="#keg=${encodeURIComponent(keg.id)}">
+              <span class="list-row-text">
+                <span class="list-row-name">${esc(kegName(keg))}</span>
+                <span class="list-row-meta">${keg.keg_mode === 2 ? "CO₂" : "Beer"}${left}</span>
+              </span>
+              <span class="status-pill${online ? " is-online" : ""}">${online ? "Connected" : "Offline"}</span>
+              <span class="list-row-go" aria-hidden="true">›</span>
+            </a>`;
+        }).join("");
+      }
 
-              // Load data for auto-selected keg on first load
-              if (!currentValue && kegs.length > 0) {
-                loadKegData(kegs[0]);
-              }
-            }
-          })
-          .catch(() => {
-            connectionStatus.textContent = "Error loading kegs";
-            connectionStatus.className = "help is-danger";
-          });
+      function updateEditHead() {
+        if (!selectedKegId) return;
+        const keg = allKegs.find(k => k.id === selectedKegId);
+        const online = connectedIds.has(selectedKegId);
+        document.getElementById("editTitle").textContent = keg ? kegName(keg) : "Scale";
+        const pill = document.getElementById("editStatus");
+        pill.textContent = online ? "Connected" : "Offline";
+        pill.classList.toggle("is-online", online);
+        document.getElementById("offlineNotice").hidden = online;
+      }
+
+      // ── Views ─────────────────────────────────────
+      // The URL hash says which view is open: empty for the list, #keg=<id>
+      // for a scale's settings. Links change the hash and showView follows
+      // it, so Back returns to the list and a reload keeps the scale open.
+      function showView() {
+        const hash = location.hash.slice(1);
+        const id = hash.startsWith("keg=") ? decodeURIComponent(hash.slice(4)) : null;
+        if (id && !allKegs.some(k => k.id === id)) { location.replace("#"); return; }
+
+        if (id !== selectedKegId) {
+          selectedKegId = id;
+          clearForm();
+          if (id) loadKegData(id);
+        }
+        updateEditHead();
+        document.getElementById("listView").hidden = !!id;
+        document.getElementById("editView").hidden = !id;
+        window.scrollTo(0, 0);
+      }
+
+      function backToList() {
+        if (location.hash) location.hash = "";
+        else showView();
+      }
+
+      // clearForm empties the settings, so one scale's values never show
+      // while the next is loading.
+      function clearForm() {
+        currentKegData = {};
+        for (const id of ["tempOffset", "maxVolume", "kegLabel", "emptyKegWeight", "knownWeight", "co2CapacityInput"]) {
+          document.getElementById(id).value = "";
+        }
+        document.getElementById("currentSettings").innerHTML = '<p class="has-text-grey">Loading…</p>';
+        document.getElementById("co2CapacityField").style.display = "none";
+        clearActiveButtons();
+        updateUnitLabels("1");
       }
 
       // Load keg data from REST API
@@ -531,7 +556,7 @@
               </tr>
             </tbody>
           </table>
-          <h3 class="title is-6" style="margin-top: 1rem;">System</h3>
+          <h3 class="title is-6">System</h3>
           <table class="table is-fullwidth is-hoverable">
             <tbody>
               <tr>
@@ -586,7 +611,6 @@
           </table>
         `;
         document.getElementById("currentSettings").innerHTML = html;
-        loadOtaFirmwareOptions();
       }
 
       function clearActiveButtons() {
@@ -636,27 +660,6 @@
         document.getElementById(displayModeId)?.classList.add("is-primary", "is-selected");
       }
 
-      // Listen for keg selection changes
-      kegIdSelect.addEventListener("change", () => {
-        const kegId = kegIdSelect.value;
-        if (kegId) {
-          loadKegData(kegId);
-        } else {
-          // Clear form when no keg selected
-          currentKegData = {};
-          document.getElementById("tempOffset").value = "";
-          document.getElementById("maxVolume").value = "";
-          document.getElementById("kegLabel").value = "";
-          document.getElementById("emptyKegWeight").value = "";
-          document.getElementById("knownWeight").value = "";
-          document.getElementById("tempOffset").value = "";
-          document.getElementById("currentSettings").innerHTML =
-            '<p class="has-text-grey">Select a keg to view current settings</p>';
-          clearActiveButtons();
-          updateUnitLabels("1");
-        }
-      });
-
       // WebSocket connection for real-time updates
       const socket = new WebSocket('/ws');
 
@@ -668,8 +671,14 @@
         const msg = JSON.parse(event.data);
         if (msg.type !== "keg") return;
         const data = msg.data;
-        // Only update if this is the currently selected keg
-        if (data.id === kegIdSelect.value) {
+        const i = allKegs.findIndex(k => k.id === data.id);
+        if (i >= 0) {
+          allKegs[i] = data;
+          renderKegList();
+          updateEditHead();
+        }
+        // Only update the form for the scale that is open
+        if (data.id === selectedKegId) {
           currentKegData = { ...currentKegData, ...data };
           populateFormFields(currentKegData);
           updateSettingsDisplay(currentKegData);
@@ -685,10 +694,12 @@
         console.log("WebSocket closed");
       });
 
-      loadConnectedKegs();
-      setInterval(loadConnectedKegs, 10000);
+      window.addEventListener("hashchange", showView);
+      loadKegs().then(showView);
+      // Connection status has no event of its own, so it is polled.
+      setInterval(loadKegs, 10000);
       function getSelectedKeg() {
-        const kegId = kegIdSelect.value;
+        const kegId = selectedKegId;
         if (!kegId) {
           showToast("Please select a keg first", "warning");
           return null;
@@ -748,7 +759,7 @@
         const button = document.getElementById(buttonId);
         const originalText = button.innerHTML;
         button.disabled = true;
-        button.innerHTML = '<span class="icon">⏳</span><span>Working...</span>';
+        button.innerHTML = '<span>Working...</span>';
 
         fetch(`/api/kegs/${kegId}/${command}`, {
           method: "POST",
@@ -823,13 +834,13 @@
       }
 
       function forgetSelectedScale() {
-        const kegId = document.getElementById("kegId")?.value;
+        const kegId = selectedKegId;
         if (!kegId) {
           showToast("Please select a scale first", "warning");
           return;
         }
 
-        if (!confirm(`Forget this saved scale record?\n\n${kegId}\n\nThis removes the stored scale ID and local settings from the server.`)) {
+        if (!confirm(`Forget this saved scale record?\n\n${kegId}\n\nThis removes the stored scale ID, local settings and all of its history from the server. This cannot be undone.`)) {
           return;
         }
 
@@ -842,19 +853,7 @@
           .then((data) => {
             if (data.status === "ok") {
               showToast("Scale record removed", "success");
-              currentKegData = {};
-              document.getElementById("kegId").value = "";
-              document.getElementById("kegLabel").value = "";
-              document.getElementById("emptyKegWeight").value = "";
-              document.getElementById("knownWeight").value = "";
-              document.getElementById("tempOffset").value = "";
-              document.getElementById("maxVolume").value = "";
-              document.getElementById("co2CapacityInput").value = "";
-              document.getElementById("currentSettings").innerHTML =
-                '<p class="has-text-grey">Select a keg to view current settings</p>';
-              clearActiveButtons();
-              updateUnitLabels("1");
-              loadConnectedKegs();
+              loadKegs().then(backToList);
             } else {
               showToast(`Error: ${data.error || "Failed to forget scale"}`, "danger");
             }
@@ -893,7 +892,7 @@
       }
 
       function saveCO2Capacity() {
-        const kegId = document.getElementById('kegId')?.value;
+        const kegId = selectedKegId;
         if (!kegId) { showToast('Select a keg first', 'warning'); return; }
         const value = document.getElementById('co2CapacityInput').value.trim();
         if (!value) { showToast('Enter a capacity value', 'warning'); return; }

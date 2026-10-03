@@ -1,7 +1,7 @@
 # From keg reading to browser
 
 This follows one reading — "17.8 left" — from a Plaato Keg's TCP socket to a
-card on the dashboard, and explains why the path is shaped the way it is.
+tile on the Kegs page, and explains why the path is shaped the way it is.
 
 ## Overview
 
@@ -38,10 +38,10 @@ sequenceDiagram
     G2->>G2: pending[id] = KegUpdated, signal wake
     G2-->>G3: wake
     G3->>DB: GetKeg(id)
-    G3->>G3: SetDisplay(units)
+    G3->>G3: fill(k, units): Connected, SetDisplay
     G3->>G4: client.send <- {"type":"keg", ...}
     G4->>Browser: WebSocket text frame
-    Browser->>Browser: upsertKegCard()
+    Browser->>Browser: render()
 ```
 
 ## Step by step
@@ -91,7 +91,8 @@ Unconfirmed devices get no further than this.
 ### 6. Persistence — `internal/store/apply.go`, `ApplyPacket` → `keg.go`, `UpdateKeg`
 
 In one transaction: `SELECT` the keg row, apply the `amount_left` setter from
-`kegSetters`, update `last_seen` and the derived `beer_left_unit`, then
+`kegSetters`, stamp `last_seen` (only `ApplyPacket` does; API edits through
+`UpdateKeg` leave it alone) and derive `beer_left_unit`, then
 `INSERT OR REPLACE` and `COMMIT`. The store has a single SQLite connection, so
 this queues behind any API query already running.
 
@@ -117,8 +118,11 @@ Woken, it calls `takePending()` to swap the map out, then:
 - reads the display-unit preference once for the batch;
 - re-reads the **whole** keg with `store.GetKeg(id)` — the event carried only an
   id, so the message carries whatever is stored now;
-- calls `k.SetDisplay(units)` to add the `display` block. The top-level fields
-  stay in the device's own units.
+- calls `fill`, which sets `connected` from the connection registry and calls
+  `k.SetDisplay(units)` to add the `display` block. The top-level fields stay
+  in the device's own units. The snapshot a newly connected tab is sent goes
+  through `fill` too, so every keg frame carries the same `connected` the REST
+  API returns.
 
 ### 10. Broadcast — `hub.go`, `Broadcast` (G3)
 
@@ -135,10 +139,12 @@ timeout:
   "display":{"amount_left":4.7,"amount_unit":"gal", …}}}
 ```
 
-### 12. Render — `web/static/index.html`
+### 12. Render — `web/static/kegs.html`
 
-The `message` listener parses the frame, sees `type === "keg"`, calls
-`upsertKegCard(msg.data)` and then `reorderColumnsInDom()`.
+The `message` listener parses the frame, sees `type === "keg"`, stores
+`msg.data` in its map of kegs and calls `render()`. That updates the scale's
+tile in place with `updateTile`, so the keg graphic's level animates to the new
+reading, and keeps the tiles in their display order.
 
 ## Why the hub uses two goroutines
 
@@ -224,7 +230,7 @@ Steps 7 to 12 are shared by everything that publishes a keg event:
   `KegUpdated`.
 - **Deleting a keg** — `internal/api/kegs.go` publishes `KegRemoved`. The flush
   skips the database read and broadcasts `{"type":"keg_removed","id":…}`, and
-  the dashboard removes the card.
+  the Kegs page removes the scale's tile.
 
 A newly opened tab does not wait for this path: `ServeHTTP` immediately sends it
 a snapshot of every keg from `ListKegs`, then it receives updates like any other
@@ -232,10 +238,10 @@ client.
 
 ## Known gaps
 
-- `index.html` and `setup.html` do not reconnect when the socket closes, so
-  they show stale data after a server restart until the page is reloaded.
-  `taplist.html` retries every five seconds.
+- `keg-setup.html` does not reconnect when the socket closes, so it shows stale
+  data after a server restart until the page is reloaded. `taplist.html` and
+  `kegs.html` retry every five seconds.
 - The comment on `clientBuffer` says a client that falls behind is
   disconnected; the code drops messages for it instead and leaves it connected.
 - A tab's initial snapshot uses the same 16-slot buffer, so with more than 16
-  kegs some cards may be missing until those kegs next report.
+  kegs some tiles may be missing until those kegs next report.

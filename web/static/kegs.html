@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kegs</title>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/tiles.css">
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
+</head>
+<body>
+  <site-header heading="Kegs"></site-header>
+
+  <section class="section">
+    <p class="empty-state" id="status">Loading scales…</p>
+    <div class="grid" id="kegContainer"></div>
+  </section>
+
+  <script src="/beer-color.js"></script>
+  <script src="/keg-graphic.js"></script>
+  <script>
+    'use strict';
+
+    // Each scale is a tile in the tap list's style: the scale's name, the
+    // beer on the tap it feeds, its readings, and a keg graphic filled to the
+    // level left, in the beer's colour when a tap links to it.
+    const kegContainer = document.getElementById('kegContainer');
+    const statusEl = document.getElementById('status');
+
+    const kegs = {};
+    let tapsByKeg = {};
+    let dragSource = null;
+    let renderPending = false;
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function num(v, digits) {
+      return Number.isFinite(v) ? v.toFixed(digits) : null;
+    }
+
+    // roundTemp rounds to a whole degree, as the tap list does; adding 0
+    // turns the -0 Math.round gives just below zero into 0.
+    function roundTemp(v) {
+      return Number.isFinite(v) ? Math.round(v) + 0 : v;
+    }
+
+    function sortKegs(list) {
+      return [...list].sort((a, b) => {
+        const aHas = Number.isFinite(a.sort_order);
+        const bHas = Number.isFinite(b.sort_order);
+        if (aHas && bHas && a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+        if (aHas !== bHas) return aHas ? -1 : 1;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+    }
+
+    // A CO₂ cylinder, drawn in place of the keg for a scale in CO₂ mode.
+    const BOTTLE_PATH = 'M40,15 L60,15 L60,37 Q80,47 82,58 L82,152 Q82,162 70,162 L30,162 Q18,162 18,152 L18,58 Q20,47 40,37 Z';
+    let bottleSeq = 0;
+
+    function bottleSvg(pct, isLow) {
+      const id = 'bcl' + (++bottleSeq);
+      // The path runs from y=15 to y=162, so a full cylinder is 147 units.
+      const fillH = (Math.max(0, Math.min(100, pct)) / 100) * 147;
+      return `
+<svg class="co2-bottle-svg" viewBox="0 0 100 172" aria-hidden="true">
+  <defs><clipPath id="${id}"><path d="${BOTTLE_PATH}"/></clipPath></defs>
+  <path d="${BOTTLE_PATH}" class="co2-bottle-bg"/>
+  <rect x="14" y="${(162 - fillH).toFixed(1)}" width="74" height="${fillH.toFixed(1)}" clip-path="url(#${id})" class="co2-bottle-fill${isLow ? ' is-low' : ''}"/>
+  <rect x="18" y="62" width="10" height="70" rx="5" clip-path="url(#${id})" class="co2-bottle-gloss"/>
+  <path d="${BOTTLE_PATH}" class="co2-bottle-stroke"/>
+  <line x1="40" y1="15" x2="40" y2="37" class="co2-neck-line"/>
+  <line x1="60" y1="15" x2="60" y2="37" class="co2-neck-line"/>
+  <rect x="36" y="3" width="28" height="14" rx="5" class="co2-valve"/>
+  <line x1="50" y1="3" x2="50" y2="17" class="co2-valve-divider"/>
+</svg>`;
+    }
+
+    function createTile(keg) {
+      const tile = document.createElement('article');
+      tile.className = 'tile keg-tile';
+      tile.dataset.kegId = keg.id;
+      tile.draggable = true;
+      tile.innerHTML = `
+        <div class="tile-info">
+          <div class="tile-meta">
+            <span class="keg-name"></span>
+            <span class="pouring">Pouring</span>
+            <span class="leak">Leak</span>
+            <span class="offline">Offline</span>
+          </div>
+          <h2 class="beer"></h2>
+          <div class="specs"></div>
+          <div class="readings"></div>
+        </div>
+        <div class="tile-keg">
+          <div class="keg-graphic"></div>
+          <span class="keg-amount"></span>
+        </div>`;
+      attachDragHandlers(tile);
+      return tile;
+    }
+
+    function updateTile(tile, keg, index) {
+      // Readings arrive converted into the chosen display units; the raw
+      // fields are only a fallback for a keg that has no display block.
+      const d = keg.display ?? {};
+      const amount = d.amount_left ?? keg.amount_left ?? null;
+      const rawUnit = d.amount_unit ?? keg.beer_left_unit ?? '';
+      const unit = rawUnit === 'litre' ? 'L' : rawUnit;
+      const temp = d.keg_temperature ?? keg.keg_temperature ?? null;
+      const tempUnit = d.temperature_unit ?? keg.temperature_unit ?? '';
+      const pour = d.last_pour ?? keg.last_pour ?? 0;
+      const pourUnit = d.last_pour_unit || unit;
+      const pct = Number.isFinite(keg.percent_of_beer_left)
+        ? Math.max(0, Math.min(100, keg.percent_of_beer_left)) : null;
+      const isCO2 = keg.keg_mode === 2;
+      const isLow = pct != null && pct < 20;
+      const percentPrimary = keg.display_mode === 'percent_primary' && !isCO2;
+      const tap = tapsByKeg[keg.id];
+
+      tile.classList.toggle('is-pouring', keg.is_pouring === true);
+      tile.classList.toggle('is-leaking', keg.leak_detection === 1);
+      tile.classList.toggle('is-offline', keg.connected !== true);
+      tile.classList.toggle('is-co2', isCO2);
+      tile.classList.toggle('is-clear', !!tap && isClear(tap));
+      if (tap) tile.style.setProperty('--accent', beerColor(tap));
+      else tile.style.removeProperty('--accent');
+      if (keg.sort_order != null) tile.dataset.sortOrder = keg.sort_order;
+      else delete tile.dataset.sortOrder;
+
+      tile.querySelector('.keg-name').innerHTML = isCO2
+        ? '<span class="co2-badge">CO₂</span>'
+        : tap ? esc(tap.name || 'Unnamed beer') : 'Not on tap';
+      tile.querySelector('.beer').textContent =
+        keg.label?.trim() || `Scale ${(index ?? 0) + 1}`;
+
+      const readings = [
+        `<div class="reading">
+          <span class="reading-value">${num(roundTemp(temp), 0) ?? '—'}<small>${esc(tempUnit)}</small></span>
+          <span class="reading-label">Temp</span>
+        </div>`,
+        percentPrimary
+          ? `<div class="reading">
+              <span class="reading-value">${num(amount, 2) ?? '—'}<small>${esc(unit)}</small></span>
+              <span class="reading-label">Left</span>
+            </div>`
+          : `<div class="reading${isLow ? ' is-low' : ''}">
+              <span class="reading-value">${num(pct, 0) ?? '—'}<small>%</small></span>
+              <span class="reading-label">${isCO2 ? 'CO₂ left' : 'Left'}</span>
+            </div>`,
+      ];
+      if (!isCO2 && pour > 0) {
+        readings.push(`
+          <div class="reading">
+            <span class="reading-value">${Math.round(pour)}<small>${esc(pourUnit)}</small></span>
+            <span class="reading-label">Last pour</span>
+          </div>`);
+      }
+      tile.querySelector('.readings').innerHTML = readings.join('');
+
+      // The graphic is rebuilt only when the scale switches mode, so the
+      // keg's level animates between readings.
+      const graphic = tile.querySelector('.keg-graphic');
+      const mode = isCO2 ? 'co2' : 'keg';
+      if (isCO2) {
+        graphic.innerHTML = bottleSvg(pct ?? 0, isLow);
+      } else if (graphic.dataset.mode !== mode) {
+        graphic.innerHTML = kegSvg();
+      }
+      graphic.dataset.mode = mode;
+      if (!isCO2) graphic.querySelector('.liquid').style.transform = kegLevelTransform(pct);
+
+      tile.querySelector('.keg-amount').innerHTML = percentPrimary
+        ? `${num(pct, 1) ?? '—'}<small>%</small>`
+        : `${num(amount, isCO2 ? 2 : 1) ?? '—'}<small>${esc(unit)}</small>`;
+
+      tile.querySelector('.specs').innerHTML = statusLine(keg);
+    }
+
+    // statusLine says when the scale last reported, when BarHelper last took a
+    // reading from it, and its Wi-Fi strength. A part with nothing to say is left
+    // out, so an unmapped keg shows no BarHelper time.
+    function statusLine(keg) {
+      const parts = [
+        statusPart('Device', keg.last_seen > 0 ? ago(keg.last_seen) : 'never', keg.last_seen),
+      ];
+      if (keg.barhelper_last_sent > 0) {
+        parts.push(statusPart('BarHelper', ago(keg.barhelper_last_sent), keg.barhelper_last_sent));
+      }
+      if (Number.isFinite(keg.wifi_signal_strength)) {
+        parts.push(statusPart('Wi-Fi', `${keg.wifi_signal_strength}%`));
+      }
+      return parts.join('');
+    }
+
+    function statusPart(label, value, unixTime) {
+      const title = unixTime > 0 ? ` title="${esc(new Date(unixTime * 1000).toLocaleString())}"` : '';
+      return `<span${title}>${label} ${esc(value)}</span>`;
+    }
+
+    // ago describes a Unix time relative to now, coarsely enough to stay
+    // readable on a tile.
+    function ago(unixTime) {
+      const s = Math.max(0, Math.round(Date.now() / 1000 - unixTime));
+      if (s < 10) return 'just now';
+      if (s < 60) return `${s}s ago`;
+      if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      return `${Math.floor(s / 86400)}d ago`;
+    }
+
+    function render() {
+      // Reordering mid-drag would move tiles under the pointer; the drop
+      // renders instead.
+      if (dragSource) { renderPending = true; return; }
+      const list = sortKegs(Object.values(kegs));
+      if (!list.length) {
+        kegContainer.replaceChildren();
+        statusEl.textContent = 'No scales yet. Once a Plaato Keg connects, it appears here.';
+        return;
+      }
+      statusEl.textContent = '';
+
+      const existing = new Map([...kegContainer.children].map(t => [t.dataset.kegId, t]));
+      list.forEach((keg, i) => {
+        const tile = existing.get(keg.id) ?? createTile(keg);
+        existing.delete(keg.id);
+        updateTile(tile, keg, i);
+        if (kegContainer.children[i] !== tile) kegContainer.insertBefore(tile, kegContainer.children[i] ?? null);
+      });
+      existing.forEach(t => t.remove());
+    }
+
+    // ── Drag to rearrange ──────────────────────────
+    function persistKegOrder() {
+      const ids = [...kegContainer.children].map(t => t.dataset.kegId);
+      ids.forEach((id, i) => { if (kegs[id]) kegs[id].sort_order = i; });
+      fetch('/api/kegs/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ordered_ids: ids }),
+      }).catch(err => console.error('Error saving keg order:', err));
+    }
+
+    function attachDragHandlers(tile) {
+      tile.addEventListener('dragstart', () => {
+        dragSource = tile;
+        tile.classList.add('is-dragging');
+      });
+      tile.addEventListener('dragend', () => {
+        tile.classList.remove('is-dragging');
+        dragSource = null;
+        kegContainer.querySelectorAll('.drag-over').forEach(t => t.classList.remove('drag-over'));
+        persistKegOrder();
+        if (renderPending) { renderPending = false; render(); }
+      });
+      tile.addEventListener('dragover', e => {
+        e.preventDefault();
+        if (dragSource && dragSource !== tile) tile.classList.add('drag-over');
+      });
+      tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
+      tile.addEventListener('drop', e => {
+        e.preventDefault();
+        tile.classList.remove('drag-over');
+        if (!dragSource || dragSource === tile) return;
+        const tiles = [...kegContainer.children];
+        if (tiles.indexOf(dragSource) < tiles.indexOf(tile)) tile.after(dragSource);
+        else tile.before(dragSource);
+      });
+    }
+
+    // ── Data ───────────────────────────────────────
+    // Taps only supply each keg's beer name and colour, so they are fetched
+    // with the kegs and refreshed on the same slow cycle as the tap list.
+    async function loadTaps() {
+      try {
+        const res = await fetch('/api/taps');
+        if (!res.ok) return;
+        tapsByKeg = {};
+        for (const tap of await res.json()) {
+          if (tap.keg_id && !tapsByKeg[tap.keg_id]) tapsByKeg[tap.keg_id] = tap;
+        }
+      } catch (_) {}
+    }
+
+    async function loadAll() {
+      try {
+        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps()]);
+        if (!kegsRes.ok) throw new Error(kegsRes.status);
+        for (const id in kegs) delete kegs[id];
+        for (const k of await kegsRes.json()) kegs[k.id] = k;
+        render();
+      } catch (err) {
+        if (!Object.keys(kegs).length) statusEl.textContent = 'Could not load the scales. Is the server running?';
+      }
+    }
+
+    function connect() {
+      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+      ws.addEventListener('message', ev => {
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (_) { return; }
+        if (msg.type === 'keg_removed') {
+          delete kegs[msg.id];
+          render();
+        } else if (msg.type === 'keg' && msg.data?.id) {
+          kegs[msg.data.id] = msg.data;
+          render();
+        }
+      });
+      ws.addEventListener('close', () => setTimeout(connect, 5000));
+      ws.addEventListener('error', () => ws.close());
+    }
+
+    loadAll();
+    setInterval(() => { if (!dragSource) loadAll(); }, 60000);
+    // Keeps the "ago" times current between updates.
+    setInterval(render, 15000);
+    connect();
+  </script>
+</body>
+</html>

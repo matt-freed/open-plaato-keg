@@ -6,15 +6,9 @@ import (
 	"time"
 )
 
-// Layouts a date is written in.
-const (
-	// DateLayout is how a tap's kegged date is stored: ISO, which also sorts
-	// and is what a browser date picker produces.
-	DateLayout = "2006-01-02"
-	// KegDateLayout is how a keg's own date is stored and sent to the device:
-	// day first, matching the Plaato app.
-	KegDateLayout = "02.01.2006"
-)
+// DateLayout is how a tap's kegged date is stored: ISO, which also sorts
+// and is what a browser date picker produces.
+const DateLayout = "2006-01-02"
 
 // dateInputs are the forms a typed date is accepted in. Slash dates are left
 // out on purpose: 03/04/2025 could be either month.

@@ -486,37 +486,6 @@ func TestCommanderValidatesArguments(t *testing.T) {
 	}
 }
 
-// The beer style and date the app sends carry a leading space, which the
-// device's display depends on.
-func TestBeerStyleIsSpacePrefixed(t *testing.T) {
-	h := newHarness(t)
-	c := h.dial()
-	sendAndRead(t, c, loginSegment())
-	waitFor(t, "the keg to register", func() bool {
-		return len(h.server.Registry().IDs()) == 1
-	})
-
-	cmd := NewCommander(h.server.Registry())
-	if err := cmd.SetBeerStyle(testToken, "my style"); err != nil {
-		t.Fatalf("SetBeerStyle: %v", err)
-	}
-
-	if err := c.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
-		t.Fatalf("set deadline: %v", err)
-	}
-	header := make([]byte, blynk.HeaderSize)
-	if _, err := io.ReadFull(c, header); err != nil {
-		t.Fatalf("read header: %v", err)
-	}
-	body := make([]byte, int(header[3])<<8|int(header[4]))
-	if _, err := io.ReadFull(c, body); err != nil {
-		t.Fatalf("read body: %v", err)
-	}
-	if string(body) != "vw\x0064\x00 my style" {
-		t.Errorf("body = %q, want a leading space before the style", body)
-	}
-}
-
 func TestAmountConsumerIsNotified(t *testing.T) {
 	h := newHarness(t)
 	c := h.dial()

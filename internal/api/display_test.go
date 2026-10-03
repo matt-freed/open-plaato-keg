@@ -165,10 +165,10 @@ func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 
 	rec := a.do(http.MethodPost, "/api/config/theme", map[string]any{
 		"accent_color": "#f59e0b",
-		"bg_color":     "#020617",
-		"card_bg":      "#0f172a",
-		"text_color":   "#dfdfdf",
-		"font_family":  "Outfit",
+		"bg_color":     "#0c0d11",
+		"card_bg":      "#16181f",
+		"text_color":   "#eef0f5",
+		"font_family":  "System",
 		"bg_image":     "1",
 		"bg_opacity":   "15",
 	})
@@ -178,7 +178,7 @@ func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	assertStatus(t, rec, http.StatusOK)
 	var theme store.Theme
 	a.decode(rec, &theme)
-	if theme.AccentColor != "#f59e0b" || theme.FontFamily != "Outfit" {
+	if theme.AccentColor != "#f59e0b" || theme.BgColor != "#0c0d11" || theme.FontFamily != "System" {
 		t.Errorf("theme did not round trip: %+v", theme)
 	}
 }

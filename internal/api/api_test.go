@@ -37,7 +37,7 @@ func newTestAPI(t *testing.T) *testAPI {
 
 	bus := events.NewBus()
 	commander := keg.NewCommander(keg.NewRegistry())
-	hub := ws.NewHub(st)
+	hub := ws.NewHub(st, nil)
 	srv := NewServer(st, commander, hub, bus, "test", web.Static())
 
 	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus}
@@ -219,7 +219,7 @@ func TestCommandWithoutValueIsRejected(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
-	for _, path := range []string{"og", "fg", "co2-capacity", "max-keg-volume", "temperature-offset"} {
+	for _, path := range []string{"co2-capacity", "max-keg-volume", "temperature-offset"} {
 		rec := a.do(http.MethodPost, "/api/kegs/keg-1/"+path, map[string]any{})
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s without a value: status = %d, want 400", path, rec.Code)
@@ -233,44 +233,17 @@ func TestCommandAcceptsNumberOrString(t *testing.T) {
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
 	for _, value := range []any{1.052, "1.052"} {
-		rec := a.do(http.MethodPost, "/api/kegs/keg-1/og", map[string]any{"value": value})
+		rec := a.do(http.MethodPost, "/api/kegs/keg-1/co2-capacity", map[string]any{"value": value})
 		assertStatus(t, rec, http.StatusOK)
 
 		k, _ := a.store.GetKeg("keg-1")
-		if k.OG == nil || *k.OG != 1.052 {
-			t.Errorf("value %#v: OG = %v, want 1.052", value, k.OG)
+		if k.CO2Capacity == nil || *k.CO2Capacity != 1.052 {
+			t.Errorf("value %#v: CO2Capacity = %v, want 1.052", value, k.CO2Capacity)
 		}
-		if _, err := a.store.UpdateKeg("keg-1", func(k *store.Keg) { k.OG = nil }); err != nil {
+		if _, err := a.store.UpdateKeg("keg-1", func(k *store.Keg) { k.CO2Capacity = nil }); err != nil {
 			t.Fatalf("reset: %v", err)
 		}
 	}
-}
-
-func TestSetABVComputesFromGravities(t *testing.T) {
-	a := newTestAPI(t)
-	a.storeKeg("keg-1", "vw\x0051\x001.000")
-
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/abv",
-		map[string]any{"og": "1.050", "fg": "1.010"})
-	assertStatus(t, rec, http.StatusOK)
-
-	var body map[string]any
-	a.decode(rec, &body)
-	abv, ok := body["value"].(float64)
-	if !ok {
-		t.Fatalf("value = %#v, want a number", body["value"])
-	}
-	if diff := abv - 5.25; diff > 0.001 || diff < -0.001 {
-		t.Errorf("abv = %v, want 5.25", abv)
-	}
-
-	k, _ := a.store.GetKeg("keg-1")
-	if k.ABV == nil || k.OG == nil || k.FG == nil {
-		t.Errorf("gravities were not stored: %+v", k)
-	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/keg-1/abv", map[string]any{"og": "1.050"})
-	assertStatus(t, rec, http.StatusBadRequest)
 }
 
 // A command for a keg with no live connection is a 503, so the UI can say the
@@ -303,52 +276,6 @@ func TestEnumCommandValidation(t *testing.T) {
 	// A valid value gets as far as the disconnected keg.
 	rec = a.do(http.MethodPost, "/api/kegs/keg-1/unit", map[string]string{"value": "metric"})
 	assertStatus(t, rec, http.StatusServiceUnavailable)
-}
-
-// Beer style is kept locally because the device never reports the pin back.
-// The kegged date must be a real date, and is stored day first whichever
-// accepted form it arrives in.
-func TestKegDateIsValidated(t *testing.T) {
-	a := newTestAPI(t)
-	const id = "00000000000000000000000000000001"
-	a.storeKeg(id, "vw\x0051\x001.000")
-
-	rec := a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": "2026-09-03"})
-	assertStatus(t, rec, http.StatusOK)
-	if k, _ := a.store.GetKeg(id); k.KegDate != "03.09.2026" {
-		t.Errorf("keg_date = %q, want 03.09.2026", k.KegDate)
-	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": "Labor Day"})
-	assertStatus(t, rec, http.StatusBadRequest)
-	if k, _ := a.store.GetKeg(id); k.KegDate != "03.09.2026" {
-		t.Errorf("keg_date = %q after a rejected value, want it unchanged", k.KegDate)
-	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/"+id+"/date", map[string]any{"value": ""})
-	assertStatus(t, rec, http.StatusOK)
-	if k, _ := a.store.GetKeg(id); k.KegDate != "" {
-		t.Errorf("keg_date = %q, want it cleared", k.KegDate)
-	}
-}
-
-func TestBeerStyleIsStoredEvenWhenOffline(t *testing.T) {
-	a := newTestAPI(t)
-	a.storeKeg("keg-1", "vw\x0051\x001.000")
-
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/beer-style", map[string]string{"value": "Saison"})
-	assertStatus(t, rec, http.StatusOK)
-
-	var body map[string]any
-	a.decode(rec, &body)
-	if body["sent_to_device"] != false {
-		t.Errorf("sent_to_device = %v, want false for an offline keg", body["sent_to_device"])
-	}
-
-	k, _ := a.store.GetKeg("keg-1")
-	if k.BeerStyle != "Saison" {
-		t.Errorf("BeerStyle = %q, want it stored locally", k.BeerStyle)
-	}
 }
 
 func TestKegOrder(t *testing.T) {
@@ -433,6 +360,39 @@ func TestKegHistory(t *testing.T) {
 
 	// History for an unknown keg is a 404.
 	rec = a.do(http.MethodGet, "/api/kegs/nope/log", nil)
+	assertStatus(t, rec, http.StatusNotFound)
+}
+
+// Clearing a keg's history empties every range and keeps the keg.
+func TestClearKegHistory(t *testing.T) {
+	a := newTestAPI(t)
+	k := a.storeKeg("keg-1", "vw\x0051\x003.000")
+	now := time.Now()
+	for _, at := range []time.Time{now, now.Add(-48 * time.Hour)} {
+		if err := a.store.AppendLog(k, at); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/clear", nil)
+	assertStatus(t, rec, http.StatusOK)
+	var resp struct {
+		Deleted int `json:"deleted"`
+	}
+	a.decode(rec, &resp)
+	if resp.Deleted != 2 {
+		t.Errorf("deleted = %d, want 2", resp.Deleted)
+	}
+
+	rec = a.do(http.MethodGet, "/api/kegs/keg-1/log?range=30d", nil)
+	var entries []store.LogEntry
+	a.decode(rec, &entries)
+	if len(entries) != 0 {
+		t.Errorf("got %d entries after clearing, want 0", len(entries))
+	}
+	assertStatus(t, a.do(http.MethodGet, "/api/kegs/keg-1", nil), http.StatusOK)
+
+	rec = a.do(http.MethodPost, "/api/kegs/nope/log/clear", nil)
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
@@ -601,8 +561,8 @@ func TestRootRedirectsToHomePage(t *testing.T) {
 		t.Fatalf("SetHomePage: %v", err)
 	}
 	rec = a.do(http.MethodGet, "/", nil)
-	if rec.Header().Get("Location") != "/index.html" {
-		t.Errorf("Location = %q, want /index.html", rec.Header().Get("Location"))
+	if rec.Header().Get("Location") != "/kegs.html" {
+		t.Errorf("Location = %q, want /kegs.html", rec.Header().Get("Location"))
 	}
 }
 
@@ -624,6 +584,32 @@ func TestThemeCSS(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("theme.css does not contain %q:\n%s", want, body)
 		}
+	}
+}
+
+// The settings page stores bare family names. theme.css serves them as full
+// stacks, so a font that fails to load falls back to the system font, and
+// "System" is the system stack with nothing fetched from Google Fonts.
+func TestThemeCSSFontStacks(t *testing.T) {
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
+		"font_family": "System", "taplist_title_font": "Playfair Display",
+	})
+	assertStatus(t, rec, http.StatusOK)
+
+	body := a.do(http.MethodGet, "/theme.css", nil).Body.String()
+	for _, want := range []string{
+		"--font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;",
+		"--taplist-title-font: 'Playfair Display', system-ui,",
+		"family=Playfair+Display",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("theme.css does not contain %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "family=System") {
+		t.Errorf("theme.css imports System from Google Fonts:\n%s", body)
 	}
 }
 
@@ -662,7 +648,7 @@ func TestMalformedJSONIsRejected(t *testing.T) {
 
 func TestStaticUIIsServed(t *testing.T) {
 	a := newTestAPI(t)
-	for _, path := range []string{"/index.html", "/taplist.html", "/style.css"} {
+	for _, path := range []string{"/kegs.html", "/taplist.html", "/style.css"} {
 		rec := a.do(http.MethodGet, path, nil)
 		if rec.Code != http.StatusOK {
 			t.Errorf("%s: status = %d, want 200", path, rec.Code)

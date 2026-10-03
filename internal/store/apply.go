@@ -2,6 +2,7 @@ package store
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/plaato"
 )
@@ -68,6 +69,7 @@ var defaultPourRange = [2]float64{0.05, 1.4}
 // updated record.
 func (s *Store) ApplyPacket(id string, pkt plaato.Packet) (*Keg, error) {
 	return s.UpdateKeg(id, func(k *Keg) {
+		k.LastSeen = time.Now().Unix()
 		for _, p := range pkt.Props {
 			if p.Transient {
 				continue

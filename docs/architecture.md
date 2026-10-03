@@ -173,7 +173,7 @@ anything outside a device's own goroutine reaches that device.
   and commands from HTTP handlers share one socket.
 
 **`Commander`** builds Blynk pin writes — tare, empty-keg weight, max volume,
-calibration, units, keg mode, sensitivity, beer style, date — and sends them via
+calibration, units, keg mode, sensitivity — and sends them via
 `Registry.Lookup`. Outbound message ids are random in `1..65535`.
 
 ### Protocol rules the hardware depends on
@@ -181,7 +181,6 @@ calibration, units, keg mode, sensitivity, beer style, date — and sends them v
 - One acknowledgement per TCP read, not per frame.
 - The acknowledgement echoes the first frame's message id.
 - Outbound message ids are never 0.
-- `beer_style` and `date` writes are prefixed with a space.
 - A device is only a keg once it sends a keg-identifying pin.
 
 ## Persistence — `internal/store`
@@ -204,9 +203,13 @@ There are no foreign keys.
 - **Device-reported columns** are nullable, and pointers in Go, so "never
   reported" stays distinct from a genuine zero — an uncalibrated scale really
   does report 0.
-- **App-only columns** (label, beer style, OG/FG/ABV, sort order, display mode)
+- **App-only columns** (label, display mode, sort order, CO2 capacity)
   are set through the UI and never overwritten by the device.
 - **`internal`** and **`extra`** hold metadata and unknown pins as JSON.
+- **Timestamps.** `first_seen` is set when the row is created. `last_seen` is
+  when the device last sent a data packet, stamped only by `ApplyPacket`.
+  `barhelper_last_sent` is when BarHelper last accepted a reading, written by
+  `RecordBarHelperSent`; 0 means never.
 
 `kegColumns` is the single list that drives both the `INSERT` and the `SELECT`,
 so the column list, the values and the scan destinations cannot drift apart.
@@ -215,7 +218,7 @@ so the column list, the values and the scan destinations cannot drift apart.
 
 `ApplyPacket` → `UpdateKeg` runs a read-modify-write in one transaction: load
 the row (or start a new one), apply each non-transient property through
-`kegSetters`, merge metadata and unknown pins, update `last_seen`, derive
+`kegSetters`, merge metadata and unknown pins, stamp `last_seen`, derive
 `beer_left_unit`, then `INSERT OR REPLACE`. Because a packet carries only the
 pins that changed, fields it does not mention keep their stored values. The
 first confirmed packet from a new keg id creates its row.
@@ -269,7 +272,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
 | `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`), delete |
+| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
 | `/api/config/…` | Home page, time format, display units, theme |
@@ -281,14 +284,86 @@ are sent as a press and a release. Edits and deletes publish events so open
 browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
-`web/embed.go`, with no build step: the dashboard (`index.html`), tap list,
-scale setup, history and their setup pages. A tap holds all of its drink's
+`web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
+Keg Setup, history and their setup pages. A tap holds all of its drink's
 details; there is no separate beverage library.
-`beer-color.js` is the one shared script. A drink's colour is either an SRM or
+Every page shares one header bar, the `<site-header>` custom element in
+`site-header.js` with its styles in `site-header.css`. It renders the page
+title from its `heading` attribute, the Tap List, Kegs and History links, the
+Configure menu with the server version, and marks the current page. Pages load
+it in `<head>` without `defer`, so the element is defined before the parser
+reaches it. The tap list sets the beer count beside its title through the
+element's `count` property.
+
+The pages are styled as one application, in the tap list's look:
+
+- `tokens.css` holds the design tokens every page loads first: the page, tile
+  and text colours, the greys for secondary text, the radii, the fonts and
+  `--action`, the accent used for main buttons and selections. The themeable
+  ones read the variables from `/theme.css` (see Theme below).
+- `tiles.css` is the tile grid and tile shared by the tap list and the Kegs
+  page: the heading, specs, readings and the keg graphic.
+- `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
+  sets its level. The tap list, the Kegs page and the Dashboard Setup preview
+  use it.
+- `style.css` styles everything else, used by every page except the tap list:
+  layout, tiles for groups of settings, form controls, segmented choices,
+  tables and toasts.
+
+Tap Setup and Keg Setup share one pattern: a list of taps or scales in a
+single centred column, where choosing one opens its editor as a view of its
+own with a back link to the list. The URL hash records the open item
+(`#tap=<id>`, `#new`, `#keg=<id>`), and each page's `showView` follows it, so
+Back and reload work. Keg Setup lists every known scale with whether it is
+connected, polling `/api/kegs/connected` since connections publish no event.
+
+The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
+the chosen range. Amount and temperature are two charts sharing a time axis
+rather than one chart with two y-axes, and a line breaks where readings stop
+for more than ten minutes. Its summary works out poured and pours in the
+browser, in `findPours`, from drops in the amount left larger than the scale's
+jitter: the logged `is_pouring` flag is sampled once a minute, which misses
+most pours, so it is not used.
+Clear history posts to `/api/kegs/{id}/log/clear`, which `handleClearKegLog`
+serves with `store.ClearLog`: every reading for that keg goes, in every range,
+while the keg and the other kegs' history stay. The page asks for confirmation
+first, since the history is not recoverable.
+
+The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
+its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
+and to fill the keg in that beer's colour. The specs row under each
+tile's name shows how long ago the device last sent data (`last_seen`), how long ago
+BarHelper last accepted a reading (`barhelper_last_sent`, left out when 0) and
+the Wi-Fi strength; the page re-renders every 15 seconds to keep those times
+current. Badges beside "Pouring" in the top row mark a scale reporting a leak
+(`leak_detection` is 1), which also reddens the tile's border, and a scale
+with no live connection (`connected` is false), whose readings and graphic are
+dimmed. A disconnect publishes a keg update, so the offline badge appears as
+soon as the server notices: at once for a clean close, and within
+`ReadTimeout` (60 seconds) for a scale that drops off the network.
+
+`beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
 green, blue) for drinks the SRM scale cannot describe; the API rejects both at
 once. The script turns either into a colour for the tap list, which draws
 `clear` as a faint tint, and builds the colour picker used by the tap editor.
+
+### Theme
+
+Dashboard Setup stores the theme through `store.SetTheme`, and
+`handleThemeCSS` serves it as `/theme.css`, a set of custom properties
+(`--bg-color`, `--card-bg`, `--text-color`, `--font-family`, the accent and the
+two tap list fonts). Every page links it, and `tokens.css` reads every one of
+them, so they reach all pages. The `var()` fallbacks in `tokens.css` hold the
+defaults, which are the tap list's palette, the system font and an amber
+accent, so an unset value leaves the page in its default look. The tap list
+does not use the accent, since each tile takes its beer's colour. The tap list
+title font is also the font of the page title in the header bar.
+`fontStack` turns a stored family name into a full stack that falls back to the
+system font, and `System` selects that stack with no Google Fonts import.
+`GetAppConfig` runs a stored theme through `dropLegacyThemeDefaults`, which
+clears the settings page's former defaults. Every save used to post them while
+the colours had no effect, so they are treated as unset.
 
 ### Display units
 
@@ -297,7 +372,7 @@ user's preferred units is a presentation step, applied only where the browser
 reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
 paths and the history JSON. The converted values go in a `display` block
 alongside the original fields; it is never stored. BarHelper, the CSV export
-and the scale setup page all use device units.
+and the Keg Setup page all use device units.
 
 ## BarHelper — `internal/barhelper`
 
@@ -313,6 +388,10 @@ keg monitor API, configured by the `BARHELPER_*` variables.
   goes first.
 - **Retried until accepted.** A value is marked sent only on a confirmed
   success, and unchanged values are not resent.
+- **Recorded.** Each accepted send is passed to the client's `SentRecorder`,
+  which is the store: `RecordBarHelperSent` sets the keg's `barhelper_last_sent`
+  with a plain `UPDATE`, so a send that lands after the keg was forgotten does
+  not bring its row back.
 
 Volumes are sent in the keg's own unit, labelled with `BARHELPER_UNIT`, so that
 setting must match how the kegs are configured.
@@ -366,7 +445,10 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   arrives as a different keg; message ids are untouched.
 - `testdata/demo.sql` is seed data for a demo database: six kegs on eight taps
   and a US display unit system, data only, loaded on top of
-  `internal/store/schema.sql`. Its keg 1 shares the capture's token.
+  `internal/store/schema.sql`. Its keg 1 shares the capture's token. Its
+  history is generated by a recursive query when the file is loaded: 30 days
+  at five-minute steps, ending at the load time and at each keg's current
+  reading, from plain arithmetic so every load gives the same shape.
 - CI (`.github/workflows/ci.yaml`) checks `gofmt`, runs `go vet`,
   `go test -race ./...` and `go build ./...`.
 - Releases (`.github/workflows/release.yaml`) run on every push to `main`: the
@@ -390,9 +472,13 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   for that segment.
 - **`hardware_sync` is not answered.** The device's startup request for its
   configuration pins is acknowledged but not replied to.
-- **UI reconnection.** The dashboard and scale setup pages do not reconnect
-  their WebSocket; the tap list does.
+- **UI reconnection.** The Keg Setup page does not reconnect its WebSocket;
+  the tap list and the Kegs page do.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
+- **BarHelper time on the Kegs page.** Recording a send publishes no event, so
+  the new time appears at the scale's next update or the page's minute reload.
+  A keg removed from `BARHELPER_KEG_MONITOR_MAPPING` keeps showing its last
+  send time.
 - **Kegs without a tap.** The tap list shows taps, so a keg that no tap links to
-  appears only on the dashboard.
+  appears only on the Kegs page.

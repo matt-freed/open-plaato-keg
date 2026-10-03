@@ -9,9 +9,10 @@ import (
 
 // pages are the UI entry points that must exist for the navigation to work.
 var pages = []string{
-	"index.html", "taplist.html", "taplist-setup.html", "history.html",
-	"dashboard-setup.html", "setup.html",
-	"style.css",
+	"kegs.html", "taplist.html", "taplist-setup.html", "history.html",
+	"dashboard-setup.html", "keg-setup.html",
+	"style.css", "site-header.css", "site-header.js",
+	"tokens.css", "tiles.css", "keg-graphic.js",
 }
 
 func TestPagesArePresent(t *testing.T) {
@@ -224,6 +225,35 @@ func itoa(n int) string {
 	return string(digits)
 }
 
+// Every page uses the shared header, loaded in <head> so the element is
+// defined before the parser reaches it, rather than carrying its own copy, and
+// loads the shared design tokens so the pages look like one application.
+func TestPagesUseTheSharedHeader(t *testing.T) {
+	static := Static()
+	for _, name := range pages {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		page := string(data)
+		head, _, _ := strings.Cut(page, "</head>")
+		for _, want := range []string{`<script src="/site-header.js"></script>`, `href="/site-header.css"`, `href="/tokens.css"`} {
+			if !strings.Contains(head, want) {
+				t.Errorf("%s does not load %s in <head>", name, want)
+			}
+		}
+		if !strings.Contains(page, "<site-header heading=") {
+			t.Errorf("%s has no <site-header>", name)
+		}
+		if strings.Contains(page, "navbar") {
+			t.Errorf("%s still carries its own navbar", name)
+		}
+	}
+}
+
 // Pages must not link to features this server does not provide.
 func TestNoLinksToRemovedPages(t *testing.T) {
 	removed := []string{
@@ -250,7 +280,7 @@ func TestNoLinksToRemovedPages(t *testing.T) {
 // than treating an untagged message as a keg.
 func TestWebSocketPagesHandleTaggedMessages(t *testing.T) {
 	static := Static()
-	for _, name := range []string{"index.html", "taplist.html", "setup.html"} {
+	for _, name := range []string{"kegs.html", "taplist.html", "keg-setup.html"} {
 		data, err := fs.ReadFile(static, name)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)

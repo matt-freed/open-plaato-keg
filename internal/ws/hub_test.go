@@ -18,6 +18,11 @@ import (
 
 func newTestHub(t *testing.T) (*Hub, *store.Store, *events.Bus, string) {
 	t.Helper()
+	return newTestHubWith(t, nil)
+}
+
+func newTestHubWith(t *testing.T, connected func(string) bool) (*Hub, *store.Store, *events.Bus, string) {
+	t.Helper()
 
 	st, err := store.OpenMemory()
 	if err != nil {
@@ -25,7 +30,7 @@ func newTestHub(t *testing.T) (*Hub, *store.Store, *events.Bus, string) {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	hub := NewHub(st)
+	hub := NewHub(st, connected)
 	bus := events.NewBus()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -252,7 +257,7 @@ func TestUpdatesForOneKegAreCollapsed(t *testing.T) {
 // Recording an event must collapse by keg and must not block, so the intake
 // keeps up with the bus however long a flush takes.
 func TestMarkCoalescesByKeg(t *testing.T) {
-	h := NewHub(nil)
+	h := NewHub(nil, nil)
 
 	for i := 0; i < 500; i++ {
 		h.mark(events.Event{Kind: events.KegUpdated, KegID: "keg-1"})
@@ -284,7 +289,7 @@ func TestMarkCoalescesByKeg(t *testing.T) {
 // The hub is built with a nil store, so any read would panic — the check
 // cannot pass by accident.
 func TestFlushDoesNothingWithoutClients(t *testing.T) {
-	h := NewHub(nil)
+	h := NewHub(nil, nil)
 
 	pending := map[string]events.Kind{
 		"keg-1": events.KegUpdated,
@@ -310,5 +315,30 @@ func TestUpdateForMissingKegIsSkipped(t *testing.T) {
 	// Only the removal should arrive.
 	if msg := readMessage(t, conn); msg.Type != TypeKegRemoved {
 		t.Errorf("Type = %q, want the update for a missing keg to be skipped", msg.Type)
+	}
+}
+
+// The Kegs page replaces a keg with each frame, so every frame must carry the
+// live connection state or a reading would mark an online scale offline.
+func TestFramesCarryConnectedState(t *testing.T) {
+	online := func(id string) bool { return id == "keg-1" }
+	hub, st, bus, url := newTestHubWith(t, online)
+	storeKeg(t, st, "keg-1", "vw\x0051\x001.000")
+	storeKeg(t, st, "keg-2", "vw\x0051\x002.000")
+
+	conn := dialWS(t, url)
+	initial := map[string]bool{}
+	for range 2 {
+		k := decodeKeg(t, readMessage(t, conn))
+		initial[k.ID] = k.Connected
+	}
+	if !initial["keg-1"] || initial["keg-2"] {
+		t.Errorf("initial connected = %v, want keg-1 only", initial)
+	}
+
+	waitForClients(t, hub, 1)
+	bus.Publish(events.Event{Kind: events.KegUpdated, KegID: "keg-1"})
+	if k := decodeKeg(t, readMessage(t, conn)); !k.Connected {
+		t.Errorf("broadcast for %s has connected = false, want true", k.ID)
 	}
 }

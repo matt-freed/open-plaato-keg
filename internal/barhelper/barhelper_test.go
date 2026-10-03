@@ -46,7 +46,7 @@ func TestClassify(t *testing.T) {
 }
 
 func TestNewReturnsNilWhenDisabled(t *testing.T) {
-	if c := New(config.BarHelperConfig{Enabled: false}); c != nil {
+	if c := New(config.BarHelperConfig{Enabled: false}, nil); c != nil {
 		t.Error("New returned a client for a disabled integration")
 	}
 }
@@ -61,6 +61,11 @@ func TestNilClientIsSafe(t *testing.T) {
 
 func newTestClient(t *testing.T, handler http.HandlerFunc, monitors map[string]string) *Client {
 	t.Helper()
+	return newRecordingTestClient(t, handler, monitors, nil)
+}
+
+func newRecordingTestClient(t *testing.T, handler http.HandlerFunc, monitors map[string]string, rec SentRecorder) *Client {
+	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
@@ -70,7 +75,7 @@ func newTestClient(t *testing.T, handler http.HandlerFunc, monitors map[string]s
 		APIKey:   "test-key",
 		Unit:     "l",
 		Monitors: monitors,
-	})
+	}, rec)
 	if c == nil {
 		t.Fatal("New returned nil for an enabled integration")
 	}
@@ -305,7 +310,7 @@ func newOfflineClient(t *testing.T, monitors map[string]string) *Client {
 		APIKey:   "test-key",
 		Unit:     "l",
 		Monitors: monitors,
-	})
+	}, nil)
 	if c == nil {
 		t.Fatal("New returned nil for an enabled integration")
 	}
@@ -510,4 +515,65 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for %s", what)
+}
+
+// sentLog is a SentRecorder that remembers which kegs were recorded.
+type sentLog struct {
+	mu   sync.Mutex
+	kegs []string
+}
+
+func (l *sentLog) RecordBarHelperSent(kegID string, at time.Time) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.kegs = append(l.kegs, kegID)
+	return nil
+}
+
+func (l *sentLog) recorded() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.kegs...)
+}
+
+// An accepted reading is recorded against the keg, not the monitor, so the
+// Kegs page can show when each scale last reached BarHelper.
+func TestAcceptedSendIsRecordedForTheKeg(t *testing.T) {
+	log := &sentLog{}
+	c := newRecordingTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(successBody))
+	}, map[string]string{"keg-token": "monitor-1"}, log)
+
+	c.KegAmount("keg-token", 15.89)
+
+	waitFor(t, "the send to be recorded", func() bool { return len(log.recorded()) > 0 })
+	if got := log.recorded(); got[0] != "keg-token" {
+		t.Errorf("recorded %v, want keg-token", got)
+	}
+}
+
+// A rejected reading did not reach BarHelper, so it must not be recorded.
+func TestRejectedSendIsNotRecorded(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		attempts int
+	)
+	log := &sentLog{}
+	c := newRecordingTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		attempts++
+		mu.Unlock()
+		w.WriteHeader(http.StatusTooManyRequests)
+	}, map[string]string{"keg-token": "monitor-1"}, log)
+
+	c.KegAmount("keg-token", 15.89)
+
+	waitFor(t, "the send to be attempted", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return attempts > 0
+	})
+	if got := log.recorded(); len(got) != 0 {
+		t.Errorf("recorded %v after a rejected send, want nothing", got)
+	}
 }

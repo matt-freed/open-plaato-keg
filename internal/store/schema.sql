@@ -52,15 +52,10 @@ CREATE TABLE IF NOT EXISTS kegs (
     device_date               TEXT,
 
     -- Values set through the API and held only here. The device has no pin for
-    -- most of these, and does not report back the ones it does.
+    -- any of these.
     label                     TEXT    NOT NULL DEFAULT '',
     display_mode              TEXT    NOT NULL DEFAULT 'weight_primary',
     sort_order                INTEGER NOT NULL DEFAULT 0,
-    beer_style                TEXT    NOT NULL DEFAULT '',
-    keg_date                  TEXT    NOT NULL DEFAULT '',
-    og                        REAL,
-    fg                        REAL,
-    abv                       REAL,
     co2_capacity              REAL,
 
     -- internal: the device metadata map (ver, fw, dev, build, tmpl, ...).
@@ -68,8 +63,12 @@ CREATE TABLE IF NOT EXISTS kegs (
     internal                  TEXT    NOT NULL DEFAULT '{}',
     extra                     TEXT    NOT NULL DEFAULT '{}',
 
+    -- first_seen: when the keg was first stored. last_seen: when the device last
+    -- sent a data packet; changes made through the API do not move it.
     first_seen                INTEGER NOT NULL DEFAULT 0,
-    last_seen                 INTEGER NOT NULL DEFAULT 0
+    last_seen                 INTEGER NOT NULL DEFAULT 0,
+    -- When BarHelper last accepted a reading for this keg, or 0 if never.
+    barhelper_last_sent       INTEGER NOT NULL DEFAULT 0
 );
 
 -- Time series of keg readings, written at most once per minute per keg.

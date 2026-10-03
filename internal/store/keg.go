@@ -70,24 +70,25 @@ type Keg struct {
 	Label       string   `json:"label"`
 	DisplayMode string   `json:"display_mode"`
 	SortOrder   int      `json:"sort_order"`
-	BeerStyle   string   `json:"beer_style"`
-	KegDate     string   `json:"keg_date"`
-	OG          *float64 `json:"og"`
-	FG          *float64 `json:"fg"`
-	ABV         *float64 `json:"abv"`
 	CO2Capacity *float64 `json:"co2_capacity"`
 
 	Internal map[string]string `json:"internal"`
 	Extra    map[string]string `json:"extra,omitempty"`
 
 	FirstSeen int64 `json:"first_seen"`
-	LastSeen  int64 `json:"last_seen"`
+	// LastSeen is when the device last sent a data packet. Only ApplyPacket
+	// moves it, so editing a keg through the API does not make it look alive.
+	LastSeen int64 `json:"last_seen"`
+	// BarHelperLastSent is when BarHelper last accepted a reading for this
+	// keg, or 0 if it never has.
+	BarHelperLastSent int64 `json:"barhelper_last_sent"`
 
 	// BeerLeftUnit is always derived from unit, measure_unit and keg_mode
 	// rather than trusted from the device, so the displayed label cannot
 	// disagree with the configured mode.
 	BeerLeftUnit string `json:"beer_left_unit"`
-	// Connected is filled in by the API from the live connection registry.
+	// Connected is filled in from the live connection registry by the API
+	// handlers and the WebSocket hub, wherever a browser reads a keg.
 	Connected bool `json:"connected"`
 	// Display is filled in at the JSON boundaries the browser reads, from the
 	// user's display-unit preference. It is nil everywhere else, which is what
@@ -161,16 +162,12 @@ var kegColumns = []kegColumn{
 	{"label", func(k *Keg) any { return k.Label }, func(k *Keg) any { return &k.Label }},
 	{"display_mode", func(k *Keg) any { return k.DisplayMode }, func(k *Keg) any { return &k.DisplayMode }},
 	{"sort_order", func(k *Keg) any { return k.SortOrder }, func(k *Keg) any { return &k.SortOrder }},
-	{"beer_style", func(k *Keg) any { return k.BeerStyle }, func(k *Keg) any { return &k.BeerStyle }},
-	{"keg_date", func(k *Keg) any { return k.KegDate }, func(k *Keg) any { return &k.KegDate }},
-	{"og", func(k *Keg) any { return k.OG }, func(k *Keg) any { return &k.OG }},
-	{"fg", func(k *Keg) any { return k.FG }, func(k *Keg) any { return &k.FG }},
-	{"abv", func(k *Keg) any { return k.ABV }, func(k *Keg) any { return &k.ABV }},
 	{"co2_capacity", func(k *Keg) any { return k.CO2Capacity }, func(k *Keg) any { return &k.CO2Capacity }},
 	{"internal", func(k *Keg) any { return encodeMap(k.Internal) }, nil},
 	{"extra", func(k *Keg) any { return encodeMap(k.Extra) }, nil},
 	{"first_seen", func(k *Keg) any { return k.FirstSeen }, func(k *Keg) any { return &k.FirstSeen }},
 	{"last_seen", func(k *Keg) any { return k.LastSeen }, func(k *Keg) any { return &k.LastSeen }},
+	{"barhelper_last_sent", func(k *Keg) any { return k.BarHelperLastSent }, func(k *Keg) any { return &k.BarHelperLastSent }},
 }
 
 var (
@@ -333,9 +330,8 @@ func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
 
 	mutate(k)
 
-	k.LastSeen = time.Now().Unix()
 	if k.FirstSeen == 0 {
-		k.FirstSeen = k.LastSeen
+		k.FirstSeen = time.Now().Unix()
 	}
 	k.BeerLeftUnit = k.DeriveBeerLeftUnit()
 
@@ -492,4 +488,13 @@ func SetDisplayAll(kegs []*Keg, u DisplayUnits) {
 	for _, k := range kegs {
 		k.SetDisplay(u)
 	}
+}
+
+// RecordBarHelperSent notes when BarHelper accepted a reading for a keg.
+//
+// It is a plain UPDATE rather than UpdateKeg, so a send that lands just after
+// the keg was forgotten cannot bring its record back.
+func (s *Store) RecordBarHelperSent(id string, at time.Time) error {
+	_, err := s.db.Exec("UPDATE kegs SET barhelper_last_sent = ? WHERE id = ?", at.Unix(), id)
+	return err
 }
