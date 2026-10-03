@@ -9,36 +9,6 @@
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
-  <style>
-    /* The list and the editor are two views of one column: the page shows
-       one or the other, never both. */
-    .list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-    /* Matches the specificity of style.css's tile-heading rule, so the
-       heading sits level with the button beside it. */
-    .box > div.list-head > .title,
-    .box > div.form-head > .title { margin: 0; }
-    .tap-list-item {
-      display: flex; align-items: center; gap: 0.75rem;
-      width: calc(100% + 1.6rem); margin: 0 -0.8rem 0.15rem; padding: 0.7rem 0.8rem;
-      border: 1px solid transparent; border-radius: 12px; background: none;
-      color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer;
-      transition: background 0.15s, border-color 0.15s;
-    }
-    .tap-list-item:hover, .tap-list-item:focus-visible { background: var(--tile-2); outline: none; border-color: var(--line-strong); }
-    .tap-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    .tap-list-text { flex: 1; min-width: 0; }
-    .tap-list-name { display: block; font-weight: 600; }
-    .tap-list-meta { display: block; font-size: 0.82rem; }
-    .tap-list-id { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
-    .tap-list-go { font-size: 1.2rem; line-height: 1; color: var(--muted); }
-    .back-link {
-      display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 1rem;
-      font-size: 0.88rem; text-decoration: none;
-    }
-    .back-link:hover { text-decoration: underline; }
-    .form-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-    .form-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
-  </style>
 </head>
 <body>
   <site-header heading="Tap List Setup"></site-header>
@@ -221,14 +191,14 @@
         return;
       }
       container.innerHTML = allTaps.map(tap => `
-        <a class="tap-list-item" href="#tap=${encodeURIComponent(tap.id)}">
-          <span class="tap-color-dot" style="background:${esc(beerColor(tap))};"></span>
-          <span class="tap-list-text">
-            <span class="tap-list-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
-            <span class="tap-list-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
+        <a class="list-row" href="#tap=${encodeURIComponent(tap.id)}">
+          <span class="list-row-dot" style="background:${esc(beerColor(tap))};"></span>
+          <span class="list-row-text">
+            <span class="list-row-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
+            <span class="list-row-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
           </span>
-          <span class="tap-list-id">#${esc(tap.id)}</span>
-          <span class="tap-list-go" aria-hidden="true">›</span>
+          <span class="list-row-aside">#${esc(tap.id)}</span>
+          <span class="list-row-go" aria-hidden="true">›</span>
         </a>`).join('');
     }
 

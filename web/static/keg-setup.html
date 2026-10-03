@@ -9,6 +9,18 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <style>
+      /* The open scale's name, with whether it is connected. */
+      .edit-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+      .edit-head h2 {
+        margin: 0;
+        font-family: var(--title-font);
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      #offlineNotice { margin-bottom: 1.25rem; }
+    </style>
   </head>
   <body>
     <site-header heading="Keg Setup"></site-header>
@@ -17,18 +29,30 @@
         <div class="container is-centered">
           <p class="subtitle">Configure and calibrate your scale</p>
 
-          <!-- Scale Selector -->
-          <div class="field scale-picker">
-            <label class="label" for="kegId">Select Scale</label>
-            <div class="control">
-              <div class="select is-fullwidth">
-                <select id="kegId" name="kegId">
-                  <option value="">Select a connected scale...</option>
-                </select>
+          <!-- List view -->
+          <div id="listView">
+            <div class="box">
+              <div class="list-head">
+                <h2 class="title is-5">Scales</h2>
+                <span class="help" id="connectionStatus"></span>
+              </div>
+              <div id="kegListContainer">
+                <p class="has-text-grey">Loading…</p>
               </div>
             </div>
-            <p class="help" id="connectionStatus">Loading connected scales...</p>
           </div>
+
+          <!-- Editor view -->
+          <div id="editView" hidden>
+          <a class="back-link" href="#">← All scales</a>
+          <div class="edit-head">
+            <h2 id="editTitle"></h2>
+            <span class="status-pill" id="editStatus"></span>
+          </div>
+          <p class="notification is-warning" id="offlineNotice" hidden>
+            This scale is not connected. Changes that are sent to the scale itself
+            will fail until it reconnects.
+          </p>
 
           <!-- Units Section -->
           <div class="box section-box">
@@ -295,8 +319,12 @@
           <div class="box section-box" id="currentSettingsBox">
             <h2 class="title is-4">Current Status</h2>
             <div id="currentSettings" class="content">
-              <p class="has-text-grey">Select a keg to view current settings</p>
+              <p class="has-text-grey">Loading…</p>
             </div>
+          </div>
+
+          <!-- The settings run long, so the way back is at the bottom too. -->
+          <a class="button" href="#">← All scales</a>
           </div>
         </div>
     </section>
@@ -305,63 +333,121 @@
     <div id="toast" class="notification toast is-hidden"></div>
 
     <script>
-      const kegIdSelect = document.getElementById("kegId");
       const connectionStatus = document.getElementById("connectionStatus");
       let currentKegData = {};
+      // The scale whose settings are open, from the URL hash; null on the list.
+      let selectedKegId = null;
+      let allKegs = [];
+      let connectedIds = new Set();
 
-      function getFallbackScaleName(index) {
-        return `Scale ${index + 1}`;
+      function esc(v) {
+        return String(v ?? "").replace(/[&<>"']/g, c =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
       }
 
-      // Load connected scales
-      function loadConnectedKegs() {
-        const currentValue = kegIdSelect.value; // Preserve current selection
+      function kegName(keg) {
+        const index = allKegs.findIndex(k => k.id === keg.id);
+        return keg.label?.trim() || `Scale ${index + 1}`;
+      }
 
-        fetch("/api/kegs/connected")
-          .then((response) => response.json())
-          .then(async (kegs) => {
-            let labelMap = {};
-            try {
-              const allKegsResponse = await fetch("/api/kegs");
-              if (allKegsResponse.ok) {
-                const allKegs = await allKegsResponse.json();
-                allKegs.forEach((keg, index) => {
-                  labelMap[keg.id] = keg.label || `Scale ${index + 1}`;
-                });
-              }
-            } catch (_) {
-              // Fall back to generic names below if lookup fails.
-            }
+      // Every scale the server knows, with whether it is connected now.
+      // Settings that go to the scale itself need it connected, but its
+      // label, display and record can be changed either way.
+      async function loadKegs() {
+        try {
+          const [kegsRes, connectedRes] = await Promise.all([
+            fetch("/api/kegs"),
+            fetch("/api/kegs/connected"),
+          ]);
+          if (!kegsRes.ok || !connectedRes.ok) throw new Error("bad response");
+          allKegs = await kegsRes.json();
+          connectedIds = new Set(await connectedRes.json());
+          renderKegList();
+          updateEditHead();
+        } catch (_) {
+          connectionStatus.textContent = "Could not load the scales";
+          connectionStatus.className = "help is-danger";
+        }
+      }
 
-            kegIdSelect.innerHTML = '<option value="">Select a connected scale...</option>';
+      function renderKegList() {
+        const n = connectedIds.size;
+        connectionStatus.textContent = allKegs.length
+          ? `${n} of ${allKegs.length} connected`
+          : "";
+        connectionStatus.className = "help";
 
-            if (kegs.length === 0) {
-              connectionStatus.textContent = "No scales connected";
-              connectionStatus.className = "help is-warning";
-            } else {
-              kegs.forEach((keg, index) => {
-                const option = document.createElement("option");
-                option.value = keg;
-                option.text = labelMap[keg] || `Scale ${index + 1}`;
-                // Restore selection or auto-select first keg if none selected
-                if (keg === currentValue || (!currentValue && index === 0)) {
-                  option.selected = true;
-                }
-                kegIdSelect.appendChild(option);
-              });
-              connectionStatus.textContent = `${kegs.length} scale(s) connected`;
-              connectionStatus.className = "help is-success";
+        const container = document.getElementById("kegListContainer");
+        if (!allKegs.length) {
+          container.innerHTML = '<p class="has-text-grey">No scales yet. Once a Plaato Keg connects, it appears here.</p>';
+          return;
+        }
+        container.innerHTML = allKegs.map(keg => {
+          const online = connectedIds.has(keg.id);
+          const d = keg.display ?? {};
+          const amount = d.amount_left ?? keg.amount_left;
+          const rawUnit = d.amount_unit ?? keg.beer_left_unit ?? "";
+          const unit = rawUnit === "litre" ? "L" : rawUnit;
+          const left = Number.isFinite(amount) ? ` · ${amount.toFixed(1)} ${esc(unit)} left` : "";
+          return `
+            <a class="list-row" href="#keg=${encodeURIComponent(keg.id)}">
+              <span class="list-row-text">
+                <span class="list-row-name">${esc(kegName(keg))}</span>
+                <span class="list-row-meta">${keg.keg_mode === 2 ? "CO₂" : "Beer"}${left}</span>
+              </span>
+              <span class="status-pill${online ? " is-online" : ""}">${online ? "Connected" : "Offline"}</span>
+              <span class="list-row-go" aria-hidden="true">›</span>
+            </a>`;
+        }).join("");
+      }
 
-              // Load data for auto-selected keg on first load
-              if (!currentValue && kegs.length > 0) {
-                loadKegData(kegs[0]);
-              }
-            }
-          })
-          .catch(() => {
-            connectionStatus.textContent = "Error loading kegs";
-            connectionStatus.className = "help is-danger";
-          });
+      function updateEditHead() {
+        if (!selectedKegId) return;
+        const keg = allKegs.find(k => k.id === selectedKegId);
+        const online = connectedIds.has(selectedKegId);
+        document.getElementById("editTitle").textContent = keg ? kegName(keg) : "Scale";
+        const pill = document.getElementById("editStatus");
+        pill.textContent = online ? "Connected" : "Offline";
+        pill.classList.toggle("is-online", online);
+        document.getElementById("offlineNotice").hidden = online;
+      }
+
+      // ── Views ─────────────────────────────────────
+      // The URL hash says which view is open: empty for the list, #keg=<id>
+      // for a scale's settings. Links change the hash and showView follows
+      // it, so Back returns to the list and a reload keeps the scale open.
+      function showView() {
+        const hash = location.hash.slice(1);
+        const id = hash.startsWith("keg=") ? decodeURIComponent(hash.slice(4)) : null;
+        if (id && !allKegs.some(k => k.id === id)) { location.replace("#"); return; }
+
+        if (id !== selectedKegId) {
+          selectedKegId = id;
+          clearForm();
+          if (id) loadKegData(id);
+        }
+        updateEditHead();
+        document.getElementById("listView").hidden = !!id;
+        document.getElementById("editView").hidden = !id;
+        window.scrollTo(0, 0);
+      }
+
+      function backToList() {
+        if (location.hash) location.hash = "";
+        else showView();
+      }
+
+      // clearForm empties the settings, so one scale's values never show
+      // while the next is loading.
+      function clearForm() {
+        currentKegData = {};
+        for (const id of ["tempOffset", "maxVolume", "kegLabel", "emptyKegWeight", "knownWeight", "co2CapacityInput"]) {
+          document.getElementById(id).value = "";
+        }
+        document.getElementById("currentSettings").innerHTML = '<p class="has-text-grey">Loading…</p>';
+        document.getElementById("co2CapacityField").style.display = "none";
+        clearActiveButtons();
+        updateUnitLabels("1");
       }
 
       // Load keg data from REST API
@@ -525,7 +611,6 @@
           </table>
         `;
         document.getElementById("currentSettings").innerHTML = html;
-        loadOtaFirmwareOptions();
       }
 
       function clearActiveButtons() {
@@ -575,27 +660,6 @@
         document.getElementById(displayModeId)?.classList.add("is-primary", "is-selected");
       }
 
-      // Listen for keg selection changes
-      kegIdSelect.addEventListener("change", () => {
-        const kegId = kegIdSelect.value;
-        if (kegId) {
-          loadKegData(kegId);
-        } else {
-          // Clear form when no keg selected
-          currentKegData = {};
-          document.getElementById("tempOffset").value = "";
-          document.getElementById("maxVolume").value = "";
-          document.getElementById("kegLabel").value = "";
-          document.getElementById("emptyKegWeight").value = "";
-          document.getElementById("knownWeight").value = "";
-          document.getElementById("tempOffset").value = "";
-          document.getElementById("currentSettings").innerHTML =
-            '<p class="has-text-grey">Select a keg to view current settings</p>';
-          clearActiveButtons();
-          updateUnitLabels("1");
-        }
-      });
-
       // WebSocket connection for real-time updates
       const socket = new WebSocket('/ws');
 
@@ -607,8 +671,14 @@
         const msg = JSON.parse(event.data);
         if (msg.type !== "keg") return;
         const data = msg.data;
-        // Only update if this is the currently selected keg
-        if (data.id === kegIdSelect.value) {
+        const i = allKegs.findIndex(k => k.id === data.id);
+        if (i >= 0) {
+          allKegs[i] = data;
+          renderKegList();
+          updateEditHead();
+        }
+        // Only update the form for the scale that is open
+        if (data.id === selectedKegId) {
           currentKegData = { ...currentKegData, ...data };
           populateFormFields(currentKegData);
           updateSettingsDisplay(currentKegData);
@@ -624,10 +694,12 @@
         console.log("WebSocket closed");
       });
 
-      loadConnectedKegs();
-      setInterval(loadConnectedKegs, 10000);
+      window.addEventListener("hashchange", showView);
+      loadKegs().then(showView);
+      // Connection status has no event of its own, so it is polled.
+      setInterval(loadKegs, 10000);
       function getSelectedKeg() {
-        const kegId = kegIdSelect.value;
+        const kegId = selectedKegId;
         if (!kegId) {
           showToast("Please select a keg first", "warning");
           return null;
@@ -762,7 +834,7 @@
       }
 
       function forgetSelectedScale() {
-        const kegId = document.getElementById("kegId")?.value;
+        const kegId = selectedKegId;
         if (!kegId) {
           showToast("Please select a scale first", "warning");
           return;
@@ -781,19 +853,7 @@
           .then((data) => {
             if (data.status === "ok") {
               showToast("Scale record removed", "success");
-              currentKegData = {};
-              document.getElementById("kegId").value = "";
-              document.getElementById("kegLabel").value = "";
-              document.getElementById("emptyKegWeight").value = "";
-              document.getElementById("knownWeight").value = "";
-              document.getElementById("tempOffset").value = "";
-              document.getElementById("maxVolume").value = "";
-              document.getElementById("co2CapacityInput").value = "";
-              document.getElementById("currentSettings").innerHTML =
-                '<p class="has-text-grey">Select a keg to view current settings</p>';
-              clearActiveButtons();
-              updateUnitLabels("1");
-              loadConnectedKegs();
+              loadKegs().then(backToList);
             } else {
               showToast(`Error: ${data.error || "Failed to forget scale"}`, "danger");
             }
@@ -832,7 +892,7 @@
       }
 
       function saveCO2Capacity() {
-        const kegId = document.getElementById('kegId')?.value;
+        const kegId = selectedKegId;
         if (!kegId) { showToast('Select a keg first', 'warning'); return; }
         const value = document.getElementById('co2CapacityInput').value.trim();
         if (!value) { showToast('Enter a capacity value', 'warning'); return; }

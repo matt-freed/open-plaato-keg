@@ -47,7 +47,6 @@ hr {
 /* A single column of settings, centred, for a page that reads top to bottom
    rather than as a grid. */
 .container.is-centered { max-width: 760px; margin: 0 auto; }
-.field.scale-picker { margin-bottom: 1.5rem; }
 
 .columns {
   display: flex;
@@ -384,6 +383,83 @@ hr {
   text-transform: uppercase;
 }
 .table td:first-child strong { font-weight: inherit; }
+
+/* ─── Lists of things to open ───────────────── */
+/* The setup pages list their taps or scales in a tile; choosing a row opens
+   its editor as a view of its own, with a back link to the list. */
+.list-head, .form-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.form-head { margin-bottom: 1.25rem; }
+.form-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
+/* As specific as the tile-heading rule, so the heading sits level with the
+   button or status beside it. */
+.box > div.list-head > .title,
+.box > div.form-head > .title { margin: 0; }
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: calc(100% + 1.6rem);
+  margin: 0 -0.8rem 0.15rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.list-row:hover, .list-row:focus-visible {
+  background: var(--tile-2);
+  border-color: var(--line-strong);
+  outline: none;
+}
+.list-row-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.list-row-text { flex: 1; min-width: 0; }
+.list-row-name { display: block; font-weight: 600; }
+.list-row-meta { display: block; font-size: 0.82rem; }
+.list-row-aside { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.list-row-go { font-size: 1.2rem; line-height: 1; color: var(--muted); }
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+  text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+
+/* Whether a scale is connected. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.status-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.status-pill.is-online { color: var(--pour); background: color-mix(in srgb, var(--pour) 12%, transparent); }
+.status-pill.is-online::before { background: var(--pour); }
 
 /* ─── Notifications ──────────────────────────── */
 .notification {

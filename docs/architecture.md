@@ -307,6 +307,13 @@ The pages are styled as one application, in the tap list's look:
   layout, tiles for groups of settings, form controls, segmented choices,
   tables and toasts.
 
+Tap Setup and Keg Setup share one pattern: a list of taps or scales in a
+single centred column, where choosing one opens its editor as a view of its
+own with a back link to the list. The URL hash records the open item
+(`#tap=<id>`, `#new`, `#keg=<id>`), and each page's `showView` follows it, so
+Back and reload work. Keg Setup lists every known scale with whether it is
+connected, polling `/api/kegs/connected` since connections publish no event.
+
 The Kegs page (`index.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
 and to fill the keg in that beer's colour.
