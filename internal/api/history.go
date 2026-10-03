@@ -56,6 +56,22 @@ func (s *Server) handleKegLogCSV(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleClearKegLog deletes every reading recorded for a keg, across all
+// ranges. The keg is kept and starts logging afresh with its next report.
+func (s *Server) handleClearKegLog(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := s.store.GetKeg(id); err != nil {
+		writeStoreError(w, err, "keg")
+		return
+	}
+	removed, err := s.store.ClearLog(id)
+	if err != nil {
+		writeStoreError(w, err, "keg history")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "deleted": removed})
+}
+
 // readLog reads one keg's history, returning the keg alongside it so the
 // caller can decide whether to present the readings in the display units.
 func (s *Server) readLog(w http.ResponseWriter, r *http.Request, defaultRange string) ([]store.LogEntry, *store.Keg, bool) {

@@ -121,6 +121,16 @@ func (s *Store) ReadLog(id string, from, to time.Time) ([]LogEntry, error) {
 	return entries, rows.Err()
 }
 
+// ClearLog deletes every reading recorded for one keg and returns how many
+// rows were removed. The keg itself, and every other keg's history, is kept.
+func (s *Store) ClearLog(id string) (int64, error) {
+	res, err := s.db.Exec("DELETE FROM keg_log WHERE keg_id = ?", id)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // PruneLog deletes readings older than LogRetention and returns how many rows
 // were removed.
 func (s *Store) PruneLog(now time.Time) (int64, error) {

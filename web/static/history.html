@@ -23,7 +23,7 @@
       .scale-option { flex-direction: column; justify-content: center; gap: 0.1rem; line-height: 1.15; }
       .scale-option .scale-name { font-size: 0.72rem; font-weight: 500; color: var(--faint); }
       .scale-option.is-selected .scale-name { color: var(--muted); }
-      .page-actions { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }
+      .page-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.75rem; }
 
       /* The range's figures, set like the tap list's readings. */
       .stats {
@@ -77,6 +77,7 @@
       <!-- Its own row above the choices, so they never push it to a line of
            its own. It downloads whatever scale and range are chosen. -->
       <div class="page-actions">
+        <button class="button is-small is-danger" type="button" id="clearBtn">Clear history</button>
         <a class="button is-small" id="downloadBtn" href="#" download>&#8595; Download CSV</a>
       </div>
 
@@ -141,6 +142,7 @@
   </section>
 
   <div class="chart-tooltip" id="chartTooltip" hidden></div>
+  <div id="toast" class="notification toast is-hidden"></div>
 
   <script>
     'use strict';
@@ -523,8 +525,8 @@
         const longer = RANGE_ORDER[RANGE_ORDER.indexOf(range) + 1];
         const text = $('noDataText');
         text.textContent = longer
-          ? `No readings from ${kegName(keg, kegs.indexOf(keg))} in the ${RANGES[range].label.toLowerCase()}.`
-          : `No readings from ${kegName(keg, kegs.indexOf(keg))} in the last 30 days.`;
+          ? `No readings from ${displayName(keg)} in the ${RANGES[range].label.toLowerCase()}.`
+          : `No readings from ${displayName(keg)} in the last 30 days.`;
         if (longer) {
           text.append(document.createElement('br'));
           const more = document.createElement('a');
@@ -554,6 +556,41 @@
       const { keg: id, range } = readHash();
       if (entries.length) renderCharts(kegs.find(k => k.id === id), range);
     });
+    // ── Clearing ────────────────────────────────────
+    let toastTimer;
+    function showToast(message, type) {
+      const t = $('toast');
+      t.textContent = message;
+      t.className = `notification toast is-${type}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
+    }
+
+    // The scale as the selector names it: its beer, if a tap draws from it.
+    function displayName(keg) {
+      const name = kegName(keg, kegs.indexOf(keg));
+      const beer = tapsByKeg[keg.id]?.name?.trim();
+      return beer ? `${beer} (${name})` : name;
+    }
+
+    $('clearBtn').addEventListener('click', async () => {
+      const keg = kegs.find(k => k.id === readHash().keg);
+      if (!keg) return;
+      // History belongs to the scale, so this clears every range, not only
+      // the one on screen.
+      if (!confirm(`Clear all history for ${displayName(keg)}?\n\n` +
+          'This deletes every reading recorded for this scale, in every range, ' +
+          'not just the one shown. It cannot be undone.')) return;
+      try {
+        const res = await fetch(`/api/kegs/${encodeURIComponent(keg.id)}/log/clear`, { method: 'POST' });
+        if (!res.ok) throw new Error(res.status);
+        showToast('History cleared', 'success');
+      } catch (e) {
+        showToast('Could not clear the history: ' + e.message, 'danger');
+      }
+      show();
+    });
+
     window.addEventListener('hashchange', show);
 
     async function init() {
@@ -580,6 +617,7 @@
       if (!kegs.length) {
         $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history appears here.';
         $('downloadBtn').hidden = true;
+        $('clearBtn').hidden = true;
         return;
       }
       // A scale that feeds a tap is labelled by its beer, which is what the

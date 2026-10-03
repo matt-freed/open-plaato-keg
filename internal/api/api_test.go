@@ -436,6 +436,39 @@ func TestKegHistory(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
+// Clearing a keg's history empties every range and keeps the keg.
+func TestClearKegHistory(t *testing.T) {
+	a := newTestAPI(t)
+	k := a.storeKeg("keg-1", "vw\x0051\x003.000")
+	now := time.Now()
+	for _, at := range []time.Time{now, now.Add(-48 * time.Hour)} {
+		if err := a.store.AppendLog(k, at); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/clear", nil)
+	assertStatus(t, rec, http.StatusOK)
+	var resp struct {
+		Deleted int `json:"deleted"`
+	}
+	a.decode(rec, &resp)
+	if resp.Deleted != 2 {
+		t.Errorf("deleted = %d, want 2", resp.Deleted)
+	}
+
+	rec = a.do(http.MethodGet, "/api/kegs/keg-1/log?range=30d", nil)
+	var entries []store.LogEntry
+	a.decode(rec, &entries)
+	if len(entries) != 0 {
+		t.Errorf("got %d entries after clearing, want 0", len(entries))
+	}
+	assertStatus(t, a.do(http.MethodGet, "/api/kegs/keg-1", nil), http.StatusOK)
+
+	rec = a.do(http.MethodPost, "/api/kegs/nope/log/clear", nil)
+	assertStatus(t, rec, http.StatusNotFound)
+}
+
 // An unrecognised range falls back to the default rather than erroring.
 func TestUnknownHistoryRangeFallsBack(t *testing.T) {
 	a := newTestAPI(t)

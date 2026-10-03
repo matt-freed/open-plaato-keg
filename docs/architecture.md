@@ -269,7 +269,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
 | `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`), delete |
+| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
 | `/api/config/…` | Home page, time format, display units, theme |
@@ -321,6 +321,10 @@ for more than ten minutes. Its summary works out poured and pours in the
 browser, in `findPours`, from drops in the amount left larger than the scale's
 jitter: the logged `is_pouring` flag is sampled once a minute, which misses
 most pours, so it is not used.
+Clear history posts to `/api/kegs/{id}/log/clear`, which `handleClearKegLog`
+serves with `store.ClearLog`: every reading for that keg goes, in every range,
+while the keg and the other kegs' history stay. The page asks for confirmation
+first, since the history is not recoverable.
 
 The Kegs page (`index.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds

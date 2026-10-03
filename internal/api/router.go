@@ -61,6 +61,7 @@ func (s *Server) Handler() http.Handler {
 				r.Get("/", s.handleGetKeg)
 				r.Get("/log", s.handleKegLog)
 				r.Get("/log/csv", s.handleKegLogCSV)
+				r.Post("/log/clear", s.handleClearKegLog)
 				r.Post("/delete", s.handleDeleteKeg)
 				s.mountKegCommands(r)
 			})

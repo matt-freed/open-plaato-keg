@@ -151,6 +151,35 @@ func TestPruneLog(t *testing.T) {
 }
 
 // Deleting a keg must take its history with it.
+// Clearing one keg's history leaves the keg and every other keg's history.
+func TestClearLog(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Unix(1_700_000_000, 0)
+	for _, id := range []string{"keg-1", "keg-1", "keg-2"} {
+		now = now.Add(time.Minute)
+		if err := s.AppendLog(&Keg{ID: id}, now); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	removed, err := s.ClearLog("keg-1")
+	if err != nil {
+		t.Fatalf("ClearLog: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("cleared %d rows, want 2", removed)
+	}
+	for id, want := range map[string]int{"keg-1": 0, "keg-2": 1} {
+		entries, err := s.ReadLog(id, time.Unix(0, 0), now)
+		if err != nil {
+			t.Fatalf("ReadLog(%s): %v", id, err)
+		}
+		if len(entries) != want {
+			t.Errorf("%s has %d entries after clearing keg-1, want %d", id, len(entries), want)
+		}
+	}
+}
+
 func TestDeleteKegRemovesLog(t *testing.T) {
 	s := newTestStore(t)
 	now := time.Unix(1_700_000_000, 0)
