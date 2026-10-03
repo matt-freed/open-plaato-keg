@@ -415,6 +415,9 @@ hr {
 }
 
 .is-hidden { display: none !important; }
+/* The hidden attribute wins over a component's own display, such as a
+   button's inline-flex. */
+[hidden] { display: none !important; }
 
 /* A page's loading, empty and error message, as the tap list shows it. */
 .empty-state {

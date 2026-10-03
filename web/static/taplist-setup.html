@@ -10,20 +10,33 @@
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
   <style>
+    /* The list and the editor are two views of one column: the page shows
+       one or the other, never both. */
+    .list-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    /* Matches the specificity of style.css's tile-heading rule, so the
+       heading sits level with the button beside it. */
+    .box > div.list-head > .title,
+    .box > div.form-head > .title { margin: 0; }
     .tap-list-item {
-      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
-      padding: 0.65rem 0.8rem; margin: 0 -0.8rem 0.15rem; border-radius: 12px;
-      border: 1px solid transparent; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+      display: flex; align-items: center; gap: 0.75rem;
+      width: calc(100% + 1.6rem); margin: 0 -0.8rem 0.15rem; padding: 0.7rem 0.8rem;
+      border: 1px solid transparent; border-radius: 12px; background: none;
+      color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .tap-list-item:hover { background: var(--tile-2); }
-    .tap-list-item.active { background: var(--tile-2); border-color: var(--line-strong); }
+    .tap-list-item:hover, .tap-list-item:focus-visible { background: var(--tile-2); outline: none; border-color: var(--line-strong); }
     .tap-color-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-    .tap-list-left { display: flex; align-items: center; gap: 0.7rem; min-width: 0; }
-    .tap-list-name { font-weight: 600; color: var(--text); }
-    .tap-list-meta { font-size: 0.82rem; color: var(--text); }
-    .tap-list-id { font-size: 0.72rem; color: var(--text); font-variant-numeric: tabular-nums; }
+    .tap-list-text { flex: 1; min-width: 0; }
+    .tap-list-name { display: block; font-weight: 600; }
+    .tap-list-meta { display: block; font-size: 0.82rem; }
+    .tap-list-id { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+    .tap-list-go { font-size: 1.2rem; line-height: 1; color: var(--muted); }
+    .back-link {
+      display: inline-flex; align-items: center; gap: 0.35rem; margin-bottom: 1rem;
+      font-size: 0.88rem; text-decoration: none;
+    }
+    .back-link:hover { text-decoration: underline; }
     .form-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
-    .form-head .title { margin: 0; }
     .form-actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
   </style>
 </head>
@@ -31,31 +44,29 @@
   <site-header heading="Tap List Setup"></site-header>
 
   <section class="section">
-  <div class="container">
+  <div class="container is-centered">
     <p class="subtitle">Configure beer info and tasting notes for each tap. Data is stored in the beer database.</p>
 
-    <div class="columns">
-      <!-- LEFT: tap list -->
-      <div class="column is-4">
-        <div class="box" style="position:sticky;top:1rem;">
+    <!-- List view -->
+    <div id="listView">
+      <div class="box">
+        <div class="list-head">
           <h2 class="title is-5">Taps</h2>
-
-          <div id="tapListContainer">
-            <p class="has-text-grey">Loading…</p>
-          </div>
-
-          <button class="button is-primary is-fullwidth" style="margin-top:1rem;" onclick="addNewTap()">
-            + Add Tap
-          </button>
+          <a class="button is-primary is-small" href="#new">+ Add Tap</a>
+        </div>
+        <div id="tapListContainer">
+          <p class="has-text-grey">Loading…</p>
         </div>
       </div>
+    </div>
 
-      <!-- RIGHT: edit form -->
-      <div class="column is-8">
-        <div class="box" id="editBox" style="display:none;">
+    <!-- Editor view -->
+    <div id="editView" hidden>
+      <a class="back-link" href="#">← All taps</a>
+        <div class="box">
           <div class="form-head">
             <h2 class="title is-5" id="formTitle">New Tap</h2>
-            <button class="button is-danger is-light is-small" onclick="deleteTap()">Delete Tap</button>
+            <button class="button is-danger is-light is-small" id="deleteBtn" onclick="deleteTap()">Delete Tap</button>
           </div>
 
           <div class="columns">
@@ -164,12 +175,9 @@
 
           <div class="form-actions">
             <button class="button is-primary" onclick="saveTap()">Save Tap</button>
-            <button class="button" onclick="closeForm()">Cancel</button>
+            <a class="button" href="#">Cancel</a>
           </div>
         </div>
-
-        <p class="empty-state" id="emptyState">Select a tap to edit, or add a new one.</p>
-      </div>
     </div>
   </div>
   </section>
@@ -201,28 +209,56 @@
       populateDropdowns();
     }
 
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
     function renderTapList() {
       const container = document.getElementById('tapListContainer');
       if (!allTaps.length) {
-        container.innerHTML = '<p class="has-text-grey" style="font-size:0.9rem;">No taps yet — click Add Tap</p>';
+        container.innerHTML = '<p class="has-text-grey">No taps yet. Add one to start your tap list.</p>';
         return;
       }
-      container.innerHTML = '';
-      allTaps.forEach(tap => {
-        const item = document.createElement('div');
-        item.className = 'tap-list-item' + (tap.id === currentTapId ? ' active' : '');
-        item.onclick = () => editTap(tap.id);
-        item.innerHTML = `
-          <div class="tap-list-left">
-            <div class="tap-color-dot" style="background:${beerColor(tap)};"></div>
-            <div>
-              <div class="tap-list-name">Tap ${tap.tap_number || '?'} — ${tap.name || 'Unnamed'}</div>
-              <div class="tap-list-meta">${tap.style || ''}${tap.abv ? ' · '+tap.abv+'%' : ''}</div>
-            </div>
-          </div>
-          <span class="tap-list-id">#${tap.id}</span>`;
-        container.appendChild(item);
-      });
+      container.innerHTML = allTaps.map(tap => `
+        <a class="tap-list-item" href="#tap=${encodeURIComponent(tap.id)}">
+          <span class="tap-color-dot" style="background:${esc(beerColor(tap))};"></span>
+          <span class="tap-list-text">
+            <span class="tap-list-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
+            <span class="tap-list-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
+          </span>
+          <span class="tap-list-id">#${esc(tap.id)}</span>
+          <span class="tap-list-go" aria-hidden="true">›</span>
+        </a>`).join('');
+    }
+
+    // ── Views ─────────────────────────────────────
+    // The URL hash says which view is open: empty for the list, #new for a
+    // new tap, #tap=<id> for an existing one. Links change the hash and
+    // showView follows it, so Back returns to the list and a reload keeps
+    // the tap that was open.
+    function showView() {
+      const hash = location.hash.slice(1);
+      const editing = hash === 'new' || hash.startsWith('tap=');
+      if (editing && hash !== 'new') {
+        const tap = allTaps.find(t => t.id === decodeURIComponent(hash.slice(4)));
+        if (!tap) { location.replace('#'); return; }
+        currentTapId = tap.id;
+        openForm(tap);
+      } else if (editing) {
+        startNewTap();
+      } else {
+        currentTapId = null;
+      }
+      document.getElementById('listView').hidden = editing;
+      document.getElementById('editView').hidden = !editing;
+      window.scrollTo(0, 0);
+    }
+
+    // backToList returns to the list, as the editor's Back link does.
+    function backToList() {
+      if (location.hash) location.hash = '';
+      else showView();
     }
 
     function populateDropdowns() {
@@ -241,7 +277,7 @@
     }
 
     // ── Add new tap ───────────────────────────────
-    function addNewTap() {
+    function startNewTap() {
       currentTapId = 'tap_' + Date.now();
       const maxNum = allTaps.reduce((m, t) => Math.max(m, t.tap_number || 0), 0);
       openForm({
@@ -253,18 +289,11 @@
       });
     }
 
-    // ── Edit existing tap ─────────────────────────
-    function editTap(id) {
-      currentTapId = id;
-      const tap = allTaps.find(t => t.id === id);
-      if (tap) openForm(tap);
-      renderTapList();
-    }
-
     function openForm(tap) {
-      document.getElementById('editBox').style.display = '';
-      document.getElementById('emptyState').style.display = 'none';
-      document.getElementById('formTitle').textContent = tap.name ? `Editing: ${tap.name}` : 'New Tap';
+      const isNew = !allTaps.some(t => t.id === tap.id);
+      document.getElementById('formTitle').textContent = isNew ? 'New Tap' : `Editing: ${tap.name || 'Unnamed'}`;
+      // A tap that has never been saved has nothing to delete.
+      document.getElementById('deleteBtn').hidden = isNew;
 
       document.getElementById('tapNumber').value    = tap.tap_number || '';
       document.getElementById('beerName').value     = tap.name || '';
@@ -278,13 +307,6 @@
       document.getElementById('kegDate').value      = tap.kegged_date || '';
 
       color.set(tap);
-    }
-
-    function closeForm() {
-      currentTapId = null;
-      document.getElementById('editBox').style.display = 'none';
-      document.getElementById('emptyState').style.display = '';
-      renderTapList();
     }
 
     // ── Save ──────────────────────────────────────
@@ -318,10 +340,7 @@
         if (!res.ok) throw new Error(await res.text());
         showToast('Tap saved!', 'success');
         await loadAll();
-        // re-select to refresh form title
-        const saved = allTaps.find(t => t.id === currentTapId);
-        if (saved) document.getElementById('formTitle').textContent = `Editing: ${saved.name}`;
-        renderTapList();
+        backToList();
       } catch (e) {
         showToast('Save failed: ' + e.message, 'danger');
       }
@@ -334,17 +353,16 @@
       try {
         await fetch(`/api/taps/${currentTapId}/delete`, {method: 'POST'});
         showToast('Tap deleted', 'success');
-        currentTapId = null;
-        document.getElementById('editBox').style.display = 'none';
-        document.getElementById('emptyState').style.display = '';
         await loadAll();
+        backToList();
       } catch (e) {
         showToast('Delete failed', 'danger');
       }
     }
 
     const color = colorPicker(document.getElementById('colorField'));
-    loadAll();
+    window.addEventListener('hashchange', showView);
+    loadAll().then(showView);
   </script>
 </body>
 </html>
