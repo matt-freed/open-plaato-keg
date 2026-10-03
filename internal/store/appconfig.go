@@ -31,6 +31,12 @@ const (
 	DisplayMeasureVolume = "volume"
 )
 
+// Which figure a keg graphic shows large on the Kegs page and the tap list.
+const (
+	AmountDisplayAmount  = "amount"  // the amount left, in the display units
+	AmountDisplayPercent = "percent" // the percentage left
+)
+
 // DisplayUnits is a presentation preference only.
 //
 // Changing the unit on the scale itself changes what the device reports, which
@@ -67,7 +73,9 @@ type AppConfig struct {
 	HomePage     string       `json:"home_page"`
 	TimeFormat   string       `json:"time_format"`
 	DisplayUnits DisplayUnits `json:"display_units"`
-	Theme        Theme        `json:"theme"`
+	// AmountDisplay applies to every keg. A CO2 scale always shows its amount.
+	AmountDisplay string `json:"amount_display"`
+	Theme         Theme  `json:"theme"`
 }
 
 // DefaultAppConfig is what a fresh installation starts with.
@@ -79,13 +87,15 @@ func DefaultAppConfig() AppConfig {
 			System:  DisplaySystemDevice,
 			Measure: DisplayMeasureDevice,
 		},
+		AmountDisplay: AmountDisplayAmount,
 	}
 }
 
 const (
-	configKeyHomePage   = "home_page"
-	configKeyTimeFormat = "time_format"
-	configKeyTheme      = "theme"
+	configKeyHomePage      = "home_page"
+	configKeyTimeFormat    = "time_format"
+	configKeyTheme         = "theme"
+	configKeyAmountDisplay = "amount_display"
 
 	// Two scalar rows rather than one JSON blob: unlike a theme these are a
 	// pair of closed enums, so they follow the home_page/time_format pattern.
@@ -117,6 +127,8 @@ func (s *Store) GetAppConfig() (AppConfig, error) {
 			cfg.DisplayUnits.System = NormalizeDisplaySystem(value)
 		case configKeyDisplayUnitMeasure:
 			cfg.DisplayUnits.Measure = NormalizeDisplayMeasure(value)
+		case configKeyAmountDisplay:
+			cfg.AmountDisplay = NormalizeAmountDisplay(value)
 		case configKeyTheme:
 			var theme Theme
 			if err := json.Unmarshal([]byte(value), &theme); err == nil {
@@ -147,6 +159,11 @@ func (s *Store) SetDisplayUnits(u DisplayUnits) error {
 		return err
 	}
 	return s.setConfig(configKeyDisplayUnitMeasure, NormalizeDisplayMeasure(u.Measure))
+}
+
+// SetAmountDisplay stores which figure the keg graphics show large.
+func (s *Store) SetAmountDisplay(display string) error {
+	return s.setConfig(configKeyAmountDisplay, NormalizeAmountDisplay(display))
 }
 
 // SetTheme stores the appearance settings.
@@ -203,4 +220,13 @@ func NormalizeDisplayMeasure(measure string) string {
 		return DisplayMeasureVolume
 	}
 	return DisplayMeasureDevice
+}
+
+// NormalizeAmountDisplay maps any input onto a supported amount display,
+// falling back to the amount left.
+func NormalizeAmountDisplay(display string) string {
+	if strings.EqualFold(strings.TrimSpace(display), AmountDisplayPercent) {
+		return AmountDisplayPercent
+	}
+	return AmountDisplayAmount
 }

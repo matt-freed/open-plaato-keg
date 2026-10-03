@@ -11,7 +11,10 @@
     <script src="/site-header.js"></script>
     <style>
       /* The open scale's name, with whether it is connected. */
-      .edit-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+      .edit-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
+      /* The beer on the tap this scale feeds, first thing under its name. */
+      .edit-beer { margin: 0 0 1.25rem; font-size: 1.05rem; color: var(--soft); }
+      .edit-beer.is-empty { color: var(--muted); }
       .edit-head h2 {
         margin: 0;
         font-family: var(--title-font);
@@ -49,6 +52,7 @@
             <h2 id="editTitle"></h2>
             <span class="status-pill" id="editStatus"></span>
           </div>
+          <p class="edit-beer" id="editBeer"></p>
           <p class="notification is-warning" id="offlineNotice" hidden>
             This scale is not connected. Changes that are sent to the scale itself
             will fail until it reconnects.
@@ -114,21 +118,6 @@
               <p class="help has-text-warning-dark" style="margin-top: 0.5rem;">
                 <span class="req">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
               </p>
-            </div>
-
-            <div class="field">
-              <label class="label">Dashboard Display</label>
-              <p class="help">Choose whether the home card emphasizes weight or percent left</p>
-              <div class="control">
-                <div class="buttons has-addons">
-                  <button class="button displaymode-btn" id="displayModeWeightPrimary" data-value="weight_primary" onclick="setDisplayMode('weight_primary')">
-                    <span>Big weight</span>
-                  </button>
-                  <button class="button displaymode-btn" id="displayModePercentPrimary" data-value="percent_primary" onclick="setDisplayMode('percent_primary')">
-                    <span>Big percent</span>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -339,6 +328,7 @@
       let selectedKegId = null;
       let allKegs = [];
       let connectedIds = new Set();
+      let allTaps = [];
 
       function esc(v) {
         return String(v ?? "").replace(/[&<>"']/g, c =>
@@ -355,13 +345,16 @@
       // label, display and record can be changed either way.
       async function loadKegs() {
         try {
-          const [kegsRes, connectedRes] = await Promise.all([
+          const [kegsRes, connectedRes, tapsRes] = await Promise.all([
             fetch("/api/kegs"),
             fetch("/api/kegs/connected"),
+            fetch("/api/taps"),
           ]);
           if (!kegsRes.ok || !connectedRes.ok) throw new Error("bad response");
           allKegs = await kegsRes.json();
           connectedIds = new Set(await connectedRes.json());
+          // Taps only name the beer; without them the rest of the page still works.
+          if (tapsRes.ok) allTaps = await tapsRes.json();
           renderKegList();
           updateEditHead();
         } catch (_) {
@@ -384,16 +377,14 @@
         }
         container.innerHTML = allKegs.map(keg => {
           const online = connectedIds.has(keg.id);
-          const d = keg.display ?? {};
-          const amount = d.amount_left ?? keg.amount_left;
-          const rawUnit = d.amount_unit ?? keg.beer_left_unit ?? "";
-          const unit = rawUnit === "litre" ? "L" : rawUnit;
-          const left = Number.isFinite(amount) ? ` · ${amount.toFixed(1)} ${esc(unit)} left` : "";
+          const left = amountLeft(keg);
+          const taps = tapsFor(keg.id);
+          const first = taps.length ? taps.map(t => esc(tapLabel(t))).join(", ") : esc(noTapLabel(keg));
           return `
             <a class="list-row" href="#keg=${encodeURIComponent(keg.id)}">
               <span class="list-row-text">
                 <span class="list-row-name">${esc(kegName(keg))}</span>
-                <span class="list-row-meta">${keg.keg_mode === 2 ? "CO₂" : "Beer"}${left}</span>
+                <span class="list-row-meta">${first}${left}</span>
               </span>
               <span class="status-pill${online ? " is-online" : ""}">${online ? "Connected" : "Offline"}</span>
               <span class="list-row-go" aria-hidden="true">›</span>
@@ -410,6 +401,45 @@
         pill.textContent = online ? "Connected" : "Offline";
         pill.classList.toggle("is-online", online);
         document.getElementById("offlineNotice").hidden = online;
+        renderEditBeer();
+      }
+
+      // The taps that draw from a scale, and how each is named on this page.
+      function tapsFor(kegId) {
+        return allTaps.filter(t => t.keg_id === kegId);
+      }
+
+      function tapLabel(tap) {
+        return `Tap ${tap.tap_number || "?"} — ${tap.name || "Unnamed beer"}`;
+      }
+
+      // Names the beer on every tap that draws from this scale, each linking to
+      // that tap in Tap Setup.
+      function renderEditBeer() {
+        const el = document.getElementById("editBeer");
+        const keg = allKegs.find(k => k.id === selectedKegId);
+        const taps = tapsFor(selectedKegId);
+        el.classList.toggle("is-empty", !taps.length);
+        el.innerHTML = (taps.length
+          ? taps.map(t =>
+              `<a href="/taplist-setup.html#tap=${encodeURIComponent(t.id)}">${esc(tapLabel(t))}</a>`
+            ).join(", ")
+          : esc(noTapLabel(keg))) + (keg ? amountLeft(keg) : "");
+      }
+
+      // What a scale on no tap shows in place of a beer.
+      function noTapLabel(keg) {
+        return keg?.keg_mode === 2 ? "CO₂" : "Not on a tap";
+      }
+
+      // " · 3.2 gal left" in the display units, or "" before the scale has
+      // reported an amount. Shared by the list and the editor so they agree.
+      function amountLeft(keg) {
+        const d = keg.display ?? {};
+        const amount = d.amount_left ?? keg.amount_left;
+        const rawUnit = d.amount_unit ?? keg.beer_left_unit ?? "";
+        const unit = rawUnit === "litre" ? "L" : rawUnit;
+        return Number.isFinite(amount) ? ` · ${amount.toFixed(1)} ${esc(unit)} left` : "";
       }
 
       // ── Views ─────────────────────────────────────
@@ -495,10 +525,6 @@
           updateFieldIfNotFocused("kegLabel", data.label);
         }
 
-        if (data.display_mode) {
-          currentKegData.display_mode = data.display_mode;
-        }
-
         // Known weight - only update if not focused
         if (data.known_weight) {
           updateFieldIfNotFocused("knownWeight", data.known_weight);
@@ -537,10 +563,6 @@
               <tr>
                 <td><strong>Sensitivity</strong></td>
                 <td>${sensMap[data.sensitivity] || data.sensitivity || "Not set"}</td>
-              </tr>
-              <tr>
-                <td><strong>Dashboard Display</strong></td>
-                <td>${data.display_mode === "percent_primary" ? "Big percent / small weight" : "Big weight / small percent"}</td>
               </tr>
               <tr>
                 <td><strong>Temperature</strong></td>
@@ -614,7 +636,7 @@
       }
 
       function clearActiveButtons() {
-        document.querySelectorAll(".unit-btn, .measure-btn, .kegmode-btn, .sensitivity-btn, .displaymode-btn")
+        document.querySelectorAll(".unit-btn, .measure-btn, .kegmode-btn, .sensitivity-btn")
           .forEach(btn => btn.classList.remove("is-primary", "is-selected"));
       }
 
@@ -654,10 +676,6 @@
         // Sensitivity
         const sensId = `sens${data.sensitivity}`;
         document.getElementById(sensId)?.classList.add("is-primary", "is-selected");
-
-        const displayMode = data.display_mode === "percent_primary" ? "percent_primary" : "weight_primary";
-        const displayModeId = displayMode === "percent_primary" ? "displayModePercentPrimary" : "displayModeWeightPrimary";
-        document.getElementById(displayModeId)?.classList.add("is-primary", "is-selected");
       }
 
       // WebSocket connection for real-time updates
@@ -861,10 +879,6 @@
           .catch((err) => {
             showToast(`Error: ${err.message}`, "danger");
           });
-      }
-
-      function setDisplayMode(value) {
-        sendCommand("display-mode", { value });
       }
 
       // Settings commands

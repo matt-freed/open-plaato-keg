@@ -14,12 +14,6 @@ import (
 // ErrNotFound is returned when a record does not exist.
 var ErrNotFound = errors.New("not found")
 
-// Display modes for the keg tile in the web UI.
-const (
-	DisplayWeightPrimary  = "weight_primary"
-	DisplayPercentPrimary = "percent_primary"
-)
-
 // Keg is the full state of one keg.
 //
 // Device-reported fields are pointers because "the device has never sent this
@@ -68,7 +62,6 @@ type Keg struct {
 
 	// User-set fields, held only here.
 	Label       string   `json:"label"`
-	DisplayMode string   `json:"display_mode"`
 	SortOrder   int      `json:"sort_order"`
 	CO2Capacity *float64 `json:"co2_capacity"`
 
@@ -160,7 +153,6 @@ var kegColumns = []kegColumn{
 	{"device_beer_style", func(k *Keg) any { return k.DeviceBeerStyle }, func(k *Keg) any { return &k.DeviceBeerStyle }},
 	{"device_date", func(k *Keg) any { return k.DeviceDate }, func(k *Keg) any { return &k.DeviceDate }},
 	{"label", func(k *Keg) any { return k.Label }, func(k *Keg) any { return &k.Label }},
-	{"display_mode", func(k *Keg) any { return k.DisplayMode }, func(k *Keg) any { return &k.DisplayMode }},
 	{"sort_order", func(k *Keg) any { return k.SortOrder }, func(k *Keg) any { return &k.SortOrder }},
 	{"co2_capacity", func(k *Keg) any { return k.CO2Capacity }, func(k *Keg) any { return &k.CO2Capacity }},
 	{"internal", func(k *Keg) any { return encodeMap(k.Internal) }, nil},
@@ -346,10 +338,9 @@ func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
 
 func newKeg(id string) *Keg {
 	return &Keg{
-		ID:          id,
-		DisplayMode: DisplayWeightPrimary,
-		Internal:    map[string]string{},
-		Extra:       map[string]string{},
+		ID:       id,
+		Internal: map[string]string{},
+		Extra:    map[string]string{},
 	}
 }
 

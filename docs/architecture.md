@@ -193,8 +193,8 @@ path and the API never contend for SQLite's lock.
 |---|---|
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
-| `taps` | Tap list entries, optionally linked to a keg and to a display device |
-| `app_config` | Key/value settings: theme, display units, home page, time format |
+| `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap`) and to a display device |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format |
 
 There are no foreign keys.
 
@@ -203,7 +203,7 @@ There are no foreign keys.
 - **Device-reported columns** are nullable, and pointers in Go, so "never
   reported" stays distinct from a genuine zero — an uncalibrated scale really
   does report 0.
-- **App-only columns** (label, display mode, sort order, CO2 capacity)
+- **App-only columns** (label, sort order, CO2 capacity)
   are set through the UI and never overwritten by the device.
 - **`internal`** and **`extra`** hold metadata and unknown pins as JSON.
 - **Timestamps.** `first_seen` is set when the row is created. `last_seen` is
@@ -274,8 +274,8 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs` | List, connected ids, known ids, ordering |
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
-| `/api/config/…` | Home page, time format, display units, theme |
+| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
+| `/api/config/…` | Home page, time format, display units, amount display, theme |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -320,7 +320,9 @@ connected, polling `/api/kegs/connected` since connections publish no event.
 The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
 the chosen range. Amount and temperature are two charts sharing a time axis
 rather than one chart with two y-axes, and a line breaks where readings stop
-for more than ten minutes. Its summary works out poured and pours in the
+for more than ten minutes. The amount chart's Fit/Full toggle (`axisScale`) picks its
+y-axis: Fit, the default, pads the range's lowest and highest value by 15%
+in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero. Its summary works out poured and pours in the
 browser, in `findPours`, from drops in the amount left larger than the scale's
 jitter: the logged `is_pouring` flag is sampled once a minute, which misses
 most pours, so it is not used.
@@ -332,9 +334,10 @@ first, since the history is not recoverable.
 The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
 and to fill the keg in that beer's colour. The specs row under each
-tile's name shows how long ago the device last sent data (`last_seen`), how long ago
-BarHelper last accepted a reading (`barhelper_last_sent`, left out when 0) and
-the Wi-Fi strength; the page re-renders every 15 seconds to keep those times
+tile's name shows how long ago the device last sent data (`last_seen`) and how
+long ago BarHelper last accepted a reading (`barhelper_last_sent`, left out when
+0). The Wi-Fi strength sits at the end of the top row while the scale is
+connected; the page re-renders every 15 seconds to keep those times
 current. Badges beside "Pouring" in the top row mark a scale reporting a leak
 (`leak_detection` is 1), which also reddens the tile's border, and a scale
 with no live connection (`connected` is false), whose readings and graphic are
@@ -373,6 +376,16 @@ reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
 paths and the history JSON. The converted values go in a `display` block
 alongside the original fields; it is never stored. BarHelper, the CSV export
 and the Keg Setup page all use device units.
+
+### Amount display
+
+One app-wide setting, `amount_display` (`store.SetAmountDisplay`), chooses
+whether every keg graphic shows the amount left or the percentage left as its
+large figure, on both the tap list and the Kegs page; the Kegs page shows the
+other figure among the tile's readings. CO₂ cylinders always show the amount.
+It is a presentation choice only and is not sent to the device. Both pages
+read it from `/api/config/amount-display` when they load and on their minute
+reload, so a change reaches an open screen within a minute.
 
 ## BarHelper — `internal/barhelper`
 

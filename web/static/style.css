@@ -540,6 +540,8 @@ hr {
 .keg-tile .offline::before { background: transparent; border: 1.5px solid currentColor; }
 .keg-tile.is-leaking .leak,
 .keg-tile.is-offline .offline { display: inline-flex; }
+/* Signal strength, at the far end of the top row with the connection state. */
+.keg-tile .wifi { margin-left: auto; flex-shrink: 0; color: var(--muted); white-space: nowrap; }
 
 /* A leak outranks everything else on the tile, pouring included. */
 .tile.keg-tile.is-leaking { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }

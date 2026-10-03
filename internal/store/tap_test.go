@@ -239,3 +239,47 @@ func TestNewIDIsUnique(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+// A keg feeds one tap. Another tap cannot take it until the first lets go, but
+// a tap may be re-saved with its own keg, and any number may have none.
+func TestKegFeedsOneTap(t *testing.T) {
+	s := newTestStore(t)
+	first := &Tap{ID: "tap-1", TapNumber: intPtr(3), Name: "Red Barn Amber", KegID: "keg-1"}
+	second := &Tap{ID: "tap-2", TapNumber: intPtr(4), Name: "Pils", KegID: "keg-1"}
+
+	if err := s.SaveTap(first); err != nil {
+		t.Fatalf("SaveTap first: %v", err)
+	}
+	var inUse *KegInUseError
+	if err := s.SaveTap(second); !errors.As(err, &inUse) {
+		t.Fatalf("SaveTap second = %v, want a KegInUseError", err)
+	}
+	if inUse.Tap.ID != "tap-1" || inUse.Tap.Name != "Red Barn Amber" {
+		t.Errorf("conflicting tap = %+v, want tap-1", inUse.Tap)
+	}
+	if _, err := s.GetTap("tap-2"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the refused tap was saved anyway: %v", err)
+	}
+
+	first.Name = "Amber"
+	if err := s.SaveTap(first); err != nil {
+		t.Errorf("re-saving a tap with its own keg: %v", err)
+	}
+
+	second.KegID = ""
+	if err := s.SaveTap(second); err != nil {
+		t.Fatalf("SaveTap with no keg: %v", err)
+	}
+	if err := s.SaveTap(&Tap{ID: "tap-3", TapNumber: intPtr(5), Name: "Cider"}); err != nil {
+		t.Errorf("a second tap with no keg: %v", err)
+	}
+
+	first.KegID = ""
+	if err := s.SaveTap(first); err != nil {
+		t.Fatalf("unlinking: %v", err)
+	}
+	second.KegID = "keg-1"
+	if err := s.SaveTap(second); err != nil {
+		t.Errorf("linking the freed keg to another tap: %v", err)
+	}
+}

@@ -65,6 +65,9 @@
 
     let taps = [];
     const kegs = {};
+    // Which figure each keg graphic shows large: one setting for every scale,
+    // chosen on Dashboard Setup.
+    let amountDisplay = 'amount';
 
     // ── Formatting ─────────────────────────────────
     const UNIT_LABELS = { litre: 'L' };
@@ -211,8 +214,11 @@
       }
       tile.querySelector('.readings').innerHTML = readings;
 
-      tile.querySelector('.keg-amount').innerHTML =
-        keg ? `${num(amount, 1) ?? '—'}<small>${esc(unit)}</small>` : '';
+      // A CO₂ cylinder always shows its amount, as it does on the Kegs page.
+      const showPercent = amountDisplay === 'percent' && keg?.keg_mode !== 2;
+      tile.querySelector('.keg-amount').innerHTML = !keg ? ''
+        : showPercent ? `${num(Number.isFinite(rawPct) ? pct : null, 1) ?? '—'}<small>%</small>`
+        : `${num(amount, 2) ?? '—'}<small>${esc(unit)}</small>`;
       tile.querySelector('.liquid').style.transform = kegLevelTransform(pct);
     }
 
@@ -467,14 +473,24 @@
     }
 
     // ── Data ───────────────────────────────────────
+    // A failed read keeps the current choice rather than flipping every tile.
+    async function loadAmountDisplay() {
+      try {
+        const res = await fetch('/api/config/amount-display');
+        if (res.ok) amountDisplay = (await res.json()).amount_display || 'amount';
+      } catch (_) {}
+    }
+
     async function loadAll() {
       try {
+        const settings = loadAmountDisplay();
         const [tapsRes, kegsRes] = await Promise.all([fetch('/api/taps'), fetch('/api/kegs')]);
         if (!tapsRes.ok || !kegsRes.ok) throw new Error('bad response');
         const [nextTaps, kegList] = await Promise.all([tapsRes.json(), kegsRes.json()]);
         taps = nextTaps;
         for (const id in kegs) delete kegs[id];
         for (const k of kegList) kegs[k.id] = k;
+        await settings;
         render();
       } catch (_) {
         if (!taps.length) statusEl.textContent = 'Could not load the tap list. Is the server running?';

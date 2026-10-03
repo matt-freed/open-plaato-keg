@@ -84,6 +84,8 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/time-format", s.handleSetTimeFormat)
 			r.Get("/display-units", s.handleGetDisplayUnits)
 			r.Post("/display-units", s.handleSetDisplayUnits)
+			r.Get("/amount-display", s.handleGetAmountDisplay)
+			r.Post("/amount-display", s.handleSetAmountDisplay)
 			r.Get("/theme", s.handleGetTheme)
 			r.Post("/theme", s.handleSetTheme)
 		})

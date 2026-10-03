@@ -194,7 +194,7 @@ func TestReservedKegPathsAreNotTreatedAsIDs(t *testing.T) {
 	}
 }
 
-func TestSetLabelAndDisplayMode(t *testing.T) {
+func TestSetLabel(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
@@ -205,13 +205,6 @@ func TestSetLabelAndDisplayMode(t *testing.T) {
 	if k.Label != "Pale Ale" {
 		t.Errorf("Label = %q, want it trimmed", k.Label)
 	}
-
-	rec = a.do(http.MethodPost, "/api/kegs/keg-1/display-mode",
-		map[string]string{"value": store.DisplayPercentPrimary})
-	assertStatus(t, rec, http.StatusOK)
-
-	rec = a.do(http.MethodPost, "/api/kegs/keg-1/display-mode", map[string]string{"value": "sideways"})
-	assertStatus(t, rec, http.StatusBadRequest)
 }
 
 // A missing value is a 400, not a crash.
@@ -656,5 +649,48 @@ func TestStaticUIIsServed(t *testing.T) {
 		if rec.Body.Len() == 0 {
 			t.Errorf("%s: empty body", path)
 		}
+	}
+}
+
+// The amount display is one setting for every keg, defaulting to the amount
+// left; anything unrecognised falls back to that default.
+func TestAmountDisplay(t *testing.T) {
+	a := newTestAPI(t)
+
+	var got map[string]string
+	a.decode(a.do(http.MethodGet, "/api/config/amount-display", nil), &got)
+	if got["amount_display"] != store.AmountDisplayAmount {
+		t.Errorf("default = %q, want %q", got["amount_display"], store.AmountDisplayAmount)
+	}
+
+	rec := a.do(http.MethodPost, "/api/config/amount-display", map[string]string{"amount_display": "percent"})
+	assertStatus(t, rec, http.StatusOK)
+	if cfg, _ := a.store.GetAppConfig(); cfg.AmountDisplay != store.AmountDisplayPercent {
+		t.Errorf("AmountDisplay = %q after saving percent", cfg.AmountDisplay)
+	}
+
+	a.do(http.MethodPost, "/api/config/amount-display", map[string]string{"amount_display": "sideways"})
+	if cfg, _ := a.store.GetAppConfig(); cfg.AmountDisplay != store.AmountDisplayAmount {
+		t.Errorf("AmountDisplay = %q after an unknown value, want the default", cfg.AmountDisplay)
+	}
+}
+
+// Linking a scale that another tap already uses is a 409 that names that tap,
+// so Tap Setup can say where to unlink it.
+func TestTapKegConflict(t *testing.T) {
+	a := newTestAPI(t)
+	rec := a.do(http.MethodPost, "/api/taps/tap-1", map[string]any{
+		"tap_number": 3, "name": "Red Barn Amber", "keg_id": "keg-1",
+	})
+	assertStatus(t, rec, http.StatusOK)
+
+	rec = a.do(http.MethodPost, "/api/taps/tap-2", map[string]any{
+		"tap_number": 4, "name": "Pils", "keg_id": "keg-1",
+	})
+	assertStatus(t, rec, http.StatusConflict)
+	var body errorResponse
+	a.decode(rec, &body)
+	if body.Error != "keg_in_use" || !strings.Contains(body.Detail, "Tap 3 (Red Barn Amber)") {
+		t.Errorf("body = %+v, want keg_in_use naming Tap 3 (Red Barn Amber)", body)
 	}
 }
