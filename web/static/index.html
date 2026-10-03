@@ -88,7 +88,6 @@
       tile.dataset.kegId = keg.id;
       tile.draggable = true;
       tile.innerHTML = `
-        <button class="keg-forget-btn" type="button" title="Forget this scale" aria-label="Forget this scale">×</button>
         <div class="tile-info">
           <div class="tile-meta">
             <span class="keg-name"></span>
@@ -101,7 +100,6 @@
           <div class="keg-graphic"></div>
           <span class="keg-amount"></span>
         </div>`;
-      tile.querySelector('.keg-forget-btn').addEventListener('click', () => forgetKeg(keg.id));
       attachDragHandlers(tile);
       return tile;
     }
@@ -237,16 +235,6 @@
         if (tiles.indexOf(dragSource) < tiles.indexOf(tile)) tile.after(dragSource);
         else tile.before(dragSource);
       });
-    }
-
-    function forgetKeg(kegId) {
-      if (!confirm('Remove this scale from the dashboard?\n\nThis clears its stored data and disconnects the hardware. It will reappear if the device reconnects.')) return;
-      fetch(`/api/kegs/${encodeURIComponent(kegId)}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-        .then(r => r.json())
-        .then(d => {
-          if (d.status !== 'ok') alert('Could not remove scale: ' + (d.error || 'unknown error'));
-        })
-        .catch(err => alert('Error: ' + err.message));
     }
 
     // ── Data ───────────────────────────────────────

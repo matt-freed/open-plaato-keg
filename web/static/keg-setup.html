@@ -250,7 +250,7 @@
 
             <div class="field">
               <label class="label">Forget Saved Scale</label>
-              <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID and local settings. The scale can reconnect and create a fresh record later.</p>
+              <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID, local settings and all of its history. This cannot be undone. The scale can reconnect and create a fresh record later, with empty history. To keep the scale and only remove its readings, use Clear history on the <a href="/history.html">History</a> page.</p>
               <div class="control">
                 <button class="button is-danger is-light" type="button" onclick="forgetSelectedScale()">
                   Forget Scale
@@ -840,7 +840,7 @@
           return;
         }
 
-        if (!confirm(`Forget this saved scale record?\n\n${kegId}\n\nThis removes the stored scale ID and local settings from the server.`)) {
+        if (!confirm(`Forget this saved scale record?\n\n${kegId}\n\nThis removes the stored scale ID, local settings and all of its history from the server. This cannot be undone.`)) {
           return;
         }
 

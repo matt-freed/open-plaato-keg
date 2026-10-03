@@ -512,33 +512,6 @@ hr {
 /* ─── Kegs page ──────────────────────────────── */
 /* Keg tiles are tap list tiles (tiles.css); these are the parts that only a
    scale has. */
-.keg-tile .keg-forget-btn {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--muted);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
-}
-.keg-tile:hover .keg-forget-btn,
-.keg-tile .keg-forget-btn:focus-visible { opacity: 1; }
-.keg-tile .keg-forget-btn:hover {
-  background: color-mix(in srgb, var(--danger) 16%, transparent);
-  color: var(--danger);
-}
-
 .keg-tile.is-dragging { opacity: 0.4; }
 .keg-tile.drag-over { border-color: var(--soft); border-style: dashed; }
 
