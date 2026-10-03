@@ -212,7 +212,7 @@
       tile.querySelector('.readings').innerHTML = readings;
 
       tile.querySelector('.keg-amount').innerHTML =
-        keg ? `${num(amount, 1) ?? '—'}<small>${esc(unit)}</small>` : '';
+        keg ? `${num(amount, 2) ?? '—'}<small>${esc(unit)}</small>` : '';
       tile.querySelector('.liquid').style.transform = kegLevelTransform(pct);
     }
 
