@@ -97,6 +97,7 @@
             <span class="pouring">Pouring</span>
             <span class="leak">Leak</span>
             <span class="offline">Offline</span>
+            <span class="wifi" hidden></span>
           </div>
           <h2 class="beer"></h2>
           <div class="specs"></div>
@@ -185,20 +186,24 @@
         : `${num(amount, isCO2 ? 2 : 1) ?? '—'}<small>${esc(unit)}</small>`;
 
       tile.querySelector('.specs').innerHTML = statusLine(keg);
+
+      // Wi-Fi sits with the connection state in the top row. An offline scale
+      // shows the Offline badge instead, since its last signal is stale.
+      const wifi = tile.querySelector('.wifi');
+      const showWifi = keg.connected === true && Number.isFinite(keg.wifi_signal_strength);
+      wifi.hidden = !showWifi;
+      wifi.textContent = showWifi ? `Wi-Fi ${keg.wifi_signal_strength}%` : '';
     }
 
-    // statusLine says when the scale last reported, when BarHelper last took a
-    // reading from it, and its Wi-Fi strength. A part with nothing to say is left
-    // out, so an unmapped keg shows no BarHelper time.
+    // statusLine says when the scale last reported and when BarHelper last took
+    // a reading from it. A part with nothing to say is left out, so an unmapped
+    // keg shows no BarHelper time.
     function statusLine(keg) {
       const parts = [
         statusPart('Device', keg.last_seen > 0 ? ago(keg.last_seen) : 'never', keg.last_seen),
       ];
       if (keg.barhelper_last_sent > 0) {
         parts.push(statusPart('BarHelper', ago(keg.barhelper_last_sent), keg.barhelper_last_sent));
-      }
-      if (Number.isFinite(keg.wifi_signal_strength)) {
-        parts.push(statusPart('Wi-Fi', `${keg.wifi_signal_strength}%`));
       }
       return parts.join('');
     }
