@@ -561,8 +561,8 @@ func TestRootRedirectsToHomePage(t *testing.T) {
 		t.Fatalf("SetHomePage: %v", err)
 	}
 	rec = a.do(http.MethodGet, "/", nil)
-	if rec.Header().Get("Location") != "/index.html" {
-		t.Errorf("Location = %q, want /index.html", rec.Header().Get("Location"))
+	if rec.Header().Get("Location") != "/kegs.html" {
+		t.Errorf("Location = %q, want /kegs.html", rec.Header().Get("Location"))
 	}
 }
 
@@ -648,7 +648,7 @@ func TestMalformedJSONIsRejected(t *testing.T) {
 
 func TestStaticUIIsServed(t *testing.T) {
 	a := newTestAPI(t)
-	for _, path := range []string{"/index.html", "/taplist.html", "/style.css"} {
+	for _, path := range []string{"/kegs.html", "/taplist.html", "/style.css"} {
 		rec := a.do(http.MethodGet, path, nil)
 		if rec.Code != http.StatusOK {
 			t.Errorf("%s: status = %d, want 200", path, rec.Code)

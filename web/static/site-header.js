@@ -10,7 +10,7 @@
 (() => {
   const LINKS = [
     ['/taplist.html', 'Tap List'],
-    ['/index.html', 'Kegs'],
+    ['/kegs.html', 'Kegs'],
     ['/history.html', 'History'],
   ];
   const CONFIGURE = [

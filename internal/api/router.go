@@ -107,9 +107,6 @@ func (s *Server) Handler() http.Handler {
 // page is set as home, so the two would loop.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
-	if name == "" {
-		name = "index.html"
-	}
 
 	file, err := s.static.Open(name)
 	if err != nil {
@@ -146,7 +143,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	target := "/taplist.html"
 	if cfg.HomePage == store.HomePageKegs {
-		target = "/index.html"
+		target = "/kegs.html"
 	}
 	http.Redirect(w, r, target, http.StatusFound)
 }

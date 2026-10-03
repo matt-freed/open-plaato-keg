@@ -135,7 +135,7 @@ timeout:
   "display":{"amount_left":4.7,"amount_unit":"gal", …}}}
 ```
 
-### 12. Render — `web/static/index.html`
+### 12. Render — `web/static/kegs.html`
 
 The `message` listener parses the frame, sees `type === "keg"`, stores
 `msg.data` in its map of kegs and calls `render()`. That updates the scale's
@@ -236,7 +236,7 @@ client.
 
 - `keg-setup.html` does not reconnect when the socket closes, so it shows stale
   data after a server restart until the page is reloaded. `taplist.html` and
-  `index.html` retry every five seconds.
+  `kegs.html` retry every five seconds.
 - The comment on `clientBuffer` says a client that falls behind is
   disconnected; the code drops messages for it instead and leaves it connected.
 - A tab's initial snapshot uses the same 16-slot buffer, so with more than 16

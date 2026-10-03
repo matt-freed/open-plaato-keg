@@ -9,7 +9,7 @@ import (
 
 // pages are the UI entry points that must exist for the navigation to work.
 var pages = []string{
-	"index.html", "taplist.html", "taplist-setup.html", "history.html",
+	"kegs.html", "taplist.html", "taplist-setup.html", "history.html",
 	"dashboard-setup.html", "keg-setup.html",
 	"style.css", "site-header.css", "site-header.js",
 	"tokens.css", "tiles.css", "keg-graphic.js",
@@ -280,7 +280,7 @@ func TestNoLinksToRemovedPages(t *testing.T) {
 // than treating an untagged message as a keg.
 func TestWebSocketPagesHandleTaggedMessages(t *testing.T) {
 	static := Static()
-	for _, name := range []string{"index.html", "taplist.html", "keg-setup.html"} {
+	for _, name := range []string{"kegs.html", "taplist.html", "keg-setup.html"} {
 		data, err := fs.ReadFile(static, name)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)

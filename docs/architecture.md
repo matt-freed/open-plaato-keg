@@ -280,7 +280,7 @@ are sent as a press and a release. Edits and deletes publish events so open
 browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
-`web/embed.go`, with no build step: the Kegs page (`index.html`), tap list,
+`web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
 Keg Setup, history and their setup pages. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
@@ -325,7 +325,7 @@ serves with `store.ClearLog`: every reading for that keg goes, in every range,
 while the keg and the other kegs' history stay. The page asks for confirmation
 first, since the history is not recoverable.
 
-The Kegs page (`index.html`) draws a tile per scale with the scale's label as
+The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
 and to fill the keg in that beer's colour.
 
