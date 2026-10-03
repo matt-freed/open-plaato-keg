@@ -206,6 +206,10 @@ There are no foreign keys.
 - **App-only columns** (label, display mode, sort order, CO2 capacity)
   are set through the UI and never overwritten by the device.
 - **`internal`** and **`extra`** hold metadata and unknown pins as JSON.
+- **Timestamps.** `first_seen` is set when the row is created. `last_seen` is
+  when the device last sent a data packet, stamped only by `ApplyPacket`.
+  `barhelper_last_sent` is when BarHelper last accepted a reading, written by
+  `RecordBarHelperSent`; 0 means never.
 
 `kegColumns` is the single list that drives both the `INSERT` and the `SELECT`,
 so the column list, the values and the scan destinations cannot drift apart.
@@ -214,7 +218,7 @@ so the column list, the values and the scan destinations cannot drift apart.
 
 `ApplyPacket` → `UpdateKeg` runs a read-modify-write in one transaction: load
 the row (or start a new one), apply each non-transient property through
-`kegSetters`, merge metadata and unknown pins, update `last_seen`, derive
+`kegSetters`, merge metadata and unknown pins, stamp `last_seen`, derive
 `beer_left_unit`, then `INSERT OR REPLACE`. Because a packet carries only the
 pins that changed, fields it does not mention keep their stored values. The
 first confirmed packet from a new keg id creates its row.
@@ -327,7 +331,11 @@ first, since the history is not recoverable.
 
 The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
-and to fill the keg in that beer's colour.
+and to fill the keg in that beer's colour. A status line across the foot of each
+tile shows how long ago the device last sent data (`last_seen`), how long ago
+BarHelper last accepted a reading (`barhelper_last_sent`, left out when 0) and
+the Wi-Fi strength; the page re-renders every 15 seconds to keep those times
+current.
 
 `beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
@@ -375,6 +383,10 @@ keg monitor API, configured by the `BARHELPER_*` variables.
   goes first.
 - **Retried until accepted.** A value is marked sent only on a confirmed
   success, and unchanged values are not resent.
+- **Recorded.** Each accepted send is passed to the client's `SentRecorder`,
+  which is the store: `RecordBarHelperSent` sets the keg's `barhelper_last_sent`
+  with a plain `UPDATE`, so a send that lands after the keg was forgotten does
+  not bring its row back.
 
 Volumes are sent in the keg's own unit, labelled with `BARHELPER_UNIT`, so that
 setting must match how the kegs are configured.
@@ -459,5 +471,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   the tap list and the Kegs page do.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
+- **BarHelper time on the Kegs page.** Recording a send publishes no event, so
+  the new time appears at the scale's next update or the page's minute reload.
+  A keg removed from `BARHELPER_KEG_MONITOR_MAPPING` keeps showing its last
+  send time.
 - **Kegs without a tap.** The tap list shows taps, so a keg that no tap links to
   appears only on the Kegs page.

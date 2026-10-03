@@ -76,7 +76,12 @@ type Keg struct {
 	Extra    map[string]string `json:"extra,omitempty"`
 
 	FirstSeen int64 `json:"first_seen"`
-	LastSeen  int64 `json:"last_seen"`
+	// LastSeen is when the device last sent a data packet. Only ApplyPacket
+	// moves it, so editing a keg through the API does not make it look alive.
+	LastSeen int64 `json:"last_seen"`
+	// BarHelperLastSent is when BarHelper last accepted a reading for this
+	// keg, or 0 if it never has.
+	BarHelperLastSent int64 `json:"barhelper_last_sent"`
 
 	// BeerLeftUnit is always derived from unit, measure_unit and keg_mode
 	// rather than trusted from the device, so the displayed label cannot
@@ -161,6 +166,7 @@ var kegColumns = []kegColumn{
 	{"extra", func(k *Keg) any { return encodeMap(k.Extra) }, nil},
 	{"first_seen", func(k *Keg) any { return k.FirstSeen }, func(k *Keg) any { return &k.FirstSeen }},
 	{"last_seen", func(k *Keg) any { return k.LastSeen }, func(k *Keg) any { return &k.LastSeen }},
+	{"barhelper_last_sent", func(k *Keg) any { return k.BarHelperLastSent }, func(k *Keg) any { return &k.BarHelperLastSent }},
 }
 
 var (
@@ -323,9 +329,8 @@ func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
 
 	mutate(k)
 
-	k.LastSeen = time.Now().Unix()
 	if k.FirstSeen == 0 {
-		k.FirstSeen = k.LastSeen
+		k.FirstSeen = time.Now().Unix()
 	}
 	k.BeerLeftUnit = k.DeriveBeerLeftUnit()
 
@@ -482,4 +487,13 @@ func SetDisplayAll(kegs []*Keg, u DisplayUnits) {
 	for _, k := range kegs {
 		k.SetDisplay(u)
 	}
+}
+
+// RecordBarHelperSent notes when BarHelper accepted a reading for a keg.
+//
+// It is a plain UPDATE rather than UpdateKeg, so a send that lands just after
+// the keg was forgotten cannot bring its record back.
+func (s *Store) RecordBarHelperSent(id string, at time.Time) error {
+	_, err := s.db.Exec("UPDATE kegs SET barhelper_last_sent = ? WHERE id = ?", at.Unix(), id)
+	return err
 }

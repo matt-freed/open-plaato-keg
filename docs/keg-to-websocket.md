@@ -91,7 +91,8 @@ Unconfirmed devices get no further than this.
 ### 6. Persistence — `internal/store/apply.go`, `ApplyPacket` → `keg.go`, `UpdateKeg`
 
 In one transaction: `SELECT` the keg row, apply the `amount_left` setter from
-`kegSetters`, update `last_seen` and the derived `beer_left_unit`, then
+`kegSetters`, stamp `last_seen` (only `ApplyPacket` does; API edits through
+`UpdateKeg` leave it alone) and derive `beer_left_unit`, then
 `INSERT OR REPLACE` and `COMMIT`. The store has a single SQLite connection, so
 this queues behind any API query already running.
 

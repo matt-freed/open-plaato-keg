@@ -64,12 +64,21 @@ const (
 )
 
 type reading struct {
+	kegID     string
 	monitorID string
 	amount    float64
 }
 
+// SentRecorder is told whenever BarHelper accepts a reading, so the time can be
+// shown alongside the keg.
+type SentRecorder interface {
+	RecordBarHelperSent(kegID string, at time.Time) error
+}
+
 // monitorState is the latest reading for one monitor and what has been sent.
 type monitorState struct {
+	// kegID is the keg that reports to this monitor.
+	kegID string
 	// latest is the most recent volume the keg reported.
 	latest     float64
 	haveLatest bool
@@ -91,6 +100,8 @@ type Client struct {
 	cfg  config.BarHelperConfig
 	http *http.Client
 	done chan struct{}
+	// recorder, if set, is told about each accepted reading.
+	recorder SentRecorder
 	// minSendInterval and globalWindow are MinSendInterval and
 	// GlobalSendWindow, overridden in tests so they need not wait out the
 	// production timings.
@@ -104,12 +115,14 @@ type Client struct {
 }
 
 // New returns a client for cfg, or nil if the integration is disabled.
-func New(cfg config.BarHelperConfig) *Client {
+// recorder may be nil.
+func New(cfg config.BarHelperConfig, recorder SentRecorder) *Client {
 	if !cfg.Enabled {
 		return nil
 	}
 	return &Client{
 		cfg:             cfg,
+		recorder:        recorder,
 		http:            &http.Client{Timeout: requestTimeout},
 		done:            make(chan struct{}),
 		minSendInterval: MinSendInterval,
@@ -190,7 +203,7 @@ func (c *Client) due(now time.Time) []reading {
 		st := c.state[monitorID]
 		st.lastSendAt = now
 		c.recentSends = append(c.recentSends, now)
-		out = append(out, reading{monitorID: monitorID, amount: st.latest})
+		out = append(out, reading{kegID: st.kegID, monitorID: monitorID, amount: st.latest})
 	}
 	return out
 }
@@ -252,6 +265,7 @@ func (c *Client) KegAmount(kegID string, amount float64) {
 		st = &monitorState{}
 		c.state[monitorID] = st
 	}
+	st.kegID = kegID
 	st.latest = amount
 	st.haveLatest = true
 }
@@ -293,6 +307,11 @@ func (c *Client) send(ctx context.Context, r reading) {
 	outcome := Classify(resp.StatusCode, respBody)
 	if outcome == OutcomeSuccess {
 		c.recordSent(r.monitorID, r.amount)
+		if c.recorder != nil {
+			if err := c.recorder.RecordBarHelperSent(r.kegID, time.Now()); err != nil {
+				slog.Error("failed to record a BarHelper send", "keg", r.kegID, "error", err)
+			}
+		}
 	}
 	logOutcome(outcome, r, resp.StatusCode, respBody)
 }

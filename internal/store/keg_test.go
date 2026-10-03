@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/blynk"
 	"github.com/matt-freed/open-plaato-keg/internal/plaato"
@@ -308,5 +309,59 @@ func TestUnknownPinsLandInExtra(t *testing.T) {
 	}
 	if k.Extra["_hardware_vw_78"] != "42" {
 		t.Errorf("Extra = %v, want _hardware_vw_78=42", k.Extra)
+	}
+}
+
+// last_seen means "the device last sent data", so only a packet moves it.
+func TestOnlyPacketsMoveLastSeen(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.ApplyPacket("keg-1", decode(t, "vw\x0051\x001.000")); err != nil {
+		t.Fatalf("ApplyPacket: %v", err)
+	}
+	if _, err := s.db.Exec("UPDATE kegs SET last_seen = 1 WHERE id = 'keg-1'"); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	if _, err := s.UpdateKeg("keg-1", func(k *Keg) { k.Label = "Kitchen" }); err != nil {
+		t.Fatalf("UpdateKeg: %v", err)
+	}
+	if _, err := s.SetPouring("keg-1", false); err != nil {
+		t.Fatalf("SetPouring: %v", err)
+	}
+	if k, _ := s.GetKeg("keg-1"); k.LastSeen != 1 {
+		t.Errorf("LastSeen = %d after API edits, want it left at 1", k.LastSeen)
+	}
+
+	k, err := s.ApplyPacket("keg-1", decode(t, "vw\x0051\x002.000"))
+	if err != nil {
+		t.Fatalf("ApplyPacket: %v", err)
+	}
+	if k.LastSeen <= 1 {
+		t.Errorf("LastSeen = %d after a packet, want it moved to now", k.LastSeen)
+	}
+}
+
+func TestRecordBarHelperSent(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.ApplyPacket("keg-1", decode(t, "vw\x0051\x001.000")); err != nil {
+		t.Fatalf("ApplyPacket: %v", err)
+	}
+	at := time.Unix(1790000000, 0)
+	if err := s.RecordBarHelperSent("keg-1", at); err != nil {
+		t.Fatalf("RecordBarHelperSent: %v", err)
+	}
+	if k, _ := s.GetKeg("keg-1"); k.BarHelperLastSent != at.Unix() {
+		t.Errorf("BarHelperLastSent = %d, want %d", k.BarHelperLastSent, at.Unix())
+	}
+
+	// A send landing after the keg was forgotten must not bring it back.
+	if err := s.DeleteKeg("keg-1"); err != nil {
+		t.Fatalf("DeleteKeg: %v", err)
+	}
+	if err := s.RecordBarHelperSent("keg-1", at); err != nil {
+		t.Fatalf("RecordBarHelperSent after delete: %v", err)
+	}
+	if _, err := s.GetKeg("keg-1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetKeg = %v, want the forgotten keg to stay gone", err)
 	}
 }

@@ -518,6 +518,29 @@ hr {
 .keg-tile .keg-graphic { width: 100%; }
 .reading.is-low .reading-value { color: var(--danger); }
 
+/* When the scale and BarHelper were last heard from, across the tile's foot. */
+.keg-tile .tile-status {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 1.1rem;
+  margin-top: -0.35rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.keg-tile .status-part { white-space: nowrap; }
+.keg-tile .status-label {
+  margin-right: 0.2rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
 .co2-badge {
   padding: 0.05rem 0.4rem;
   border-radius: 4px;

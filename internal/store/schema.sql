@@ -63,8 +63,12 @@ CREATE TABLE IF NOT EXISTS kegs (
     internal                  TEXT    NOT NULL DEFAULT '{}',
     extra                     TEXT    NOT NULL DEFAULT '{}',
 
+    -- first_seen: when the keg was first stored. last_seen: when the device last
+    -- sent a data packet; changes made through the API do not move it.
     first_seen                INTEGER NOT NULL DEFAULT 0,
-    last_seen                 INTEGER NOT NULL DEFAULT 0
+    last_seen                 INTEGER NOT NULL DEFAULT 0,
+    -- When BarHelper last accepted a reading for this keg, or 0 if never.
+    barhelper_last_sent       INTEGER NOT NULL DEFAULT 0
 );
 
 -- Time series of keg readings, written at most once per minute per keg.

@@ -99,7 +99,8 @@
         <div class="tile-keg">
           <div class="keg-graphic"></div>
           <span class="keg-amount"></span>
-        </div>`;
+        </div>
+        <div class="tile-status"></div>`;
       attachDragHandlers(tile);
       return tile;
     }
@@ -175,6 +176,40 @@
       tile.querySelector('.keg-amount').innerHTML = percentPrimary
         ? `${num(pct, 1) ?? '—'}<small>%</small>`
         : `${num(amount, isCO2 ? 2 : 1) ?? '—'}<small>${esc(unit)}</small>`;
+
+      tile.querySelector('.tile-status').innerHTML = statusLine(keg);
+    }
+
+    // statusLine says when the scale last reported, when BarHelper last took a
+    // reading from it, and its Wi-Fi strength. A part with nothing to say is left
+    // out, so an unmapped keg shows no BarHelper time.
+    function statusLine(keg) {
+      const parts = [
+        statusPart('Device', keg.last_seen > 0 ? ago(keg.last_seen) : 'never', keg.last_seen),
+      ];
+      if (keg.barhelper_last_sent > 0) {
+        parts.push(statusPart('BarHelper', ago(keg.barhelper_last_sent), keg.barhelper_last_sent));
+      }
+      if (Number.isFinite(keg.wifi_signal_strength)) {
+        parts.push(statusPart('Wi-Fi', `${keg.wifi_signal_strength}%`));
+      }
+      return parts.join('');
+    }
+
+    function statusPart(label, value, unixTime) {
+      const title = unixTime > 0 ? ` title="${esc(new Date(unixTime * 1000).toLocaleString())}"` : '';
+      return `<span class="status-part"${title}><span class="status-label">${label}</span> ${esc(value)}</span>`;
+    }
+
+    // ago describes a Unix time relative to now, coarsely enough to stay
+    // readable on a tile.
+    function ago(unixTime) {
+      const s = Math.max(0, Math.round(Date.now() / 1000 - unixTime));
+      if (s < 10) return 'just now';
+      if (s < 60) return `${s}s ago`;
+      if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      return `${Math.floor(s / 86400)}d ago`;
     }
 
     function render() {
@@ -282,6 +317,8 @@
 
     loadAll();
     setInterval(() => { if (!dragSource) loadAll(); }, 60000);
+    // Keeps the "ago" times current between updates.
+    setInterval(render, 15000);
     connect();
   </script>
 </body>
