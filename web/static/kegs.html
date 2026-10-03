@@ -94,13 +94,13 @@
             <span class="pouring">Pouring</span>
           </div>
           <h2 class="beer"></h2>
+          <div class="specs"></div>
           <div class="readings"></div>
         </div>
         <div class="tile-keg">
           <div class="keg-graphic"></div>
           <span class="keg-amount"></span>
-        </div>
-        <div class="tile-status"></div>`;
+        </div>`;
       attachDragHandlers(tile);
       return tile;
     }
@@ -177,7 +177,7 @@
         ? `${num(pct, 1) ?? '—'}<small>%</small>`
         : `${num(amount, isCO2 ? 2 : 1) ?? '—'}<small>${esc(unit)}</small>`;
 
-      tile.querySelector('.tile-status').innerHTML = statusLine(keg);
+      tile.querySelector('.specs').innerHTML = statusLine(keg);
     }
 
     // statusLine says when the scale last reported, when BarHelper last took a
@@ -198,7 +198,7 @@
 
     function statusPart(label, value, unixTime) {
       const title = unixTime > 0 ? ` title="${esc(new Date(unixTime * 1000).toLocaleString())}"` : '';
-      return `<span class="status-part"${title}><span class="status-label">${label}</span> ${esc(value)}</span>`;
+      return `<span${title}>${label} ${esc(value)}</span>`;
     }
 
     // ago describes a Unix time relative to now, coarsely enough to stay

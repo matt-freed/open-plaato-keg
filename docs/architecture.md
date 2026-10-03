@@ -331,8 +331,8 @@ first, since the history is not recoverable.
 
 The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
-and to fill the keg in that beer's colour. A status line across the foot of each
-tile shows how long ago the device last sent data (`last_seen`), how long ago
+and to fill the keg in that beer's colour. The specs row under each
+tile's name shows how long ago the device last sent data (`last_seen`), how long ago
 BarHelper last accepted a reading (`barhelper_last_sent`, left out when 0) and
 the Wi-Fi strength; the page re-renders every 15 seconds to keep those times
 current.
