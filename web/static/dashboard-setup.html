@@ -11,328 +11,262 @@
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
     <style>
-      .color-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-      .color-row input[type="color"] { width: 44px; height: 38px; border: none; border-radius: 6px; padding: 2px; cursor: pointer; background: transparent; }
-      .color-row input[type="text"] { max-width: 110px; font-variant-numeric: tabular-nums; }
-      /* The preview redefines the shared tokens on its own element, so the
-         real tile styles below draw it in the colours being edited. */
-      .preview-area {
-        display: grid;
-        gap: 0.75rem;
-        padding: 1.25rem;
-        border-radius: 0 0 var(--radius) var(--radius);
-        background: var(--bg);
-        color: var(--text);
-        font-family: var(--sans);
-        transition: background 0.3s;
+      .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem 1.5rem; }
+      .color-grid .field { margin: 0; }
+      .color-row { display: flex; align-items: center; gap: 0.6rem; }
+      .color-row input[type="color"] {
+        width: 42px; height: 38px; padding: 2px; flex-shrink: 0;
+        border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+        background: var(--bg); cursor: pointer;
       }
-      .preview-caption {
-        margin: 0.25rem 0 0;
-        font-size: 0.65rem;
-        font-weight: 600;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        color: var(--text);
+      .color-row input[type="text"] { max-width: 120px; font-variant-numeric: tabular-nums; }
+
+      /* A section of the page: its heading, with the button that restores
+         that section's defaults. */
+      .group-head {
+        display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+        margin: 2.25rem 0 0.9rem;
       }
-      .preview-area .tile { cursor: default; min-height: 0; --accent: #c9a849; }
-      .preview-area .tile-keg { width: 72px; }
-      input[type="range"] { width: 100%; accent-color: var(--action); }
+      .settings-group:first-of-type .group-head { margin-top: 0; }
+      .group-head h2 {
+        margin: 0;
+        font-family: var(--title-font);
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      /* The tap list tile, drawn with the real tile styles in the colours and
+         fonts being edited. Pinned while the colours scroll beneath it, on a
+         screen tall enough to spare the room. */
+      .preview-box { padding: 1.1rem; }
+      .preview-box .tile { cursor: default; min-height: 0; --accent: #c9a849; }
+      .preview-box .tile-keg { width: 72px; }
+      @media (min-width: 700px) and (min-height: 760px) {
+        .preview-box {
+          position: sticky; top: 0.75rem; z-index: 5;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+        }
+      }
     </style>
   </head>
   <body>
     <site-header heading="Dashboard Setup"></site-header>
 
-      <section class="section">
-        <div class="container">
-          <p class="subtitle">Customize colors and fonts across all pages</p>
+    <section class="section">
+      <div class="container is-centered">
+        <p class="subtitle">
+          Customize how every page looks and behaves. Changes save as you make
+          them; screens that are already open pick them up when they reload.
+        </p>
 
-          <div class="columns is-variable is-6">
-            <!-- ── Left column: settings ── -->
-            <div class="column is-5">
+        <!-- ── Appearance ── -->
+        <!-- Its own element, so the pinned preview lets go at its end. -->
+        <div class="settings-group">
+        <div class="group-head">
+          <h2>Appearance</h2>
+          <button class="button is-small" type="button" id="resetAppearance">Restore defaults</button>
+        </div>
 
-              <!-- Colors -->
-              <div class="card section-card">
-                <div class="card-header">
-                  <p class="card-header-title">Colors</p>
+        <div class="box section-box preview-box">
+          <h2 class="title is-4">Live Preview</h2>
+          <article class="tile" id="pvTile">
+            <div class="tile-info">
+              <div class="tile-meta"><span class="keg-name">Kegerator 1</span></div>
+              <h2 class="beer">Pale Ale</h2>
+              <div class="specs"><span class="style">American Pale Ale</span><span>5.4% ABV</span><span>32 IBU</span></div>
+              <p class="desc">Bright citrus, soft malt, and a clean finish.</p>
+              <div class="readings">
+                <div class="reading">
+                  <span class="reading-value">38<small>°F</small></span>
+                  <span class="reading-label">Temp</span>
                 </div>
-                <div class="card-content">
-                  <div class="field">
-                    <label class="label">Accent Color</label>
-                    <div class="color-row">
-                      <input type="color" id="accentColor" value="#f59e0b">
-                      <input type="text" class="input" id="accentHex" value="#f59e0b" maxlength="7" placeholder="#f59e0b">
-                      <span class="tag">Main buttons and selections</span>
-                    </div>
-                  </div>
+                <div class="reading">
+                  <span class="reading-value">12 days</span>
+                  <span class="reading-label">Kegged Sep 20</span>
+                </div>
+              </div>
+            </div>
+            <div class="tile-keg">
+              <div id="pvKeg"></div>
+              <span class="keg-amount">3.2<small>gal</small></span>
+            </div>
+          </article>
+        </div>
 
+        <div class="box section-box">
+          <h2 class="title is-4">Colors</h2>
+          <div class="color-grid">
                   <div class="field">
-                    <label class="label">Page Background</label>
+                    <label class="label" for="bgHex">Page background</label>
                     <div class="color-row">
-                      <input type="color" id="bgColor" value="#0c0d11">
+                      <input type="color" id="bgColor" value="#0c0d11" aria-label="Page background">
                       <input type="text" class="input" id="bgHex" value="#0c0d11" maxlength="7" placeholder="#0c0d11">
                     </div>
                   </div>
-
                   <div class="field">
-                    <label class="label">Card Background</label>
+                    <label class="label" for="cardBgHex">Card background</label>
                     <div class="color-row">
-                      <input type="color" id="cardBg" value="#16181f">
+                      <input type="color" id="cardBg" value="#16181f" aria-label="Card background">
                       <input type="text" class="input" id="cardBgHex" value="#16181f" maxlength="7" placeholder="#16181f">
                     </div>
                   </div>
-
                   <div class="field">
-                    <label class="label">Text Color</label>
+                    <label class="label" for="textHex">Text</label>
                     <div class="color-row">
-                      <input type="color" id="textColor" value="#eef0f5">
+                      <input type="color" id="textColor" value="#eef0f5" aria-label="Text">
                       <input type="text" class="input" id="textHex" value="#eef0f5" maxlength="7" placeholder="#eef0f5">
                     </div>
                   </div>
-
-                  <div class="field" style="margin-top: 1.25rem;">
-                    <div class="control">
-                      <button class="button is-light is-small" id="resetColorsBtn">Reset to defaults</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Typography -->
-              <div class="card section-card">
-                <div class="card-header">
-                  <p class="card-header-title">Typography</p>
-                </div>
-                <div class="card-content">
                   <div class="field">
-                    <label class="label">Font Family</label>
-                    <div class="control">
-                      <div class="select is-fullwidth">
-                        <select id="fontFamily">
-                          <option value="System">System Default (Default)</option>
-                          <option value="Outfit">Outfit</option>
-                          <option value="Inter">Inter</option>
-                          <option value="Roboto">Roboto</option>
-                          <option value="Nunito">Nunito</option>
-                          <option value="Ubuntu">Ubuntu</option>
-                          <option value="Lato">Lato</option>
-                          <option value="Space Grotesk">Space Grotesk</option>
-                          <option value="Poppins">Poppins</option>
-                          <option value="Montserrat">Montserrat</option>
-                          <option value="Oswald">Oswald</option>
-                          <option value="Merriweather Sans">Merriweather Sans</option>
-                          <option value="Fira Sans">Fira Sans</option>
-                        </select>
-                      </div>
+                    <label class="label" for="accentHex">Accent</label>
+                    <div class="color-row">
+                      <input type="color" id="accentColor" value="#f59e0b" aria-label="Accent">
+                      <input type="text" class="input" id="accentHex" value="#f59e0b" maxlength="7" placeholder="#f59e0b">
                     </div>
+                    <p class="help">Main buttons and selections.</p>
                   </div>
-
-                  <div class="field">
-                    <label class="label">Tap List Title Font</label>
-                    <div class="control">
-                      <div class="select is-fullwidth">
-                        <select id="taplistTitleFont">
-                          <option value="">Use Global Font</option>
-                          <option value="Outfit">Outfit</option>
-                          <option value="Inter">Inter</option>
-                          <option value="Roboto">Roboto</option>
-                          <option value="Nunito">Nunito</option>
-                          <option value="Ubuntu">Ubuntu</option>
-                          <option value="Lato">Lato</option>
-                          <option value="Space Grotesk">Space Grotesk</option>
-                          <option value="Playfair Display">Playfair Display</option>
-                          <option value="Merriweather">Merriweather</option>
-                          <option value="Bebas Neue">Bebas Neue</option>
-                          <option value="Cinzel">Cinzel</option>
-                          <option value="Cormorant Garamond">Cormorant Garamond</option>
-                          <option value="Libre Baskerville">Libre Baskerville</option>
-                          <option value="Montserrat">Montserrat</option>
-                          <option value="Oswald">Oswald</option>
-                          <option value="System">System Default</option>
-                        </select>
-                      </div>
-                    </div>
-                    <p class="help">Used for tap names and the page title in the header.</p>
-                  </div>
-
-                  <div class="field">
-                    <label class="label">Tap List Description Font</label>
-                    <div class="control">
-                      <div class="select is-fullwidth">
-                        <select id="taplistBodyFont">
-                          <option value="">Use Global Font</option>
-                          <option value="Outfit">Outfit</option>
-                          <option value="Inter">Inter</option>
-                          <option value="Roboto">Roboto</option>
-                          <option value="Nunito">Nunito</option>
-                          <option value="Ubuntu">Ubuntu</option>
-                          <option value="Lato">Lato</option>
-                          <option value="Space Grotesk">Space Grotesk</option>
-                          <option value="Merriweather">Merriweather</option>
-                          <option value="Source Sans 3">Source Sans 3</option>
-                          <option value="Poppins">Poppins</option>
-                          <option value="Montserrat">Montserrat</option>
-                          <option value="Open Sans">Open Sans</option>
-                          <option value="Fira Sans">Fira Sans</option>
-                          <option value="Work Sans">Work Sans</option>
-                          <option value="System">System Default</option>
-                        </select>
-                      </div>
-                    </div>
-                    <p class="help">Used for brewery, description, and tasting notes on the tap list.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Home Page -->
-              <div class="card section-card">
-                <div class="card-header">
-                  <p class="card-header-title">Home Page</p>
-                </div>
-                <div class="card-content">
-                  <div class="field">
-                    <label class="label">Default page when opening the server</label>
-                    <div class="control">
-                      <label class="radio" style="margin-right: 1.5rem;">
-                        <input type="radio" name="homePage" value="taplist" id="homePageTaplist" checked>
-                        Tap List
-                      </label>
-                      <label class="radio">
-                        <input type="radio" name="homePage" value="kegs" id="homePageKegs">
-                        Kegs
-                      </label>
-                    </div>
-                    <p class="help">The root URL (/) opens this page.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Time Format -->
-              <div class="card section-card">
-                <div class="card-header">
-                  <p class="card-header-title">Time Format</p>
-                </div>
-                <div class="card-content">
-                  <div class="field">
-                    <label class="label">Clock and timestamp display</label>
-                    <div class="control">
-                      <label class="radio" style="margin-right: 1.5rem;">
-                        <input type="radio" name="timeFormat" value="12h" id="timeFormat12h" checked>
-                        12-hour (1:30 PM)
-                      </label>
-                      <label class="radio">
-                        <input type="radio" name="timeFormat" value="24h" id="timeFormat24h">
-                        24-hour (13:30)
-                      </label>
-                    </div>
-                    <p class="help">Applies to the live clock on the tap list and history chart timestamps.</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Display Units -->
-              <div class="card section-card">
-                <div class="card-header">
-                  <p class="card-header-title">Display Units</p>
-                </div>
-                <div class="card-content">
-                  <div class="field">
-                    <label class="label">Unit system</label>
-                    <div class="control">
-                      <label class="radio" style="margin-right: 1.5rem;">
-                        <input type="radio" name="unitSystem" value="device" id="unitSystemDevice" checked>
-                        Follow scale
-                      </label>
-                      <label class="radio" style="margin-right: 1.5rem;">
-                        <input type="radio" name="unitSystem" value="metric" id="unitSystemMetric">
-                        Metric (L, kg, &deg;C)
-                      </label>
-                      <label class="radio">
-                        <input type="radio" name="unitSystem" value="us" id="unitSystemUS">
-                        US (gal, lbs, &deg;F)
-                      </label>
-                    </div>
-                  </div>
-
-                  <div class="field">
-                    <label class="label">Measure</label>
-                    <div class="control">
-                      <label class="radio" style="margin-right: 1.5rem;">
-                        <input type="radio" name="unitMeasure" value="device" id="unitMeasureDevice" checked>
-                        Follow scale
-                      </label>
-                      <label class="radio" style="margin-right: 1.5rem;">
-                        <input type="radio" name="unitMeasure" value="weight" id="unitMeasureWeight">
-                        Weight
-                      </label>
-                      <label class="radio">
-                        <input type="radio" name="unitMeasure" value="volume" id="unitMeasureVolume">
-                        Volume
-                      </label>
-                    </div>
-                    <p class="help">
-                      Display only. The scale keeps reporting, and this server keeps storing
-                      and forwarding, in the scale&rsquo;s own units &mdash; so changing this
-                      cannot skew your history or anything sent to BarHelper. CO&#8322; kegs are
-                      always shown by weight. To change the scale itself, use Keg Setup.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Save actions -->
-              <div class="field is-grouped">
-                <div class="control">
-                  <button class="button is-primary" id="saveBtn">Save Changes</button>
-                </div>
-                <div class="control">
-                  <button class="button is-light" id="resetAllBtn">Reset All Defaults</button>
-                </div>
-              </div>
-              <p class="help" id="saveMsg" style="display:none;"></p>
-            </div>
-
-            <!-- ── Right column: live preview ── -->
-            <div class="column is-7">
-              <div class="card" style="position: sticky; top: 1rem;">
-                <div class="card-header">
-                  <p class="card-header-title">Live Preview</p>
-                </div>
-                <div class="card-content" style="padding: 1.1rem 0 0;">
-                  <div class="preview-area" id="previewArea">
-                    <p class="preview-caption">Tap list</p>
-                    <article class="tile" id="pvTile">
-                      <div class="tile-info">
-                        <div class="tile-meta"><span class="keg-name">Kegerator 1</span></div>
-                        <h2 class="beer">Pale Ale</h2>
-                        <div class="specs"><span class="style">American Pale Ale</span><span>5.4% ABV</span><span>32 IBU</span></div>
-                        <p class="desc">Bright citrus, soft malt, and a clean finish.</p>
-                        <div class="readings">
-                          <div class="reading">
-                            <span class="reading-value">38<small>°F</small></span>
-                            <span class="reading-label">Temp</span>
-                          </div>
-                          <div class="reading">
-                            <span class="reading-value">12 days</span>
-                            <span class="reading-label">Kegged Sep 20</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="tile-keg">
-                        <div id="pvKeg"></div>
-                        <span class="keg-amount">3.2<small>gal</small></span>
-                      </div>
-                    </article>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
-      </section>
+
+        <div class="box section-box">
+          <h2 class="title is-4">Fonts</h2>
+          <div class="field">
+            <label class="label" for="fontFamily">Font family</label>
+            <div class="select is-fullwidth">
+              <select id="fontFamily">
+                <option value="System">System Default</option>
+                <option value="Outfit">Outfit</option>
+                <option value="Inter">Inter</option>
+                <option value="Roboto">Roboto</option>
+                <option value="Nunito">Nunito</option>
+                <option value="Ubuntu">Ubuntu</option>
+                <option value="Lato">Lato</option>
+                <option value="Space Grotesk">Space Grotesk</option>
+                <option value="Poppins">Poppins</option>
+                <option value="Montserrat">Montserrat</option>
+                <option value="Oswald">Oswald</option>
+                <option value="Merriweather Sans">Merriweather Sans</option>
+                <option value="Fira Sans">Fira Sans</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label" for="taplistTitleFont">Title font</label>
+            <div class="select is-fullwidth">
+              <select id="taplistTitleFont">
+                <option value="">Use Global Font</option>
+                <option value="Outfit">Outfit</option>
+                <option value="Inter">Inter</option>
+                <option value="Roboto">Roboto</option>
+                <option value="Nunito">Nunito</option>
+                <option value="Ubuntu">Ubuntu</option>
+                <option value="Lato">Lato</option>
+                <option value="Space Grotesk">Space Grotesk</option>
+                <option value="Playfair Display">Playfair Display</option>
+                <option value="Merriweather">Merriweather</option>
+                <option value="Bebas Neue">Bebas Neue</option>
+                <option value="Cinzel">Cinzel</option>
+                <option value="Cormorant Garamond">Cormorant Garamond</option>
+                <option value="Libre Baskerville">Libre Baskerville</option>
+                <option value="Montserrat">Montserrat</option>
+                <option value="Oswald">Oswald</option>
+                <option value="System">System Default</option>
+              </select>
+            </div>
+            <p class="help">Used for tap names and the page title in the header.</p>
+          </div>
+          <div class="field">
+            <label class="label" for="taplistBodyFont">Tap list description font</label>
+            <div class="select is-fullwidth">
+              <select id="taplistBodyFont">
+                <option value="">Use Global Font</option>
+                <option value="Outfit">Outfit</option>
+                <option value="Inter">Inter</option>
+                <option value="Roboto">Roboto</option>
+                <option value="Nunito">Nunito</option>
+                <option value="Ubuntu">Ubuntu</option>
+                <option value="Lato">Lato</option>
+                <option value="Space Grotesk">Space Grotesk</option>
+                <option value="Merriweather">Merriweather</option>
+                <option value="Source Sans 3">Source Sans 3</option>
+                <option value="Poppins">Poppins</option>
+                <option value="Montserrat">Montserrat</option>
+                <option value="Open Sans">Open Sans</option>
+                <option value="Fira Sans">Fira Sans</option>
+                <option value="Work Sans">Work Sans</option>
+                <option value="System">System Default</option>
+              </select>
+            </div>
+            <p class="help">Used for brewery, description, and tasting notes on the tap list.</p>
+          </div>
+        </div>
+
+        </div>
+
+        <!-- ── Preferences ── -->
+        <div class="settings-group">
+        <div class="group-head">
+          <h2>Preferences</h2>
+          <button class="button is-small" type="button" id="resetPreferences">Restore defaults</button>
+        </div>
+
+        <div class="box section-box">
+          <h2 class="title is-4">Pages and time</h2>
+          <div class="field">
+            <label class="label">Home page</label>
+            <div class="buttons has-addons" data-choice="homePage">
+              <button class="button" type="button" data-value="taplist">Tap List</button>
+              <button class="button" type="button" data-value="kegs">Kegs</button>
+            </div>
+            <p class="help">The page the root URL (/) opens.</p>
+          </div>
+          <div class="field">
+            <label class="label">Time format</label>
+            <div class="buttons has-addons" data-choice="timeFormat">
+              <button class="button" type="button" data-value="12h">1:30 PM</button>
+              <button class="button" type="button" data-value="24h">13:30</button>
+            </div>
+            <p class="help">For the clock on the tap list and the history chart's timestamps.</p>
+          </div>
+        </div>
+
+        <div class="box section-box">
+          <h2 class="title is-4">Display units</h2>
+          <div class="field">
+            <label class="label">Unit system</label>
+            <div class="buttons has-addons" data-choice="unitSystem">
+              <button class="button" type="button" data-value="device">Follow scale</button>
+              <button class="button" type="button" data-value="metric">Metric</button>
+              <button class="button" type="button" data-value="us">US</button>
+            </div>
+            <p class="help">Metric shows L, kg and &deg;C; US shows gal, lbs and &deg;F.</p>
+          </div>
+          <div class="field">
+            <label class="label">Measure</label>
+            <div class="buttons has-addons" data-choice="unitMeasure">
+              <button class="button" type="button" data-value="device">Follow scale</button>
+              <button class="button" type="button" data-value="weight">Weight</button>
+              <button class="button" type="button" data-value="volume">Volume</button>
+            </div>
+            <p class="help">
+              Display only. The scale keeps reporting, and this server keeps storing
+              and forwarding, in the scale&rsquo;s own units &mdash; so changing this
+              cannot skew your history or anything sent to BarHelper. CO&#8322; kegs are
+              always shown by weight. To change the scale itself, use Keg Setup.
+            </p>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="toast" class="notification toast is-hidden"></div>
 
     <script src="/keg-graphic.js"></script>
     <script>
-      // ── Defaults ────────────────────────────────────────
+      'use strict';
+
       const DEFAULTS = {
         accent_color: '#f59e0b',
         bg_color:     '#0c0d11',
@@ -340,196 +274,194 @@
         text_color:   '#eef0f5',
         font_family:  'System',
         taplist_title_font: '',
-        taplist_body_font: ''
+        taplist_body_font: '',
+      };
+      const PREFERENCE_DEFAULTS = {
+        homePage: 'taplist', timeFormat: '12h', unitSystem: 'device', unitMeasure: 'device',
       };
 
-      // ── Colour picker ↔ hex text sync ───────────────────
-      function syncPair(pickerId, hexId) {
-        const picker = document.getElementById(pickerId);
-        const hex    = document.getElementById(hexId);
-        picker.addEventListener('input', () => { hex.value = picker.value; updatePreview(); });
-        hex.addEventListener('input', () => {
-          if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) {
-            picker.value = hex.value;
-            updatePreview();
-          }
-        });
-      }
-      syncPair('accentColor', 'accentHex');
-      syncPair('bgColor',     'bgHex');
-      syncPair('cardBg',      'cardBgHex');
-      syncPair('textColor',   'textHex');
+      const $ = id => document.getElementById(id);
+      // The colour fields: theme key, colour picker, hex text box.
+      const COLORS = [
+        ['bg_color', 'bgColor', 'bgHex'],
+        ['card_bg', 'cardBg', 'cardBgHex'],
+        ['text_color', 'textColor', 'textHex'],
+        ['accent_color', 'accentColor', 'accentHex'],
+      ];
+      const FONTS = [
+        ['font_family', 'fontFamily'],
+        ['taplist_title_font', 'taplistTitleFont'],
+        ['taplist_body_font', 'taplistBodyFont'],
+      ];
+      const HEX = /^#[0-9a-fA-F]{6}$/;
 
-      document.getElementById('fontFamily').addEventListener('change', updatePreview);
-      document.getElementById('taplistTitleFont').addEventListener('change', updatePreview);
-      document.getElementById('taplistBodyFont').addEventListener('change', updatePreview);
-
-      // ── Preview update ───────────────────────────────────
-      function updatePreview() {
-        const bg      = document.getElementById('bgHex').value      || DEFAULTS.bg_color;
-        const cardBg  = document.getElementById('cardBgHex').value  || DEFAULTS.card_bg;
-        const text    = document.getElementById('textHex').value    || DEFAULTS.text_color;
-        const font    = document.getElementById('fontFamily').value;
-        const taplistTitleFont = document.getElementById('taplistTitleFont').value;
-        const taplistBodyFont = document.getElementById('taplistBodyFont').value;
-
-        // Matches fontStack in internal/api/config.go, which builds the
-        // stacks /theme.css serves.
-        const SYSTEM_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
-        const stackFor = name => !name || name === 'System' ? SYSTEM_STACK : `"${name}", ${SYSTEM_STACK}`;
-        const fontStack = stackFor(font);
-
-        const pa = document.getElementById('previewArea');
-        pa.style.setProperty('--bg', bg);
-        pa.style.setProperty('--tile', cardBg);
-        pa.style.setProperty('--text', text);
-        pa.style.setProperty('--sans', fontStack);
-        pa.style.setProperty('--title-font', taplistTitleFont ? stackFor(taplistTitleFont) : fontStack);
-        // The tap list's descriptions use their own face when one is set.
-        document.getElementById('pvTile').style.fontFamily =
-          taplistBodyFont ? stackFor(taplistBodyFont) : fontStack;
+      // ── Saving ──────────────────────────────────────────
+      // Every change is saved as it is made. A toast confirms it, and the
+      // last one wins if several land at once.
+      let toastTimer;
+      function showToast(message, type) {
+        const t = $('toast');
+        t.textContent = message;
+        t.className = `notification toast is-${type}`;
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.add('is-hidden'), 2500);
       }
 
-      document.getElementById('pvKeg').innerHTML = kegSvg();
-      document.querySelector('#pvKeg .liquid').style.transform = kegLevelTransform(65);
-
-      // ── Reset buttons ────────────────────────────────────
-      document.getElementById('resetColorsBtn').addEventListener('click', () => {
-        document.getElementById('accentColor').value = DEFAULTS.accent_color;
-        document.getElementById('accentHex').value   = DEFAULTS.accent_color;
-        document.getElementById('bgColor').value     = DEFAULTS.bg_color;
-        document.getElementById('bgHex').value       = DEFAULTS.bg_color;
-        document.getElementById('cardBg').value      = DEFAULTS.card_bg;
-        document.getElementById('cardBgHex').value   = DEFAULTS.card_bg;
-        document.getElementById('textColor').value   = DEFAULTS.text_color;
-        document.getElementById('textHex').value     = DEFAULTS.text_color;
-        updatePreview();
-      });
-
-      document.getElementById('resetAllBtn').addEventListener('click', async () => {
-        if (!confirm('Reset all theme settings to defaults?')) return;
-        await Promise.all([
-          fetch('/api/config/theme', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }),
-          fetch('/api/config/home-page', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ home_page: 'taplist' }) })
-        ]);
-        location.reload();
-      });
-
-      // ── Read current form state ──────────────────────────
-      function currentTheme() {
-        return {
-          accent_color: document.getElementById('accentHex').value,
-          bg_color:     document.getElementById('bgHex').value,
-          card_bg:      document.getElementById('cardBgHex').value,
-          text_color:   document.getElementById('textHex').value,
-          font_family:  document.getElementById('fontFamily').value,
-          taplist_title_font: document.getElementById('taplistTitleFont').value,
-          taplist_body_font: document.getElementById('taplistBodyFont').value
-        };
-      }
-
-      // ── Save ─────────────────────────────────────────────
-      document.getElementById('saveBtn').addEventListener('click', async () => {
-        const btn = document.getElementById('saveBtn');
-        const msg = document.getElementById('saveMsg');
-        btn.classList.add('is-loading');
+      async function post(url, body) {
         try {
-          const homePage = document.querySelector('input[name="homePage"]:checked')?.value || 'taplist';
-          const timeFormat = document.querySelector('input[name="timeFormat"]:checked')?.value || '12h';
-          const unitSystem = document.querySelector('input[name="unitSystem"]:checked')?.value || 'device';
-          const unitMeasure = document.querySelector('input[name="unitMeasure"]:checked')?.value || 'device';
-          await Promise.all([
-            fetch('/api/config/home-page', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ home_page: homePage })
-            }),
-            fetch('/api/config/time-format', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ time_format: timeFormat })
-            }),
-            fetch('/api/config/display-units', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ system: unitSystem, measure: unitMeasure })
-            })
-          ]);
-          const res = await fetch('/api/config/theme', {
+          const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(currentTheme())
+            body: JSON.stringify(body),
           });
-          if (res.ok) {
-            msg.textContent = 'Saved! Reload any open page to see changes.';
-            msg.style.color = 'var(--pour)';
-          } else {
-            msg.textContent = 'Save failed.';
-            msg.style.color = 'var(--danger)';
-          }
+          if (!res.ok) throw new Error(res.status);
+          showToast('Saved', 'success');
         } catch (e) {
-          msg.textContent = 'Error: ' + e.message;
-          msg.style.color = 'var(--danger)';
+          showToast('Could not save: ' + e.message, 'danger');
         }
-        btn.classList.remove('is-loading');
-        msg.style.display = '';
-        setTimeout(() => { msg.style.display = 'none'; }, 4000);
-      });
-
-      // ── Load saved theme on page open ────────────────────
-      async function loadTheme() {
-        try {
-          const hp = await fetch('/api/config/home-page').then(r => r.json());
-          document.querySelector(`input[name="homePage"][value="${hp.home_page || 'taplist'}"]`).checked = true;
-        } catch (_) {}
-
-        try {
-          const tf = await fetch('/api/config/time-format').then(r => r.json());
-          document.querySelector(`input[name="timeFormat"][value="${tf.time_format || '12h'}"]`).checked = true;
-        } catch (_) {}
-
-        try {
-          const du = await fetch('/api/config/display-units').then(r => r.json());
-          const sys = document.querySelector(`input[name="unitSystem"][value="${du.system || 'device'}"]`);
-          if (sys) sys.checked = true;
-          const meas = document.querySelector(`input[name="unitMeasure"][value="${du.measure || 'device'}"]`);
-          if (meas) meas.checked = true;
-        } catch (_) {}
-
-        try {
-          const t = await fetch('/api/config/theme').then(r => r.json());
-
-          if (t.accent_color) {
-            document.getElementById('accentColor').value = t.accent_color;
-            document.getElementById('accentHex').value   = t.accent_color;
-          }
-          if (t.bg_color) {
-            document.getElementById('bgColor').value = t.bg_color;
-            document.getElementById('bgHex').value   = t.bg_color;
-          }
-          if (t.card_bg) {
-            document.getElementById('cardBg').value    = t.card_bg;
-            document.getElementById('cardBgHex').value = t.card_bg;
-          }
-          if (t.text_color) {
-            document.getElementById('textColor').value = t.text_color;
-            document.getElementById('textHex').value   = t.text_color;
-          }
-          if (t.font_family) {
-            document.getElementById('fontFamily').value = t.font_family;
-          }
-          if (t.taplist_title_font != null) {
-            document.getElementById('taplistTitleFont').value = t.taplist_title_font;
-          }
-          if (t.taplist_body_font != null) {
-            document.getElementById('taplistBodyFont').value = t.taplist_body_font;
-          }
-        } catch (_) {}
-
-        updatePreview();
       }
 
-      loadTheme();
+      function currentTheme() {
+        const theme = {};
+        for (const [key, , hexId] of COLORS) theme[key] = $(hexId).value;
+        for (const [key, id] of FONTS) theme[key] = $(id).value;
+        return theme;
+      }
+
+      // Typing a hex value or dragging a picker would otherwise save on
+      // every keystroke or step, so theme saves wait for a pause.
+      let themeTimer;
+      function saveThemeSoon(delay = 500) {
+        clearTimeout(themeTimer);
+        themeTimer = setTimeout(() => post('/api/config/theme', currentTheme()), delay);
+      }
+
+      // ── Live appearance ────────────────────────────────
+      // The page previews the theme on itself: the shared tokens are set on
+      // the root element, so this page, its header and the tap list tile all
+      // redraw as the colours and fonts change.
+      const SYSTEM_STACK = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+      // Matches fontStack in internal/api/config.go, which builds the stacks
+      // /theme.css serves.
+      const stackFor = name => !name || name === 'System' ? SYSTEM_STACK : `"${name}", ${SYSTEM_STACK}`;
+
+      // A font chosen here is not in this page's /theme.css yet, so it is
+      // fetched from Google Fonts the way theme.css would.
+      const loadedFonts = new Set();
+      function loadFont(name) {
+        if (!name || name === 'System' || loadedFonts.has(name)) return;
+        loadedFonts.add(name);
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=' +
+          encodeURIComponent(name).replace(/%20/g, '+') + ':wght@400;600;700&display=swap';
+        document.head.appendChild(link);
+      }
+
+      function applyAppearance() {
+        const t = currentTheme();
+        const root = document.documentElement.style;
+        root.setProperty('--bg', HEX.test(t.bg_color) ? t.bg_color : DEFAULTS.bg_color);
+        root.setProperty('--tile', HEX.test(t.card_bg) ? t.card_bg : DEFAULTS.card_bg);
+        root.setProperty('--text', HEX.test(t.text_color) ? t.text_color : DEFAULTS.text_color);
+        root.setProperty('--action', HEX.test(t.accent_color) ? t.accent_color : DEFAULTS.accent_color);
+
+        FONTS.forEach(([key]) => loadFont(t[key]));
+        const fontStack = stackFor(t.font_family);
+        root.setProperty('--sans', fontStack);
+        root.setProperty('--title-font', t.taplist_title_font ? stackFor(t.taplist_title_font) : fontStack);
+        // The tap list's descriptions use their own face when one is set.
+        $('pvTile').style.fontFamily = t.taplist_body_font ? stackFor(t.taplist_body_font) : fontStack;
+      }
+
+      function setColor(key, value) {
+        const [, pickerId, hexId] = COLORS.find(c => c[0] === key);
+        $(pickerId).value = value;
+        $(hexId).value = value;
+      }
+
+      for (const [, pickerId, hexId] of COLORS) {
+        const picker = $(pickerId), hex = $(hexId);
+        // input fires while dragging, change once the picker is let go.
+        picker.addEventListener('input', () => { hex.value = picker.value; applyAppearance(); });
+        picker.addEventListener('change', () => saveThemeSoon(0));
+        hex.addEventListener('input', () => {
+          if (!HEX.test(hex.value)) return;
+          picker.value = hex.value;
+          applyAppearance();
+          saveThemeSoon();
+        });
+      }
+      for (const [, id] of FONTS) {
+        $(id).addEventListener('change', () => { applyAppearance(); saveThemeSoon(0); });
+      }
+
+      $('resetAppearance').addEventListener('click', () => {
+        if (!confirm('Restore the default colors and fonts?')) return;
+        for (const [key] of COLORS) setColor(key, DEFAULTS[key]);
+        for (const [key, id] of FONTS) $(id).value = DEFAULTS[key];
+        applyAppearance();
+        clearTimeout(themeTimer);
+        // An empty theme is the defaults, so nothing is pinned to today's.
+        post('/api/config/theme', {});
+      });
+
+      // ── Preferences ─────────────────────────────────────
+      function choice(name) {
+        return document.querySelector(`[data-choice="${name}"] .is-selected`)?.dataset.value
+          ?? PREFERENCE_DEFAULTS[name];
+      }
+
+      function select(name, value) {
+        document.querySelectorAll(`[data-choice="${name}"] .button`).forEach(b =>
+          b.classList.toggle('is-selected', b.dataset.value === value));
+      }
+
+      function savePreference(name) {
+        if (name === 'homePage') return post('/api/config/home-page', { home_page: choice('homePage') });
+        if (name === 'timeFormat') return post('/api/config/time-format', { time_format: choice('timeFormat') });
+        return post('/api/config/display-units', { system: choice('unitSystem'), measure: choice('unitMeasure') });
+      }
+
+      document.querySelectorAll('[data-choice]').forEach(group => {
+        group.addEventListener('click', e => {
+          const button = e.target.closest('.button');
+          if (!button || button.classList.contains('is-selected')) return;
+          select(group.dataset.choice, button.dataset.value);
+          savePreference(group.dataset.choice);
+        });
+      });
+
+      $('resetPreferences').addEventListener('click', async () => {
+        if (!confirm('Restore the default home page, time format and display units?')) return;
+        for (const [name, value] of Object.entries(PREFERENCE_DEFAULTS)) select(name, value);
+        await Promise.all([savePreference('homePage'), savePreference('timeFormat'), savePreference('unitSystem')]);
+      });
+
+      // ── Load ────────────────────────────────────────────
+      async function load() {
+        for (const [name, value] of Object.entries(PREFERENCE_DEFAULTS)) select(name, value);
+        try {
+          const cfg = await fetch('/api/config').then(r => r.json());
+          select('homePage', cfg.home_page || PREFERENCE_DEFAULTS.homePage);
+          select('timeFormat', cfg.time_format || PREFERENCE_DEFAULTS.timeFormat);
+          select('unitSystem', cfg.display_units?.system || PREFERENCE_DEFAULTS.unitSystem);
+          select('unitMeasure', cfg.display_units?.measure || PREFERENCE_DEFAULTS.unitMeasure);
+
+          const t = cfg.theme || {};
+          for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);
+          for (const [key, id] of FONTS) {
+            if (t[key] != null && [...$(id).options].some(o => o.value === t[key])) $(id).value = t[key];
+          }
+        } catch (_) {
+          showToast('Could not load the current settings', 'danger');
+        }
+        applyAppearance();
+      }
+
+      $('pvKeg').innerHTML = kegSvg();
+      document.querySelector('#pvKeg .liquid').style.transform = kegLevelTransform(65);
+      load();
     </script>
   </body>
 </html>
