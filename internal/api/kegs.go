@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -20,7 +21,9 @@ func (s *Server) handleListKegs(w http.ResponseWriter, r *http.Request) {
 	for _, k := range kegs {
 		k.Connected = s.commander.Connected(k.ID)
 	}
-	store.SetDisplayAll(kegs, s.displayUnits())
+	units := s.displayUnits()
+	store.SetDisplayAll(kegs, units)
+	s.setLatestPours(kegs, units)
 	if kegs == nil {
 		kegs = []*store.Keg{}
 	}
@@ -47,8 +50,18 @@ func (s *Server) handleGetKeg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	k.Connected = s.commander.Connected(k.ID)
-	k.SetDisplay(s.displayUnits())
+	units := s.displayUnits()
+	k.SetDisplay(units)
+	s.setLatestPours([]*store.Keg{k}, units)
 	writeJSON(w, http.StatusOK, k)
+}
+
+// setLatestPours adds each keg's newest pour. A failure must not fail the
+// request: the keg is still worth showing, just without its last pour.
+func (s *Server) setLatestPours(kegs []*store.Keg, units store.DisplayUnits) {
+	if err := s.store.SetLatestPours(kegs, units); err != nil {
+		slog.Error("failed to read the latest pours", "error", err)
+	}
 }
 
 // displayUnits reads the presentation preference.

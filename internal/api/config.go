@@ -90,6 +90,28 @@ func (s *Server) handleSetAmountDisplay(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "amount_display": display})
 }
 
+func (s *Server) handleGetMinPour(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.store.GetAppConfig()
+	if err != nil {
+		writeStoreError(w, err, "configuration")
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg.MinPour)
+}
+
+func (s *Server) handleSetMinPour(w http.ResponseWriter, r *http.Request) {
+	var req store.MinPour
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	minPour := store.NormalizeMinPour(req)
+	if err := s.store.SetMinPour(minPour); err != nil {
+		writeStoreError(w, err, "configuration")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "min_pour": minPour})
+}
+
 func (s *Server) handleGetDisplayUnits(w http.ResponseWriter, r *http.Request) {
 	cfg, err := s.store.GetAppConfig()
 	if err != nil {

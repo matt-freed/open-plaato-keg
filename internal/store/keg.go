@@ -76,6 +76,11 @@ type Keg struct {
 	// keg, or 0 if it never has.
 	BarHelperLastSent int64 `json:"barhelper_last_sent"`
 
+	// The pour in progress, kept by trackPour. Server state rather than device
+	// data, so it is stored but never sent to the browser.
+	PourStartedAt   *int64   `json:"-"`
+	PourStartAmount *float64 `json:"-"`
+
 	// BeerLeftUnit is always derived from unit, measure_unit and keg_mode
 	// rather than trusted from the device, so the displayed label cannot
 	// disagree with the configured mode.
@@ -87,6 +92,10 @@ type Keg struct {
 	// user's display-unit preference. It is nil everywhere else, which is what
 	// keeps converted values off the device-write and forwarding paths.
 	Display *KegDisplay `json:"display,omitempty"`
+	// LatestPour is the newest pour in the keg's history, filled in by
+	// SetLatestPours at the same boundaries as Display. Like Display it is
+	// never stored on the keg row.
+	LatestPour *Pour `json:"latest_pour,omitempty"`
 }
 
 // KegDisplay carries a keg's readings converted into the units the user chose
@@ -160,6 +169,8 @@ var kegColumns = []kegColumn{
 	{"first_seen", func(k *Keg) any { return k.FirstSeen }, func(k *Keg) any { return &k.FirstSeen }},
 	{"last_seen", func(k *Keg) any { return k.LastSeen }, func(k *Keg) any { return &k.LastSeen }},
 	{"barhelper_last_sent", func(k *Keg) any { return k.BarHelperLastSent }, func(k *Keg) any { return &k.BarHelperLastSent }},
+	{"pour_started_at", func(k *Keg) any { return k.PourStartedAt }, func(k *Keg) any { return &k.PourStartedAt }},
+	{"pour_start_amount", func(k *Keg) any { return k.PourStartAmount }, func(k *Keg) any { return &k.PourStartAmount }},
 }
 
 var (
@@ -281,7 +292,9 @@ func (s *Store) ListKegIDs() ([]string, error) {
 	return ids, rows.Err()
 }
 
-// DeleteKeg removes a keg and its logged history.
+// DeleteKeg removes a keg and its logged history. Its pours are kept for the
+// list of all pours, but hidden from the keg's own history, so a scale that
+// reconnects later starts with a clean one.
 func (s *Store) DeleteKeg(id string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -295,6 +308,9 @@ func (s *Store) DeleteKeg(id string) error {
 	if _, err := tx.Exec("DELETE FROM keg_log WHERE keg_id = ?", id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec("UPDATE pours SET hidden_from_keg = 1 WHERE keg_id = ?", id); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -305,6 +321,16 @@ func (s *Store) DeleteKeg(id string) error {
 // a packet only carries the handful of pins that changed, and fields it does
 // not mention must keep their stored value.
 func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
+	return s.updateKegTx(id, func(_ *sql.Tx, k *Keg) error {
+		mutate(k)
+		return nil
+	})
+}
+
+// updateKegTx is UpdateKeg for a mutation that also writes other tables, such
+// as a finished pour, and must commit or roll back with the keg itself. All
+// queries inside mutate must go through tx: the store holds one connection.
+func (s *Store) updateKegTx(id string, mutate func(*sql.Tx, *Keg) error) (*Keg, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -320,7 +346,9 @@ func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
 		return nil, err
 	}
 
-	mutate(k)
+	if err := mutate(tx, k); err != nil {
+		return nil, err
+	}
 
 	if k.FirstSeen == 0 {
 		k.FirstSeen = time.Now().Unix()
@@ -393,28 +421,7 @@ type displayConversion struct {
 // disagree with the card above it.
 func (k *Keg) resolveDisplay(u DisplayUnits) displayConversion {
 	from := k.DeriveBeerLeftUnit()
-	sys, measure, co2, known := units.ParseLabel(from)
-
-	to := from
-	if known {
-		switch u.System {
-		case DisplaySystemMetric:
-			sys = units.Metric
-		case DisplaySystemUS:
-			sys = units.US
-		}
-		// CO2 is weighed whatever the measure says, matching the rule in
-		// DeriveBeerLeftUnit.
-		if !co2 {
-			switch u.Measure {
-			case DisplayMeasureWeight:
-				measure = units.Weight
-			case DisplayMeasureVolume:
-				measure = units.Volume
-			}
-		}
-		to = units.Label(sys, measure, co2)
-	}
+	to := displayAmountUnit(from, u)
 
 	// The device reports its temperature unit as a free-form string, so that
 	// is preferred and the configured unit system is the fallback.
@@ -446,6 +453,32 @@ func (k *Keg) resolveDisplay(u DisplayUnits) displayConversion {
 	}
 
 	return displayConversion{fromUnit: from, toUnit: to, fromF: fromF, toF: toF, tempLabel: label}
+}
+
+// displayAmountUnit is the unit a remaining-beer reading stored in from is
+// shown in under the chosen units. An unrecognised unit is left alone.
+func displayAmountUnit(from string, u DisplayUnits) string {
+	sys, measure, co2, known := units.ParseLabel(from)
+	if !known {
+		return from
+	}
+	switch u.System {
+	case DisplaySystemMetric:
+		sys = units.Metric
+	case DisplaySystemUS:
+		sys = units.US
+	}
+	// CO2 is weighed whatever the measure says, matching the rule in
+	// DeriveBeerLeftUnit.
+	if !co2 {
+		switch u.Measure {
+		case DisplayMeasureWeight:
+			measure = units.Weight
+		case DisplayMeasureVolume:
+			measure = units.Volume
+		}
+	}
+	return units.Label(sys, measure, co2)
 }
 
 // SetDisplay fills in the derived display block for the chosen units.

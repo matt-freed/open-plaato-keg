@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -530,6 +531,73 @@ func TestEventsArePublished(t *testing.T) {
 // to the hardware this suite can get.
 func TestReplayRealCaptureSession(t *testing.T) {
 	h := newHarness(t)
+	replayCapture(t, h)
+
+	k, err := h.store.GetKeg(testToken)
+	if err != nil {
+		t.Fatalf("GetKeg: %v", err)
+	}
+	if *k.FirmwareVersion != "2.0.10a" {
+		t.Errorf("FirmwareVersion = %q, want 2.0.10a", *k.FirmwareVersion)
+	}
+	if k.AmountLeft == nil || *k.AmountLeft != 0.04 {
+		t.Errorf("AmountLeft = %v, want 0.04", k.AmountLeft)
+	}
+	if k.KegTemperature == nil || *k.KegTemperature != 22.25 {
+		t.Errorf("KegTemperature = %v, want 22.25", k.KegTemperature)
+	}
+	if k.Internal["dev"] != "ESP32" {
+		t.Errorf("Internal[dev] = %q, want ESP32", k.Internal["dev"])
+	}
+	if k.BeerLeftUnit != "kg" {
+		t.Errorf("BeerLeftUnit = %q, want kg (metric, weight mode)", k.BeerLeftUnit)
+	}
+	// The session records one pour of 0.184.
+	if k.LastPour == nil || *k.LastPour != 0.184 {
+		t.Errorf("LastPour = %v, want 0.184", k.LastPour)
+	}
+
+	// Its pouring windows each move the scale by 40 g or less, all under the
+	// 2 oz default, so none of them is a pour.
+	pours, err := h.store.ListPours(time.Time{}, time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("ListPours: %v", err)
+	}
+	if len(pours) != 0 {
+		t.Errorf("got %d pours, want the sub-minimum windows dropped: %+v", len(pours), pours)
+	}
+}
+
+// With no minimum, every pouring window that lowered the scale is a pour. The
+// capture has five windows; one leaves the reading unchanged.
+func TestReplayCaptureWithoutAMinimumPour(t *testing.T) {
+	h := newHarness(t)
+	if err := h.store.SetMinPour(store.MinPour{Value: 0, Unit: store.MinPourUnitOz}); err != nil {
+		t.Fatal(err)
+	}
+	replayCapture(t, h)
+
+	pours, err := h.store.ListPours(time.Time{}, time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatalf("ListPours: %v", err)
+	}
+	// Newest first.
+	want := []float64{0.04, 0.01, 0.03, 0.02}
+	if len(pours) != len(want) {
+		t.Fatalf("got %d pours, want %d: %+v", len(pours), len(want), pours)
+	}
+	for i, p := range pours {
+		if math.Abs(p.Amount-want[i]) > 1e-9 || p.Unit != "kg" {
+			t.Errorf("pour %d = %v %s, want %v kg", i, p.Amount, p.Unit, want[i])
+		}
+	}
+}
+
+// replayCapture sends the recorded session and waits for it to be ingested.
+// Each segment is acknowledged before it is ingested, but on the same read
+// loop, so receiving an ack also means every earlier segment is stored.
+func replayCapture(t *testing.T, h *harness) {
+	t.Helper()
 	c := h.dial()
 
 	names, err := filepath.Glob("../../testdata/capture/*.bin")
@@ -559,28 +627,4 @@ func TestReplayRealCaptureSession(t *testing.T) {
 		k, err := h.store.GetKeg(testToken)
 		return err == nil && k.FirmwareVersion != nil
 	})
-
-	k, err := h.store.GetKeg(testToken)
-	if err != nil {
-		t.Fatalf("GetKeg: %v", err)
-	}
-	if *k.FirmwareVersion != "2.0.10a" {
-		t.Errorf("FirmwareVersion = %q, want 2.0.10a", *k.FirmwareVersion)
-	}
-	if k.AmountLeft == nil || *k.AmountLeft != 0.04 {
-		t.Errorf("AmountLeft = %v, want 0.04", k.AmountLeft)
-	}
-	if k.KegTemperature == nil || *k.KegTemperature != 22.25 {
-		t.Errorf("KegTemperature = %v, want 22.25", k.KegTemperature)
-	}
-	if k.Internal["dev"] != "ESP32" {
-		t.Errorf("Internal[dev] = %q, want ESP32", k.Internal["dev"])
-	}
-	if k.BeerLeftUnit != "kg" {
-		t.Errorf("BeerLeftUnit = %q, want kg (metric, weight mode)", k.BeerLeftUnit)
-	}
-	// The session records one pour of 0.184.
-	if k.LastPour == nil || *k.LastPour != 0.184 {
-		t.Errorf("LastPour = %v, want 0.184", k.LastPour)
-	}
 }

@@ -62,9 +62,16 @@ func (s *Server) Handler() http.Handler {
 				r.Get("/log", s.handleKegLog)
 				r.Get("/log/csv", s.handleKegLogCSV)
 				r.Post("/log/clear", s.handleClearKegLog)
+				r.Get("/pours", s.handleKegPours)
 				r.Post("/delete", s.handleDeleteKeg)
 				s.mountKegCommands(r)
 			})
+		})
+
+		r.Route("/pours", func(r chi.Router) {
+			r.Get("/", s.handleListPours)
+			r.Get("/csv", s.handleListPoursCSV)
+			r.Post("/{id}/delete", s.handleDeletePour)
 		})
 
 		r.Route("/taps", func(r chi.Router) {
@@ -86,6 +93,8 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/display-units", s.handleSetDisplayUnits)
 			r.Get("/amount-display", s.handleGetAmountDisplay)
 			r.Post("/amount-display", s.handleSetAmountDisplay)
+			r.Get("/min-pour", s.handleGetMinPour)
+			r.Post("/min-pour", s.handleSetMinPour)
 			r.Get("/theme", s.handleGetTheme)
 			r.Post("/theme", s.handleSetTheme)
 		})

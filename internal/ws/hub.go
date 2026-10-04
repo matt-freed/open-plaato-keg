@@ -177,13 +177,19 @@ func (h *Hub) flush(pending map[string]events.Kind) {
 	clear(pending)
 }
 
-// fill adds what a browser reads but the store does not hold: the live
-// connection state and the readings in the chosen display units.
+// fill adds what a browser reads but the keg row does not hold: the live
+// connection state, the readings in the chosen display units and the newest
+// pour. A pour is recorded in the same transaction as the packet that ends it,
+// so the update that follows already carries it.
 func (h *Hub) fill(k *store.Keg, display store.DisplayUnits) {
 	if h.connected != nil {
 		k.Connected = h.connected(k.ID)
 	}
 	k.SetDisplay(display)
+	if err := h.store.SetLatestPours([]*store.Keg{k}, display); err != nil {
+		// The rest of the update is still worth sending.
+		slog.Error("failed to read the latest pour", "keg", k.ID, "error", err)
+	}
 }
 
 // displayUnits reads the presentation preference.

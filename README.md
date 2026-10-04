@@ -34,6 +34,8 @@ graph LR
 - **Tap list** — a display-ready page for what is on tap, with a live keg
   fill gauge per beer
 - **History** — per-keg time series with charts and CSV export
+- **Pours** — every pour recorded with its beer, kept for good, listed per
+  scale on History and across all beers on All Pours
 - **REST API and WebSocket** — everything the UI does, available to your own
   tooling
 - **BarHelper** — forwards volume readings to the [BarHelper custom keg
@@ -152,11 +154,12 @@ redirects to whichever page is set as home — the tap list unless you change it
 | Page | Description |
 |---|---|
 | `/taplist.html` | **Tap List** — the display page, meant to be left on a screen. A responsive grid with a tile per tap: beer name, style, ABV and IBU, the description (up to two lines), the linked keg's name and temperature (to the nearest degree), the tap's kegged date and how many days ago that was, and a keg graphic filled to the percentage remaining in the drink's colour, with the amount left beneath it, or the percentage if Dashboard Setup says so (a tap with no keg linked is drawn full); clear drinks are drawn as a faint tint. Amounts and temperatures are in the chosen display units. Drag a tile (press and hold on a touch screen) to rearrange; the new order is saved as the taps' numbers. WebSocket updates and a full reload every minute. |
-| `/kegs.html` | **Kegs** — a tile per scale in the tap list's style, showing what is left, the percentage, temperature, last pour, the beer on the tap it feeds and a pouring indicator, drawn as a keg in the beer's colour or as a CO₂ cylinder depending on the mode. Under the name, it shows when the scale last sent data and when BarHelper last accepted a reading from it; the top row shows its Wi-Fi strength while it is connected. Drag the tiles to reorder them. |
+| `/kegs.html` | **Kegs** — a tile per scale in the tap list's style, showing what is left, the percentage, temperature, the last recorded pour and when it was, the beer on the tap it feeds and a pouring indicator, drawn as a keg in the beer's colour or as a CO₂ cylinder depending on the mode. Under the name, it shows when the scale last sent data and when BarHelper last accepted a reading from it; the top row shows its Wi-Fi strength while it is connected. Drag the tiles to reorder them. |
 | `/keg-setup.html` | **Keg Setup** — a list of every scale the server knows, marked connected or offline; choose one to open its settings on their own view (the URL keeps the open scale, so Back and reload work). The settings cover everything the device can be told: units and weight-or-volume display, tare, calibration against a known weight, empty keg weight, full volume, temperature offset and pour sensitivity, plus beer or CO₂ mode. Also shows scale information. Settings sent to the scale itself need it connected; an offline scale says so, and can still be relabelled or forgotten. |
-| `/history.html` | **History** — pick a scale and a range from 1 hour to 30 days. A summary gives what was poured and how many pours (both estimated from drops in the amount left), what is left now and the temperature; below it, amount left (or percent) and temperature are charted on one time axis, with pours marked. The amount chart's axis fits the range shown by default, so small pours from a full keg are easy to see; Full starts it at zero. The URL keeps the scale and range, and the same readings download as CSV. Clear history deletes all of a scale's readings, after asking first. |
+| `/history.html` | **History** — pick a scale and a range from 1 hour to 30 days. A summary gives what was poured and how many pours, what is left now and the temperature; below it, amount left (or percent) and temperature are charted on one time axis, with pours marked, and a table lists the range's pours, each of which can be deleted. The amount chart's axis fits the range shown by default, so small pours from a full keg are easy to see; Full starts it at zero. The URL keeps the scale and range, and the same readings download as CSV. Clear history deletes all of a scale's readings and takes its pours off this page (they stay on All Pours), after asking first. |
+| `/pours.html` | **All Pours** — linked from History. Every pour from every scale, newest first, with its time, beer, style, ABV, tap, scale and amount, over 24 hours to all time. Filter by beer or scale; a summary gives the count, the total and a per-beer breakdown. Pours can be deleted, and the list downloads as CSV. |
 | `/taplist-setup.html` | **Tap List Setup** — a list of your taps; choose one, or add a new one, to open the tap editor on its own view (the URL keeps the open tap, so Back and reload work). The editor covers the tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), and the keg the tap draws from. |
-| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, 12- or 24-hour times, display units, and whether keg graphics show the amount or the percentage left. Each change saves as it is made, and the page previews colours and fonts on itself as you choose them; screens already open pick a change up when they reload. |
+| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, 12- or 24-hour times, display units, and whether keg graphics show the amount or the percentage left, and the minimum pour. Each change saves as it is made, and the page previews colours and fonts on itself as you choose them; screens already open pick a change up when they reload. |
 
 ## API
 
@@ -175,7 +178,23 @@ boolean, and a reading the device has never sent is `null` rather than zero.
 | `POST` | `/api/kegs/{id}/delete` | Forget a keg and its history |
 | `GET` | `/api/kegs/{id}/log?range=1h\|6h\|24h\|7d\|30d` | History |
 | `GET` | `/api/kegs/{id}/log/csv?range=…` | The same, as CSV |
-| `POST` | `/api/kegs/{id}/log/clear` | Delete every reading recorded for the keg, in every range; the keg itself is kept |
+| `POST` | `/api/kegs/{id}/log/clear` | Delete every reading recorded for the keg, in every range, and hide its pours from its history; the keg itself is kept |
+| `GET` | `/api/kegs/{id}/pours?range=1h\|6h\|24h\|7d\|30d` | The keg's pours, newest first |
+
+### Pours
+
+A pour is one pouring window reported by the scale: it starts when `is_pouring`
+turns on and ends when it turns off (or the scale disconnects), and its size is
+how much the amount left fell in between. It is recorded only if it is at least
+the minimum pour set at that moment and no more than 128 fl oz, so scale jitter
+never counts. Each pour keeps its own copy of the beer's name, style, ABV, tap
+number and scale label, and pours are never pruned.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/pours?range=24h\|7d\|30d\|90d\|1y\|all` | Every pour from every keg, newest first, including those hidden from a cleared scale's history (`hidden_from_keg`). Each carries a `display` block with its size in the display units |
+| `GET` | `/api/pours/csv?range=…` | The same, as CSV, in the units each scale reported |
+| `POST` | `/api/pours/{id}/delete` | Delete one pour everywhere |
 
 ### Keg commands
 
@@ -231,11 +250,12 @@ A tap body takes these fields, all optional:
 
 | Method | Path | Body | Description |
 |---|---|---|---|
-| `GET` | `/api/config` | — | Home page, clock format, display units, amount display and theme together |
+| `GET` | `/api/config` | — | Home page, clock format, display units, amount display, minimum pour and theme together |
 | `GET` `POST` | `/api/config/home-page` | `{"home_page": "taplist"\|"kegs"}` | Where `/` sends the browser |
 | `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | How times are shown, such as on the history page |
 | `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage and BarHelper stay in the scale's own units |
 | `GET` `POST` | `/api/config/amount-display` | `{"amount_display": "amount"\|"percent"}` | Which figure every keg graphic shows large on the tap list and the Kegs page. CO₂ cylinders always show the amount |
+| `GET` `POST` | `/api/config/min-pour` | `{"value": 2, "unit": "oz"\|"ml"}` | The smallest pouring window recorded as a pour; default 2 oz. Changing it only affects future pours |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
 | `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` and the tap list consume |
 | `GET` | `/api/alive` | — | Status and server version |
@@ -292,7 +312,7 @@ The recording logs in as keg `00000000000000000000000000000001`. Pass
 the tap list and keg pages populated without any hardware, and sets the display
 units to US. It also generates 30 days of history for every keg, ending at the
 moment it is loaded, so the History page has pours, keg swaps and temperature
-to chart in every range. It holds data only, so load it on top of the schema:
+to chart in every range, and All Pours has a month of pours to list. It holds data only, so load it on top of the schema:
 
 ```bash
 mkdir -p data

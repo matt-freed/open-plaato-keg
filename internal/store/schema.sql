@@ -67,7 +67,12 @@ CREATE TABLE IF NOT EXISTS kegs (
     first_seen                INTEGER NOT NULL DEFAULT 0,
     last_seen                 INTEGER NOT NULL DEFAULT 0,
     -- When BarHelper last accepted a reading for this keg, or 0 if never.
-    barhelper_last_sent       INTEGER NOT NULL DEFAULT 0
+    barhelper_last_sent       INTEGER NOT NULL DEFAULT 0,
+
+    -- The pour in progress, held here so a restart mid-pour does not lose it.
+    -- Both NULL while the keg is not pouring.
+    pour_started_at           INTEGER,
+    pour_start_amount         REAL
 );
 
 -- Time series of keg readings, written at most once per minute per keg.
@@ -80,6 +85,28 @@ CREATE TABLE IF NOT EXISTS keg_log (
     is_pouring           INTEGER,
     PRIMARY KEY (keg_id, ts)
 ) WITHOUT ROWID;
+
+-- One row per detected pour. Never pruned: this is the long-term record.
+CREATE TABLE IF NOT EXISTS pours (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    keg_id           TEXT    NOT NULL,
+    started_at       INTEGER NOT NULL,   -- unix seconds
+    ended_at         INTEGER NOT NULL,
+    amount           REAL    NOT NULL,   -- in unit
+    unit             TEXT    NOT NULL,   -- the keg's beer_left_unit when poured
+    -- A copy of what was on tap, so editing the tap or kegging a new beer
+    -- does not rewrite past pours.
+    beer_name        TEXT    NOT NULL DEFAULT '',
+    beer_style       TEXT    NOT NULL DEFAULT '',
+    abv              REAL,
+    tap_number       INTEGER,
+    scale_label      TEXT    NOT NULL DEFAULT '',
+    -- Set when the scale's history is cleared: the pour leaves that scale's
+    -- history but stays in the list of all pours.
+    hidden_from_keg  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS pours_by_time ON pours(ended_at);
+CREATE INDEX IF NOT EXISTS pours_by_keg ON pours(keg_id, ended_at);
 
 CREATE TABLE IF NOT EXISTS taps (
     id              TEXT PRIMARY KEY,

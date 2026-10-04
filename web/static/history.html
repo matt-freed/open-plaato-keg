@@ -69,6 +69,8 @@
       .chart-tooltip-row .key.is-dot { width: 7px; height: 7px; border-radius: 50%; }
 
       .empty-state .button { margin-top: 1rem; }
+      .pours-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+      .box > div.pours-head > .title { margin: 0; }
     </style>
 </head>
 <body>
@@ -79,6 +81,7 @@
       <!-- Its own row above the choices, so they never push it to a line of
            its own. It downloads whatever scale and range are chosen. -->
       <div class="page-actions">
+        <a class="button is-small" href="/pours.html">All pours &rarr;</a>
         <button class="button is-small is-danger" type="button" id="clearBtn">Clear history</button>
         <a class="button is-small" id="downloadBtn" href="#" download>&#8595; Download CSV</a>
       </div>
@@ -106,10 +109,7 @@
         <div class="box section-box" id="statsBox">
           <h2 class="title is-4" id="statsTitle">Last 24 hours</h2>
           <div class="stats" id="stats"></div>
-          <p class="help stats-note">
-            Poured and pours are estimated from drops in the amount left; a refill
-            is not counted as a pour.
-          </p>
+          <p class="help stats-note" id="statsNote"></p>
         </div>
 
         <div class="box section-box" id="noData" hidden>
@@ -146,6 +146,21 @@
             <div class="chart-wrap is-short"><canvas id="tempChart"></canvas></div>
           </div>
         </div>
+
+        <div class="box section-box" id="poursBox" hidden>
+          <div class="pours-head">
+            <h2 class="title is-4">Pours</h2>
+            <a class="button is-small" href="/pours.html">All pours &rarr;</a>
+          </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Time</th><th class="num">Amount</th><th class="num">Took</th><th>Beer</th><th class="actions"></th></tr>
+              </thead>
+              <tbody id="poursBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -177,7 +192,11 @@
     // full keg is a visible step; full starts it at zero.
     let axisScale = 'fit';
     let entries = [];
+    // The scale's recorded pours for the range, newest first, and each one's
+    // nearest logged reading, which places its marker on the line.
+    let pours = [];
     let pourPoints = [];
+    let minPour = null;
     let charts = [];
     let hoverTime = null;
     let loadSeq = 0;
@@ -228,32 +247,14 @@
     }
 
     // ── Figures ─────────────────────────────────────
-    // A pour is a drop in the amount left larger than the scale's jitter.
-    // Any rise, from jitter or a refill, resets the baseline, so a new keg is
-    // never counted as negative pouring. Readings that keep falling minute
-    // after minute are one pour, marked where it ends.
-    function findPours(list) {
-      const amounts = list.map(e => e.amount_left).filter(Number.isFinite);
-      const max = amounts.length ? Math.max(...amounts) : 0;
-      const jitter = Math.max(0.005 * max, 0.01);
-      let base = null, poured = 0, inPour = false;
-      const points = [];
-      for (const e of list) {
-        const a = e.amount_left;
-        if (!Number.isFinite(a)) continue;
-        if (base == null || a > base) { base = a; inPour = false; continue; }
-        if (base - a > jitter) {
-          poured += base - a;
-          base = a;
-          if (inPour) points[points.length - 1] = e;
-          else points.push(e);
-          inPour = true;
-        } else {
-          inPour = false;
-        }
-      }
-      return { poured, points };
+    // Pours are detected and stored by the server, so the page only counts
+    // them. A pour's size arrives already in a pour-sized display unit.
+    function pourTotal(list) {
+      const unit = list[0]?.display?.unit ?? '';
+      return { total: list.reduce((s, p) => s + (p.display?.amount ?? 0), 0), unit };
     }
+
+    const pourSize = p => p.display ? `${Math.round(p.display.amount)} ${p.display.unit}` : '—';
 
     function fmt(v, digits) {
       return Number.isFinite(v) ? v.toFixed(digits) : '—';
@@ -264,8 +265,8 @@
 
     function renderStats(keg) {
       const u = units(keg);
-      const { poured, points } = findPours(entries);
-      pourPoints = points;
+      const { total, unit: pourUnit } = pourTotal(pours);
+      pourPoints = pours.map(p => ({ pour: p, entry: nearestEntry(p.ended_at * 1000) })).filter(pp => pp.entry);
       const temps = entries.map(e => e.keg_temperature).filter(Number.isFinite);
       const last = [...entries].reverse().find(e => Number.isFinite(e.amount_left));
       const lastPct = [...entries].reverse().find(e => Number.isFinite(e.percent_of_beer_left));
@@ -277,14 +278,34 @@
           <span class="stat-label">${esc(label)}</span>
         </div>`;
       $('stats').innerHTML = [
-        stat(fmt(poured, poured < 10 ? 2 : 1), u.amount, 'Poured'),
-        stat(String(points.length), '', points.length === 1 ? 'Pour' : 'Pours'),
+        stat(pours.length ? String(Math.round(total)) : '0', pourUnit, 'Poured'),
+        stat(String(pours.length), '', pours.length === 1 ? 'Pour' : 'Pours'),
         stat(fmt(last?.amount_left, 2), u.amount,
           Number.isFinite(lastPct?.percent_of_beer_left)
             ? `Left now · ${Math.round(lastPct.percent_of_beer_left)}%` : 'Left now'),
         stat(deg(avg), u.temp, 'Average temp'),
         stat(temps.length ? `${deg(Math.min(...temps))}–${deg(Math.max(...temps))}` : '—', u.temp, 'Temp range'),
       ].join('');
+      $('statsNote').textContent = minPour
+        ? `A pour is one pouring window reported by the scale, ${minPour.value} ${minPour.unit} or more. Smaller ones are ignored.`
+        : 'A pour is one pouring window reported by the scale.';
+    }
+
+    function renderPours() {
+      $('poursBox').hidden = pours.length === 0;
+      const clock = { hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h' };
+      $('poursBody').innerHTML = pours.map(p => {
+        const when = new Date(p.ended_at * 1000).toLocaleString([], { month: 'short', day: 'numeric', ...clock });
+        const took = Math.max(0, p.ended_at - p.started_at);
+        const beer = p.beer_name?.trim();
+        return `<tr>
+          <td>${esc(when)}</td>
+          <td class="num">${esc(pourSize(p))}</td>
+          <td class="num">${took < 60 ? `${took}s` : `${Math.floor(took / 60)}m ${took % 60}s`}</td>
+          <td class="${beer ? '' : 'is-faint'}">${esc(beer || 'No beer on tap')}</td>
+          <td class="actions"><button class="button is-small is-danger" type="button" data-delete="${p.id}">Delete</button></td>
+        </tr>`;
+      }).join('');
     }
 
     // ── Charts ──────────────────────────────────────
@@ -406,7 +427,7 @@
             {
               // Pours, ringed in the tile colour so they stay clear of the line.
               type: 'scatter',
-              data: line(pourPoints),
+              data: pourPoints.map(({ pour: p, entry }) => ({ x: p.ended_at * 1000, y: value(entry) ?? null })),
               backgroundColor: pour,
               borderColor: surface,
               borderWidth: 2,
@@ -486,7 +507,9 @@
           (Number.isFinite(e.percent_of_beer_left) ? ` · ${Math.round(e.percent_of_beer_left)}%` : ''),
         'Left');
       row('#8fb3ff', false, `${deg(e.keg_temperature)}${u.temp}`, 'Temperature');
-      if (pourPoints.includes(e)) row(token('--pour'), true, 'Pour', '');
+      for (const { pour: p, entry } of pourPoints) {
+        if (entry === e) row(token('--pour'), true, pourSize(p), 'Pour');
+      }
 
       tip.hidden = false;
       const w = tip.offsetWidth, h = tip.offsetHeight;
@@ -525,11 +548,16 @@
       const seq = ++loadSeq;
       $('page').classList.add('is-loading');
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(id)}/log?range=${range}`);
+        const [res, pourRes] = await Promise.all([
+          fetch(`/api/kegs/${encodeURIComponent(id)}/log?range=${range}`),
+          fetch(`/api/kegs/${encodeURIComponent(id)}/pours?range=${range}`),
+        ]);
         if (!res.ok) throw new Error(res.status);
-        const list = await res.json();
+        if (!pourRes.ok) throw new Error(pourRes.status);
+        const [list, pourList] = await Promise.all([res.json(), pourRes.json()]);
         if (seq !== loadSeq) return; // a newer choice has already been made
         entries = list;
+        pours = pourList;
       } catch (_) {
         if (seq !== loadSeq) return;
         $('page').classList.remove('is-loading');
@@ -544,6 +572,7 @@
       $('pageStatus').textContent = '';
       $('results').hidden = false;
       renderStats(keg);
+      renderPours();
 
       const empty = entries.length === 0;
       // With no readings, zeroes would read as a measured nothing.
@@ -618,7 +647,8 @@
       // the one on screen.
       if (!confirm(`Clear all history for ${displayName(keg)}?\n\n` +
           'This deletes every reading recorded for this scale, in every range, ' +
-          'not just the one shown. It cannot be undone.')) return;
+          'not just the one shown, and removes its pours from this page. ' +
+          'The pours stay on All Pours. It cannot be undone.')) return;
       try {
         const res = await fetch(`/api/kegs/${encodeURIComponent(keg.id)}/log/clear`, { method: 'POST' });
         if (!res.ok) throw new Error(res.status);
@@ -629,19 +659,37 @@
       show();
     });
 
+    $('poursBody').addEventListener('click', async e => {
+      const b = e.target.closest('[data-delete]');
+      if (!b) return;
+      const p = pours.find(x => String(x.id) === b.dataset.delete);
+      if (!p || !confirm(`Delete this ${pourSize(p)} pour? It is removed everywhere, including All Pours.`)) return;
+      try {
+        const res = await fetch(`/api/pours/${encodeURIComponent(p.id)}/delete`, { method: 'POST' });
+        if (!res.ok) throw new Error(res.status);
+        showToast('Pour deleted', 'success');
+      } catch (err) {
+        showToast('Could not delete the pour: ' + err.message, 'danger');
+      }
+      show();
+    });
+
     window.addEventListener('hashchange', show);
 
     async function init() {
       select('measureChoice', measure);
       select('axisChoice', axisScale);
       try {
-        const [kegsRes, tf, tapList] = await Promise.all([
+        const [kegsRes, tf, tapList, mp] = await Promise.all([
           fetch('/api/kegs'),
           fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
           // Only for labelling the scales, so a failure just leaves them
           // named by scale.
           fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
+          // Only for the note under the figures.
+          fetch('/api/config/min-pour').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
+        minPour = mp;
         if (!kegsRes.ok) throw new Error(kegsRes.status);
         kegs = await kegsRes.json();
         timeFormat = tf.time_format || '12h';

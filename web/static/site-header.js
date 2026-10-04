@@ -11,7 +11,8 @@
   const LINKS = [
     ['/taplist.html', 'Tap List'],
     ['/kegs.html', 'Kegs'],
-    ['/history.html', 'History'],
+    // All Pours is reached from History, so it keeps History marked.
+    ['/history.html', 'History', ['/pours.html']],
   ];
   const CONFIGURE = [
     ['/taplist-setup.html', 'Tap Setup'],
@@ -19,11 +20,11 @@
     ['/dashboard-setup.html', 'Dashboard Setup'],
   ];
 
-  function link([href, label]) {
+  function link([href, label, also = []]) {
     const a = document.createElement('a');
     a.href = href;
     a.textContent = label;
-    if (location.pathname === href) a.setAttribute('aria-current', 'page');
+    if (location.pathname === href || also.includes(location.pathname)) a.setAttribute('aria-current', 'page');
     return a;
   }
 

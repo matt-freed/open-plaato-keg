@@ -11,6 +11,9 @@
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
     <style>
+      .min-pour-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+      .min-pour-row .input { width: 7rem; }
+      .min-pour-row .buttons { margin-bottom: 0; }
       .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem 1.5rem; }
       .color-grid .field { margin: 0; }
       .color-row { display: flex; align-items: center; gap: 0.6rem; }
@@ -269,6 +272,25 @@
             </p>
           </div>
         </div>
+
+        <div class="box section-box">
+          <h2 class="title is-4">Pours</h2>
+          <div class="field">
+            <label class="label" for="minPourValue">Minimum pour</label>
+            <div class="min-pour-row">
+              <input type="number" class="input" id="minPourValue" min="0" step="0.5" value="2" inputmode="decimal">
+              <div class="buttons has-addons" data-choice="minPourUnit">
+                <button class="button" type="button" data-value="oz">oz</button>
+                <button class="button" type="button" data-value="ml">ml</button>
+              </div>
+            </div>
+            <p class="help">
+              A pour is one pouring window reported by the scale, sized by how much the
+              amount left fell. Windows smaller than this are ignored, which filters out
+              bumps and drips. Changing it only affects future pours.
+            </p>
+          </div>
+        </div>
         </div>
       </div>
     </section>
@@ -290,8 +312,9 @@
       };
       const PREFERENCE_DEFAULTS = {
         homePage: 'taplist', timeFormat: '12h', unitSystem: 'device', unitMeasure: 'device',
-        amountDisplay: 'amount',
+        amountDisplay: 'amount', minPourUnit: 'oz',
       };
+      const MIN_POUR_DEFAULT = 2;
 
       const $ = id => document.getElementById(id);
       // The colour fields: theme key, colour picker, hex text box.
@@ -434,6 +457,10 @@
         if (name === 'homePage') return post('/api/config/home-page', { home_page: choice('homePage') });
         if (name === 'timeFormat') return post('/api/config/time-format', { time_format: choice('timeFormat') });
         if (name === 'amountDisplay') return post('/api/config/amount-display', { amount_display: choice('amountDisplay') });
+        if (name === 'minPourUnit') {
+          const value = Number($('minPourValue').value);
+          return post('/api/config/min-pour', { value: Number.isFinite(value) && value > 0 ? value : 0, unit: choice('minPourUnit') });
+        }
         return post('/api/config/display-units', { system: choice('unitSystem'), measure: choice('unitMeasure') });
       }
 
@@ -447,13 +474,22 @@
         });
       });
 
+      // The minimum pour saves once typing pauses, like the hex colour boxes.
+      let minPourTimer;
+      $('minPourValue').addEventListener('input', () => {
+        clearTimeout(minPourTimer);
+        minPourTimer = setTimeout(() => savePreference('minPourUnit'), 600);
+      });
+
       $('resetPreferences').addEventListener('click', async () => {
-        if (!confirm('Restore the default home page, time format, display units and keg graphic figure?')) return;
+        if (!confirm('Restore the default home page, time format, display units, keg graphic figure and minimum pour?')) return;
         for (const [name, value] of Object.entries(PREFERENCE_DEFAULTS)) select(name, value);
+        $('minPourValue').value = MIN_POUR_DEFAULT;
+        clearTimeout(minPourTimer);
         showPreviewAmount();
         await Promise.all([
           savePreference('homePage'), savePreference('timeFormat'), savePreference('unitSystem'),
-          savePreference('amountDisplay'),
+          savePreference('amountDisplay'), savePreference('minPourUnit'),
         ]);
       });
 
@@ -474,6 +510,8 @@
           select('unitSystem', cfg.display_units?.system || PREFERENCE_DEFAULTS.unitSystem);
           select('unitMeasure', cfg.display_units?.measure || PREFERENCE_DEFAULTS.unitMeasure);
           select('amountDisplay', cfg.amount_display || PREFERENCE_DEFAULTS.amountDisplay);
+          select('minPourUnit', cfg.min_pour?.unit || PREFERENCE_DEFAULTS.minPourUnit);
+          $('minPourValue').value = cfg.min_pour?.value ?? MIN_POUR_DEFAULT;
 
           const t = cfg.theme || {};
           for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);

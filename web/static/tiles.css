@@ -95,6 +95,9 @@
   color: var(--muted);
 }
 .specs:empty { display: none; }
+/* A second line of specs, such as the Kegs page's last pour, sits close
+   under the first. */
+.specs + .specs { margin-top: 0.25rem; }
 /* Kept to two lines so one long description cannot stretch its whole row;
    the full text is in the tooltip. */
 .desc {
