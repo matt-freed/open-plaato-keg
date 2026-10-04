@@ -117,6 +117,21 @@
 .empty-section .tile { cursor: default; }
 .empty-section .tile:hover { border-color: var(--line); }
 
+/* ─── Dragging ───────────────────────────────── */
+/* The lifted tile and the gap it leaves, from tile-gestures.js. */
+.tile.dragging {
+  cursor: grabbing;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.tile-placeholder {
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+}
+body.is-dragging { cursor: grabbing; }
+
 /* ─── Tile menu ──────────────────────────────── */
 /* The right-click menu from tile-menu.js. */
 .tile-menu {

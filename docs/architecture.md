@@ -384,14 +384,23 @@ The pages are styled as one application, in the tap list's look:
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
   list and the Kegs page share.
-- `tile-menu.js` is the right-click menu on tap list and Kegs page tiles,
-  empty ones included: View history (`/history.html#keg=`), Edit tap
-  (`/taplist-setup.html#tap=`) and Edit keg (`/keg-setup.html#keg=`). An item
-  with nothing to link to, such as a tap with no keg or a scale on no tap, is
-  shown disabled. Nothing on a tile shows the menu is there, so the tap list
-  stays clean as a display. Shift+right-click opens the browser's own menu, and
-  a touch press and hold on the tap list's main grid still starts a drag. Its
-  styles are in `tiles.css`.
+- `tile-gestures.js` is the pointer handling for tap list and Kegs page tiles,
+  through `attachTileGestures`: dragging to reorder, and opening the tile menu.
+  It uses pointer events rather than HTML5 drag and drop, which does not work
+  on touch screens. A mouse drags as soon as it moves and opens the menu with a
+  right-click; Shift+right-click gives the browser's own menu. A finger presses
+  and holds to open the menu, then moves to drag, as on a phone's home screen;
+  moving before the hold scrolls the page. It builds its own press and hold
+  rather than waiting for the browser's `contextmenu` event, which iOS Safari
+  never sends for touch. Only tiles above the Empty section can be dragged;
+  every tile has the menu.
+- `tile-menu.js` is the menu itself, on every tile, empty ones included: View
+  history (`/history.html#keg=`), Edit tap (`/taplist-setup.html#tap=`) and
+  Edit keg (`/keg-setup.html#keg=`). An item with nothing to link to, such as a
+  tap with no keg or a scale on no tap, is shown disabled. Nothing on a tile
+  shows the menu is there, so the tap list stays clean as a display. One
+  opened by touch sits above the finger rather than under it.
+- The dragging and menu styles are in `tiles.css`.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
   tables and toasts.
@@ -474,7 +483,7 @@ litre-per-kilogram assumption as package `units`. A CO₂ cylinder, or a keg
 whose unit is not known yet, is empty only below zero. An uncalibrated scale
 reports zero, so it shows as empty too. The styles are shared in `tiles.css`.
 Empty tiles also move to their own "Empty" section below the grid, in their
-saved order. They cannot be dragged and refuse drops, so a reorder moves only
+saved order. They cannot be dragged or dropped onto, so a reorder moves only
 the tiles above. `keepEmptyInPlace` merges that order back into the full one,
 leaving each empty keg's slot where it was, so a refilled keg returns to its
 old place.

@@ -536,9 +536,6 @@ hr {
 /* ─── Kegs page ──────────────────────────────── */
 /* Keg tiles are tap list tiles (tiles.css); these are the parts that only a
    scale has. */
-.keg-tile.is-dragging { opacity: 0.4; }
-.keg-tile.drag-over { border-color: var(--soft); border-style: dashed; }
-
 .keg-tile .keg-graphic { width: 100%; }
 .reading.is-low .reading-value { color: var(--danger); }
 

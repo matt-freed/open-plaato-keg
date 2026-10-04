@@ -26,6 +26,7 @@
   <script src="/beer-color.js"></script>
   <script src="/keg-graphic.js"></script>
   <script src="/tile-menu.js"></script>
+  <script src="/tile-gestures.js"></script>
   <script>
     'use strict';
 
@@ -39,7 +40,6 @@
 
     const kegs = {};
     let tapsByKeg = {};
-    let dragSource = null;
     let renderPending = false;
     // Which figure each keg graphic shows large: one setting for every scale,
     // chosen on Dashboard Setup.
@@ -116,7 +116,6 @@
           <div class="keg-graphic"></div>
           <span class="keg-amount"></span>
         </div>`;
-      attachDragHandlers(tile);
       return tile;
     }
 
@@ -143,7 +142,6 @@
       tile.classList.toggle('is-leaking', keg.leak_detection === 1);
       tile.classList.toggle('is-offline', keg.connected !== true);
       tile.classList.toggle('is-empty', isKegEmpty(keg));
-      tile.draggable = !tile.classList.contains('is-empty');
       tile.classList.toggle('is-co2', isCO2);
       tile.classList.toggle('is-clear', !!tap && isClear(tap));
       if (tap) tile.style.setProperty('--accent', beerColor(tap));
@@ -250,7 +248,7 @@
     function render() {
       // Reordering mid-drag would move tiles under the pointer; the drop
       // renders instead.
-      if (dragSource) { renderPending = true; return; }
+      if (gestures.active) { renderPending = true; return; }
       const list = sortKegs(Object.values(kegs));
       if (!list.length) {
         kegContainer.replaceChildren();
@@ -285,11 +283,19 @@
       while (container.children.length > tiles.length) container.lastElementChild.remove();
     }
 
-    // ── Drag to rearrange ──────────────────────────
-    // Empty tiles are not draggable and refuse drops, so only the tiles above
-    // the Empty section move, and the empty ones keep their saved places.
-    function persistKegOrder() {
-      const moved = [...kegContainer.children].map(t => t.dataset.kegId);
+    // ── Drag to rearrange, and the tile menu ──────
+    // Only tiles above the Empty section can be dragged, so the empty ones
+    // keep their saved places. A scale on no tap has no tap to edit.
+    const gestures = attachTileGestures({
+      root: document.querySelector('.section'),
+      grid: kegContainer,
+      idOf: tile => tile.dataset.kegId,
+      menuFor: tile => ({ tapId: tapsByKeg[tile.dataset.kegId]?.id ?? null, kegId: tile.dataset.kegId }),
+      onReorder: persistKegOrder,
+      onEnd: () => { if (renderPending) { renderPending = false; render(); } },
+    });
+
+    function persistKegOrder(moved) {
       const ids = keepEmptyInPlace(sortKegs(Object.values(kegs)).map(k => k.id), moved);
       ids.forEach((id, i) => { if (kegs[id]) kegs[id].sort_order = i; });
       fetch('/api/kegs/order', {
@@ -298,43 +304,6 @@
         body: JSON.stringify({ ordered_ids: ids }),
       }).catch(err => console.error('Error saving keg order:', err));
     }
-
-    function attachDragHandlers(tile) {
-      tile.addEventListener('dragstart', () => {
-        dragSource = tile;
-        tile.classList.add('is-dragging');
-      });
-      tile.addEventListener('dragend', () => {
-        tile.classList.remove('is-dragging');
-        dragSource = null;
-        kegContainer.querySelectorAll('.drag-over').forEach(t => t.classList.remove('drag-over'));
-        persistKegOrder();
-        if (renderPending) { renderPending = false; render(); }
-      });
-      tile.addEventListener('dragover', e => {
-        if (tile.parentElement !== kegContainer) return;
-        e.preventDefault();
-        if (dragSource && dragSource !== tile) tile.classList.add('drag-over');
-      });
-      tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
-      tile.addEventListener('drop', e => {
-        e.preventDefault();
-        tile.classList.remove('drag-over');
-        if (!dragSource || dragSource === tile || tile.parentElement !== kegContainer) return;
-        const tiles = [...kegContainer.children];
-        if (tiles.indexOf(dragSource) < tiles.indexOf(tile)) tile.after(dragSource);
-        else tile.before(dragSource);
-      });
-    }
-
-    // Right-click on any tile, empty ones included, for its history and
-    // settings. A scale on no tap has no tap to edit.
-    document.querySelector('.section').addEventListener('contextmenu', e => {
-      const tile = tileMenuWanted(e);
-      if (!tile) return;
-      const kegId = tile.dataset.kegId;
-      showTileMenu(e, { tapId: tapsByKeg[kegId]?.id ?? null, kegId });
-    });
 
     // ── Data ───────────────────────────────────────
     // Taps only supply each keg's beer name and colour, so they are fetched
@@ -396,7 +365,7 @@
     }
 
     loadAll();
-    setInterval(() => { if (!dragSource) loadAll(); }, 60000);
+    setInterval(() => { if (!gestures.active) loadAll(); }, 60000);
     // Keeps the "ago" times current between updates.
     setInterval(render, 15000);
     connect();

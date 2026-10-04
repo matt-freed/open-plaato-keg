@@ -1,24 +1,16 @@
 'use strict';
 
-// The right-click menu on tap list and Kegs page tiles, linking to the keg's
-// history and to the tap's and keg's settings. Nothing on the tile shows it is
-// there: it is a shortcut for whoever runs the screens, not part of the
-// display. Shift+right-click still opens the browser's own menu.
+// The menu on tap list and Kegs page tiles, linking to the keg's history and
+// to the tap's and keg's settings. tile-gestures.js opens it on a right-click
+// or a touch press and hold. Nothing on the tile shows it is there: it is a
+// shortcut for whoever runs the screens, not part of the display.
 
 let tileMenu = null;
 
-// tileMenuWanted says whether a contextmenu event should open the tile menu,
-// returning the tile it was on. A press and hold that has started a drag has
-// already cancelled the event.
-function tileMenuWanted(e) {
-  if (e.defaultPrevented || e.shiftKey) return null;
-  return e.target.closest('.tile');
-}
-
-// showTileMenu opens the menu at the pointer of a contextmenu event. Either id
-// may be null, which disables the items that need it.
-function showTileMenu(e, { tapId, kegId }) {
-  e.preventDefault();
+// showTileMenu opens the menu at a point in the window. Either id may be
+// null, which disables the items that need it. A menu opened by touch sits
+// clear of the finger, above it when there is room.
+function showTileMenu(x, y, { tapId, kegId }, { touch = false } = {}) {
   closeTileMenu();
 
   const enc = encodeURIComponent;
@@ -43,12 +35,16 @@ function showTileMenu(e, { tapId, kegId }) {
   }
   document.body.append(menu);
 
-  // Opened at the pointer, but kept inside the window.
-  const pad = 8;
-  const x = Math.min(e.clientX, innerWidth - menu.offsetWidth - pad);
-  const y = Math.min(e.clientY, innerHeight - menu.offsetHeight - pad);
-  menu.style.left = `${Math.max(pad, x)}px`;
-  menu.style.top = `${Math.max(pad, y)}px`;
+  // Kept inside the window.
+  const pad = 8, w = menu.offsetWidth, h = menu.offsetHeight;
+  let left = x, top = y;
+  if (touch) {
+    left = x - w / 2;
+    top = y - h - 24;
+    if (top < pad) top = y + 32;
+  }
+  menu.style.left = `${Math.max(pad, Math.min(left, innerWidth - w - pad))}px`;
+  menu.style.top = `${Math.max(pad, Math.min(top, innerHeight - h - pad))}px`;
   tileMenu = menu;
 }
 
