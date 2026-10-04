@@ -12,6 +12,13 @@
     minmax(max(min(100%, 340px), calc((100% - 2 * var(--gap)) / 3)), 1fr));
   gap: var(--gap);
 }
+/* Two across below 1200px, before three columns get cramped. */
+@media (max-width: 1199px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill,
+      minmax(max(min(100%, 340px), calc((100% - var(--gap)) / 2)), 1fr));
+  }
+}
 
 /* ─── Tile ───────────────────────────────────── */
 .tile {
