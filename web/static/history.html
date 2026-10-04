@@ -99,6 +99,9 @@
             <button class="button" type="button" data-value="24h">24 hours</button>
             <button class="button" type="button" data-value="7d">7 days</button>
             <button class="button" type="button" data-value="30d">30 days</button>
+            <button class="button" type="button" data-value="90d">3 months</button>
+            <button class="button" type="button" data-value="180d">6 months</button>
+            <button class="button" type="button" data-value="1y">1 year</button>
           </div>
         </div>
       </div>
@@ -178,11 +181,19 @@
       '24h': { ms: 24 * 3600e3, label: 'Last 24 hours' },
       '7d':  { ms: 7 * 86400e3, label: 'Last 7 days' },
       '30d': { ms: 30 * 86400e3, label: 'Last 30 days' },
+      '90d': { ms: 90 * 86400e3, label: 'Last 3 months' },
+      '180d': { ms: 180 * 86400e3, label: 'Last 6 months' },
+      '1y':  { ms: 365 * 86400e3, label: 'Last year' },
     };
     const RANGE_ORDER = Object.keys(RANGES);
     // Readings are logged at most once a minute, so a longer silence is the
     // scale being offline; the line breaks there rather than bridging it.
     const GAP_MS = 10 * 60e3;
+    // Ranges past a day arrive averaged into steps, whose size the server
+    // reports. Points are then a step apart, so only a silence of several
+    // steps is a gap.
+    let stepMs = 0;
+    const gapMs = () => Math.max(GAP_MS, 3 * stepMs);
 
     let kegs = [];
     const tapsByKeg = {};
@@ -268,8 +279,12 @@
       const { total, unit: pourUnit } = pourTotal(pours);
       pourPoints = pours.map(p => ({ pour: p, entry: nearestEntry(p.ended_at * 1000) })).filter(pp => pp.entry);
       const temps = entries.map(e => e.keg_temperature).filter(Number.isFinite);
-      const last = [...entries].reverse().find(e => Number.isFinite(e.amount_left));
-      const lastPct = [...entries].reverse().find(e => Number.isFinite(e.percent_of_beer_left));
+      // What is left now is the keg's current reading. The last entry of a
+      // long range is an average over its step, so it is only the fallback.
+      const leftNow = Number.isFinite(keg?.display?.amount_left) ? keg.display.amount_left
+        : [...entries].reverse().find(e => Number.isFinite(e.amount_left))?.amount_left;
+      const pctNow = Number.isFinite(keg?.percent_of_beer_left) ? keg.percent_of_beer_left
+        : [...entries].reverse().find(e => Number.isFinite(e.percent_of_beer_left))?.percent_of_beer_left;
       const avg = temps.length ? temps.reduce((s, t) => s + t, 0) / temps.length : NaN;
 
       const stat = (value, unit, label) => `
@@ -280,9 +295,8 @@
       $('stats').innerHTML = [
         stat(pours.length ? String(Math.round(total)) : '0', pourUnit, 'Poured'),
         stat(String(pours.length), '', pours.length === 1 ? 'Pour' : 'Pours'),
-        stat(fmt(last?.amount_left, 2), u.amount,
-          Number.isFinite(lastPct?.percent_of_beer_left)
-            ? `Left now · ${Math.round(lastPct.percent_of_beer_left)}%` : 'Left now'),
+        stat(fmt(leftNow, 2), u.amount,
+          Number.isFinite(pctNow) ? `Left now · ${Math.round(pctNow)}%` : 'Left now'),
         stat(deg(avg), u.temp, 'Average temp'),
         stat(temps.length ? `${deg(Math.min(...temps))}–${deg(Math.max(...temps))}` : '—', u.temp, 'Temp range'),
       ].join('');
@@ -422,7 +436,7 @@
               fill: 'start',
               pointRadius: 0,
               tension: 0.15,
-              spanGaps: GAP_MS,
+              spanGaps: gapMs(),
             },
             {
               // Pours, ringed in the tile colour so they stay clear of the line.
@@ -450,7 +464,7 @@
             borderCapStyle: 'round',
             pointRadius: 0,
             tension: 0.15,
-            spanGaps: GAP_MS,
+            spanGaps: gapMs(),
           }],
         },
         options: chartOptions(range, u.temp ? `Temp (${u.temp})` : 'Temp'),
@@ -548,16 +562,27 @@
       const seq = ++loadSeq;
       $('page').classList.add('is-loading');
       try {
-        const [res, pourRes] = await Promise.all([
+        const [res, pourRes, kegRes] = await Promise.all([
           fetch(`/api/kegs/${encodeURIComponent(id)}/log?range=${range}`),
           fetch(`/api/kegs/${encodeURIComponent(id)}/pours?range=${range}`),
+          // The keg's current readings, for "Left now"; the list loaded with
+          // the page may be stale by now.
+          fetch(`/api/kegs/${encodeURIComponent(id)}`).catch(() => null),
         ]);
         if (!res.ok) throw new Error(res.status);
         if (!pourRes.ok) throw new Error(pourRes.status);
-        const [list, pourList] = await Promise.all([res.json(), pourRes.json()]);
+        const [list, pourList, fresh] = await Promise.all([
+          res.json(), pourRes.json(),
+          kegRes?.ok ? kegRes.json().catch(() => null) : null,
+        ]);
         if (seq !== loadSeq) return; // a newer choice has already been made
         entries = list;
         pours = pourList;
+        stepMs = (Number(res.headers.get('X-Log-Step-Seconds')) || 0) * 1000;
+        if (fresh) {
+          const i = kegs.findIndex(k => k.id === id);
+          if (i >= 0) kegs[i] = fresh;
+        }
       } catch (_) {
         if (seq !== loadSeq) return;
         $('page').classList.remove('is-loading');
@@ -585,7 +610,7 @@
         const text = $('noDataText');
         text.textContent = longer
           ? `No readings from ${displayName(keg)} in the ${RANGES[range].label.toLowerCase()}.`
-          : `No readings from ${displayName(keg)} in the last 30 days.`;
+          : `No readings from ${displayName(keg)} in the ${RANGES[range].label.toLowerCase()}.`;
         if (longer) {
           text.append(document.createElement('br'));
           const more = document.createElement('a');

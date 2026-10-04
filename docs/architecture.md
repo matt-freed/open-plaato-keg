@@ -246,9 +246,30 @@ Two values get special treatment:
 After each stored packet, `ingest` writes a `keg_log` row if the keg has at
 least one loggable reading and the in-memory `LogThrottle` allows it — at most
 one row per keg per minute. The row is a snapshot of the stored keg, not just
-the packet. Rows older than the configured retention (`LOG_RETENTION_DAYS`,
-365 by default) are deleted by `PruneLog` at startup and once a day after that;
-a retention of 0 turns pruning off.
+the packet.
+
+Two jobs keep the table bounded, run by `prune` in `main.go` at startup and
+once a day after that:
+
+- `PruneLog` deletes rows older than the retention (`LOG_RETENTION_DAYS`, 365
+  by default; 0 turns it off).
+- `CompactLog` replaces rows older than `LOG_COMPACT_AFTER_DAYS` (30 by
+  default; 0 turns it off) with one row per keg per hour (`CompactStep`),
+  timestamped at the start of the hour. Amount, percent and temperature are
+  averaged, a reading nobody reported stays NULL, and the hour is pouring if
+  any reading in it was. It works one keg-day per transaction so the first pass
+  over a long history never holds the write lock for long, and it skips hours
+  already reduced to one aligned row, so a second run changes nothing. Pours
+  are stored separately and are unaffected.
+
+Reads for the chart are averaged too. `logRanges` in `internal/api/history.go`
+gives each range a step: none up to 24 hours, then 10 minutes for 7 days, 30
+minutes for 30 days, and 2, 3 and 8 hours for 90 days, 180 days and a year,
+so no chart exceeds 1,440 points. Past 30 days each step is a whole number of
+compacted hours. `ReadLogSampled` groups by `ts / step`, timestamps each point
+at the average time of its readings, and averages them the same way as
+`CompactLog`. `handleKegLog` reports the step in `X-Log-Step-Seconds`. The CSV
+export is never averaged; it is every row stored for the range.
 
 ### Pours
 
@@ -368,13 +389,16 @@ connected, polling `/api/kegs/connected` since connections publish no event.
 The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
 the chosen range. Amount and temperature are two charts sharing a time axis
 rather than one chart with two y-axes, and a line breaks where readings stop
-for more than ten minutes. The amount chart's Fit/Full toggle (`axisScale`) picks its
+for more than ten minutes, or three steps on an averaged range. Ranges run from
+1 hour to 1 year. The amount chart's Fit/Full toggle (`axisScale`) picks its
 y-axis: Fit, the default, pads the range's lowest and highest value by 15%
 in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero.
 Its poured and pours figures, the pour markers on the amount chart and the
 Pours table below the charts all come from the stored pours in
 `/api/kegs/{id}/pours`; a marker sits at the pour's end time, on the nearest
-logged reading. Each row of the table can be deleted.
+logged reading. "Left now" is the keg's current reading, fetched with each
+range, rather than the last point, which on a long range is an average. Each
+row of the table can be deleted.
 Clear history posts to `/api/kegs/{id}/log/clear`, which `handleClearKegLog`
 serves with `store.ClearLog`: every reading for that keg goes, in every range,
 and its pours leave the page, while the keg and the other kegs' history stay.
@@ -488,7 +512,7 @@ setting must match how the kegs are configured.
 | Hub reader | 1 | Bus → `pending` map |
 | Hub flusher | 1 | `pending` → database read → broadcast |
 | BarHelper worker | 0 or 1 | Sends due readings every second |
-| Pruner | 1 | Daily `keg_log` cleanup |
+| Pruner | 1 | Daily `keg_log` pruning and hourly compaction |
 
 Shared state is protected where it lives: the registry and hub client set by
 `RWMutex`, connection writes by a per-connection mutex, the hub's pending map,
@@ -542,6 +566,11 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
 
 ## Known limitations
 
+- **Averaged long history.** On ranges averaged into steps, the History page's
+  temperature average and range come from the averaged points, so the range is
+  narrower than the true extremes. Rows older than `LOG_COMPACT_AFTER_DAYS`
+  are hourly averages in the database and in CSV exports; the minute detail is
+  gone.
 - **No pour backfill.** Pours are recorded from when this server version first
   sees a pouring window; the minute history from before it is not converted.
 - **Shutdown mid-pour.** For the reason below, a pour in progress at shutdown is

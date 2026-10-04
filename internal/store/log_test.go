@@ -249,3 +249,160 @@ func TestPruneLogZeroRetentionKeepsEverything(t *testing.T) {
 		t.Errorf("pruned %d rows with zero retention, want 0", removed)
 	}
 }
+
+// logAt records one reading for id at ts.
+func logAt(t *testing.T, s *Store, id string, ts time.Time, amount, temp float64, pouring bool) {
+	t.Helper()
+	if err := s.AppendLog(&Keg{ID: id, AmountLeft: &amount, KegTemperature: &temp, IsPouring: &pouring}, ts); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+}
+
+func TestReadLogSampledAveragesEachStep(t *testing.T) {
+	s := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0).Truncate(time.Hour)
+
+	// Two steps of an hour: the first has three readings, one of them pouring;
+	// the second has one reading with no temperature.
+	logAt(t, s, "keg-1", base, 10, 4, false)
+	logAt(t, s, "keg-1", base.Add(20*time.Minute), 9, 5, true)
+	logAt(t, s, "keg-1", base.Add(40*time.Minute), 8, 6, false)
+	amount := 7.0
+	if err := s.AppendLog(&Keg{ID: "keg-1", AmountLeft: &amount}, base.Add(90*time.Minute)); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+	// Another keg's readings stay out of it.
+	logAt(t, s, "keg-2", base, 100, 100, true)
+
+	entries, err := s.ReadLogSampled("keg-1", base, base.Add(2*time.Hour), time.Hour)
+	if err != nil {
+		t.Fatalf("ReadLogSampled: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("got %d entries, want 2", len(entries))
+	}
+
+	first := entries[0]
+	if first.Timestamp != base.Add(20*time.Minute).Unix() {
+		t.Errorf("first timestamp = %d, want the average time %d", first.Timestamp, base.Add(20*time.Minute).Unix())
+	}
+	if first.AmountLeft == nil || *first.AmountLeft != 9 {
+		t.Errorf("first amount = %v, want 9", first.AmountLeft)
+	}
+	if first.KegTemperature == nil || *first.KegTemperature != 5 {
+		t.Errorf("first temperature = %v, want 5", first.KegTemperature)
+	}
+	if first.IsPouring == nil || !*first.IsPouring {
+		t.Error("first step should be pouring, as one of its readings was")
+	}
+
+	second := entries[1]
+	if second.AmountLeft == nil || *second.AmountLeft != 7 {
+		t.Errorf("second amount = %v, want 7", second.AmountLeft)
+	}
+	if second.KegTemperature != nil {
+		t.Errorf("second temperature = %v, want nil as none was reported", *second.KegTemperature)
+	}
+	if second.IsPouring != nil {
+		t.Errorf("second pouring = %v, want nil as none was reported", *second.IsPouring)
+	}
+}
+
+func TestReadLogSampledWithoutStepReturnsEveryReading(t *testing.T) {
+	s := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0)
+	for i := range 3 {
+		logAt(t, s, "keg-1", base.Add(time.Duration(i)*time.Minute), 10, 4, false)
+	}
+
+	entries, err := s.ReadLogSampled("keg-1", base, base.Add(time.Hour), 0)
+	if err != nil {
+		t.Fatalf("ReadLogSampled: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Errorf("got %d entries, want all 3", len(entries))
+	}
+}
+
+func TestCompactLog(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Unix(1_700_000_000, 0)
+	compactAfter := 30 * 24 * time.Hour
+	old := now.Add(-40 * 24 * time.Hour).Truncate(time.Hour)
+
+	// An old hour of minute readings, half of them pouring, for two kegs.
+	for i := range 60 {
+		at := old.Add(time.Duration(i) * time.Minute)
+		logAt(t, s, "keg-1", at, float64(60-i), 4, i%2 == 0)
+		logAt(t, s, "keg-2", at, 1, 1, false)
+	}
+	// A single old reading that is not on the hour.
+	logAt(t, s, "keg-1", old.Add(5*time.Hour+7*time.Minute), 3, 2, false)
+	// Recent readings, inside the full-resolution window.
+	for i := range 5 {
+		logAt(t, s, "keg-1", now.Add(-time.Duration(i+1)*time.Minute), 1, 1, false)
+	}
+
+	removed, err := s.CompactLog(now, compactAfter)
+	if err != nil {
+		t.Fatalf("CompactLog: %v", err)
+	}
+	// 59 from each keg's full hour; the lone reading is moved, not removed.
+	if removed != 118 {
+		t.Errorf("removed %d rows, want 118", removed)
+	}
+
+	entries, err := s.ReadLog("keg-1", time.Unix(0, 0), now)
+	if err != nil {
+		t.Fatalf("ReadLog: %v", err)
+	}
+	if len(entries) != 7 {
+		t.Fatalf("keg-1 has %d entries, want 1 + 1 compacted and 5 recent", len(entries))
+	}
+	hour := entries[0]
+	if hour.Timestamp != old.Unix() {
+		t.Errorf("compacted timestamp = %d, want the start of the hour %d", hour.Timestamp, old.Unix())
+	}
+	if hour.AmountLeft == nil || *hour.AmountLeft != 30.5 {
+		t.Errorf("compacted amount = %v, want the average 30.5", hour.AmountLeft)
+	}
+	if hour.IsPouring == nil || !*hour.IsPouring {
+		t.Error("compacted hour should be pouring")
+	}
+	if entries[1].Timestamp != old.Add(5*time.Hour).Unix() {
+		t.Errorf("lone reading at %d, want it moved to the start of its hour %d",
+			entries[1].Timestamp, old.Add(5*time.Hour).Unix())
+	}
+
+	other, err := s.ReadLog("keg-2", time.Unix(0, 0), now)
+	if err != nil {
+		t.Fatalf("ReadLog: %v", err)
+	}
+	if len(other) != 1 {
+		t.Errorf("keg-2 has %d entries, want its hour compacted separately to 1", len(other))
+	}
+
+	again, err := s.CompactLog(now, compactAfter)
+	if err != nil {
+		t.Fatalf("CompactLog again: %v", err)
+	}
+	if again != 0 {
+		t.Errorf("a second pass removed %d rows, want 0", again)
+	}
+}
+
+func TestCompactLogZeroKeepsEveryReading(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Unix(1_700_000_000, 0)
+	old := now.Add(-400 * 24 * time.Hour)
+	logAt(t, s, "keg-1", old, 1, 1, false)
+	logAt(t, s, "keg-1", old.Add(time.Minute), 1, 1, false)
+
+	removed, err := s.CompactLog(now, 0)
+	if err != nil {
+		t.Fatalf("CompactLog: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("removed %d rows with compaction off, want 0", removed)
+	}
+}

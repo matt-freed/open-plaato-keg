@@ -389,6 +389,43 @@ func TestClearKegHistory(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
+// Long ranges are averaged to their step for the chart, and say so in a
+// header, while the CSV export still carries every stored row.
+func TestLongHistoryRangeIsSampled(t *testing.T) {
+	a := newTestAPI(t)
+	k := a.storeKeg("keg-1", "vw\x0051\x003.000")
+	// Ten readings a minute apart, 200 days ago, all inside one 8-hour step.
+	start := time.Now().Add(-200 * 24 * time.Hour).Truncate(8 * time.Hour).Add(time.Hour)
+	for i := range 10 {
+		if err := a.store.AppendLog(k, start.Add(time.Duration(i)*time.Minute)); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	rec := a.do(http.MethodGet, "/api/kegs/keg-1/log?range=1y", nil)
+	assertStatus(t, rec, http.StatusOK)
+	if got := rec.Header().Get("X-Log-Step-Seconds"); got != "28800" {
+		t.Errorf("X-Log-Step-Seconds = %q, want 28800", got)
+	}
+	var entries []store.LogEntry
+	a.decode(rec, &entries)
+	if len(entries) != 1 {
+		t.Errorf("got %d entries for 1y, want the readings averaged into 1", len(entries))
+	}
+
+	// A range short enough to chart every reading reports a step of zero.
+	rec = a.do(http.MethodGet, "/api/kegs/keg-1/log?range=24h", nil)
+	if got := rec.Header().Get("X-Log-Step-Seconds"); got != "0" {
+		t.Errorf("24h X-Log-Step-Seconds = %q, want 0", got)
+	}
+
+	rec = a.do(http.MethodGet, "/api/kegs/keg-1/log/csv?range=1y", nil)
+	assertStatus(t, rec, http.StatusOK)
+	if lines := strings.Count(rec.Body.String(), "\n"); lines != 11 {
+		t.Errorf("csv has %d lines, want a header and all 10 rows", lines)
+	}
+}
+
 // An unrecognised range falls back to the default rather than erroring.
 func TestUnknownHistoryRangeFallsBack(t *testing.T) {
 	a := newTestAPI(t)

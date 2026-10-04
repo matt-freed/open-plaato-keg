@@ -90,7 +90,7 @@ func run() error {
 	hub := ws.NewHub(st, commander.Connected)
 	go hub.Run(ctx, bus)
 
-	go prune(ctx, st, cfg.LogRetention)
+	go prune(ctx, st, cfg.LogRetention, cfg.LogCompactAfter)
 
 	kegListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.KegListenerPort))
 	if err != nil {
@@ -147,9 +147,10 @@ func shutdown(httpServer *http.Server, kegListener net.Listener, kegServer *keg.
 	kegServer.Shutdown()
 }
 
-// prune discards history older than the retention window, once at startup and
-// daily thereafter. A retention of zero keeps history forever.
-func prune(ctx context.Context, st *store.Store, retention time.Duration) {
+// prune discards history older than the retention window and combines what is
+// older than compactAfter into hourly averages, once at startup and daily
+// thereafter. Zero turns either off.
+func prune(ctx context.Context, st *store.Store, retention, compactAfter time.Duration) {
 	ticker := time.NewTicker(pruneInterval)
 	defer ticker.Stop()
 
@@ -158,6 +159,11 @@ func prune(ctx context.Context, st *store.Store, retention time.Duration) {
 			slog.Error("failed to prune keg history", "error", err)
 		} else if removed > 0 {
 			slog.Info("pruned old keg history", "rows", removed)
+		}
+		if removed, err := st.CompactLog(time.Now(), compactAfter); err != nil {
+			slog.Error("failed to compact keg history", "error", err)
+		} else if removed > 0 {
+			slog.Info("compacted old keg history", "rows", removed)
 		}
 
 		select {

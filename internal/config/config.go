@@ -23,6 +23,9 @@ type Config struct {
 	// LogRetention is how long keg history is kept before it is pruned. Zero
 	// keeps it forever.
 	LogRetention time.Duration
+	// LogCompactAfter is how long keg history keeps every reading before
+	// older readings are combined into hourly averages. Zero never combines.
+	LogCompactAfter time.Duration
 
 	BarHelper BarHelperConfig
 }
@@ -60,6 +63,9 @@ func Load() (Config, error) {
 		return cfg, err
 	}
 	if cfg.LogRetention, err = envDays("LOG_RETENTION_DAYS", 365); err != nil {
+		return cfg, err
+	}
+	if cfg.LogCompactAfter, err = envDays("LOG_COMPACT_AFTER_DAYS", 30); err != nil {
 		return cfg, err
 	}
 
