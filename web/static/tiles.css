@@ -102,6 +102,21 @@
 .tile.is-empty :is(.beer, .specs, .desc, .readings, .tile-keg) { opacity: 0.4; }
 .tile.is-empty .tile-keg { filter: grayscale(1); }
 
+/* Empty kegs gather in their own section under the grid. They hold their
+   place in the saved order but cannot be dragged, or dropped onto. */
+.empty-section { margin-top: clamp(1.6rem, 3vw, 2.4rem); }
+.empty-section[hidden] { display: none; }
+.empty-section-heading {
+  margin: 0 0 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.empty-section .tile { cursor: default; }
+.empty-section .tile:hover { border-color: var(--line); }
+
 .beer {
   margin: 0.35rem 0 0;
   font-family: var(--taplist-title-font, var(--sans));

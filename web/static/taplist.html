@@ -53,6 +53,10 @@
   <main>
     <p class="status" id="status">Loading taps…</p>
     <div class="grid" id="grid"></div>
+    <section class="empty-section" id="emptySection" hidden>
+      <h2 class="empty-section-heading">Empty</h2>
+      <div class="grid" id="emptyGrid"></div>
+    </section>
   </main>
 
   <script src="/beer-color.js"></script>
@@ -61,6 +65,8 @@
     'use strict';
 
     const grid = document.getElementById('grid');
+    const emptyGrid = document.getElementById('emptyGrid');
+    const emptySection = document.getElementById('emptySection');
     const statusEl = document.getElementById('status');
 
     let taps = [];
@@ -234,40 +240,57 @@
 
       if (!taps.length) {
         grid.replaceChildren();
+        emptyGrid.replaceChildren();
+        emptySection.hidden = true;
         statusEl.innerHTML =
           'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
         return;
       }
       statusEl.textContent = '';
 
-      const existing = new Map([...grid.children].map(t => [t.dataset.tapId, t]));
-      const ordered = taps.map(tap => {
+      const existing = new Map([...grid.children, ...emptyGrid.children].map(t => [t.dataset.tapId, t]));
+      const full = [], empty = [];
+      for (const tap of taps) {
         const tile = existing.get(tap.id) ?? createTile(tap);
         existing.delete(tap.id);
         updateTile(tile, tap, kegs[tap.keg_id]);
-        return tile;
-      });
+        (tile.classList.contains('is-empty') ? empty : full).push(tile);
+      }
       existing.forEach(t => t.remove());
 
-      // Only move nodes whose position changed; appending every tile would
-      // restart their transitions.
-      ordered.forEach((tile, i) => {
-        if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i] ?? null);
+      placeTiles(grid, full);
+      placeTiles(emptyGrid, empty);
+      emptySection.hidden = !empty.length;
+    }
+
+    // placeTiles puts tiles into a grid in order. Only nodes whose position
+    // changed are moved; appending every tile would restart their transitions.
+    function placeTiles(container, tiles) {
+      tiles.forEach((tile, i) => {
+        if (container.children[i] !== tile) container.insertBefore(tile, container.children[i] ?? null);
       });
+      while (container.children.length > tiles.length) container.lastElementChild.remove();
     }
 
     function updateKegTiles(kegId) {
       if (drag) { renderPending = true; return; }
       for (const tap of taps) {
         if (tap.keg_id !== kegId) continue;
-        const tile = grid.querySelector(`.tile[data-tap-id="${CSS.escape(tap.id)}"]`);
-        if (tile) updateTile(tile, tap, kegs[kegId]);
+        const tile = document.querySelector(`.tile[data-tap-id="${CSS.escape(tap.id)}"]`);
+        if (!tile) continue;
+        updateTile(tile, tap, kegs[kegId]);
+        // A keg that empties or is refilled changes section.
+        if (tile.classList.contains('is-empty') !== (tile.parentElement === emptyGrid)) {
+          render();
+          return;
+        }
       }
     }
 
     // ── Drag to rearrange ──────────────────────────
-    // Pointer events rather than HTML5 drag and drop, which does not work on
-    // touch screens. A mouse drags as soon as it moves; a finger has to press
+    // Only the main grid listens and hit tests, so empty tiles can neither be
+    // picked up nor dropped onto. Pointer events rather than HTML5 drag and
+    // drop, which does not work on touch screens. A mouse drags as soon as it moves; a finger has to press
     // and hold first, so the page can still be scrolled.
     const DRAG_THRESHOLD = 6;
     const LONG_PRESS_MS = 350;
@@ -444,7 +467,9 @@
       drag = null;
 
       const order = [...grid.children].map(t => t.dataset.tapId);
-      if (commit && order.join() !== startOrder.join()) saveOrder(order);
+      if (commit && order.join() !== startOrder.join()) {
+        saveOrder(keepEmptyInPlace(taps.map(t => t.id), order));
+      }
 
       if (renderPending) {
         renderPending = false;

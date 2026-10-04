@@ -76,3 +76,12 @@ function isKegEmpty(keg) {
   const kgPerUnit = keg.keg_mode === 2 ? null : KG_PER_BEER_UNIT[keg.beer_left_unit];
   return kgPerUnit ? keg.amount_left * kgPerUnit < EMPTY_BELOW_KG : keg.amount_left < 0;
 }
+
+// keepEmptyInPlace merges a reordering of the tiles above the Empty section
+// back into the full saved order. Each moved id takes the next slot that one
+// of them held, so an empty keg keeps its place and returns to it once full.
+function keepEmptyInPlace(fullOrder, movedOrder) {
+  const moved = new Set(movedOrder);
+  let next = 0;
+  return fullOrder.map(id => moved.has(id) ? movedOrder[next++] : id);
+}

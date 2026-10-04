@@ -382,8 +382,8 @@ The pages are styled as one application, in the tap list's look:
   page: the heading, specs, readings and the keg graphic.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
-  use it. It also holds `isKegEmpty`, which the tap list and the Kegs page
-  share.
+  use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
+  list and the Kegs page share.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
   tables and toasts.
@@ -465,6 +465,11 @@ a keg is empty with less than a 12 oz glass left, judged on the device-reported
 litre-per-kilogram assumption as package `units`. A CO₂ cylinder, or a keg
 whose unit is not known yet, is empty only below zero. An uncalibrated scale
 reports zero, so it shows as empty too. The styles are shared in `tiles.css`.
+Empty tiles also move to their own "Empty" section below the grid, in their
+saved order. They cannot be dragged and refuse drops, so a reorder moves only
+the tiles above. `keepEmptyInPlace` merges that order back into the full one,
+leaving each empty keg's slot where it was, so a refilled keg returns to its
+old place.
 
 `beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,

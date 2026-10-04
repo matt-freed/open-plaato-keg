@@ -152,7 +152,8 @@ timeout:
 The `message` listener parses the frame, sees `type === "keg"`, stores
 `msg.data` in its map of kegs and calls `render()`. That updates the scale's
 tile in place with `updateTile`, so the keg graphic's level animates to the new
-reading, and keeps the tiles in their display order.
+reading, and keeps the tiles in their display order. A reading that empties or
+refills a keg moves its tile into or out of the Empty section below the grid.
 
 ## Why the hub uses two goroutines
 
