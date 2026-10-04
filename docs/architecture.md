@@ -390,7 +390,13 @@ The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
 the chosen range. Amount and temperature are two charts sharing a time axis
 rather than one chart with two y-axes, and a line breaks where readings stop
 for more than ten minutes, or three steps on an averaged range. Ranges run from
-1 hour to 1 year. The amount chart's Fit/Full toggle (`axisScale`) picks its
+1 hour to 1 year. `AXIS_TICKS` places the time axis's ticks on clock or calendar
+boundaries: at most seven for most ranges, so Chart.js never thins them out,
+and one per month over a year.
+`axisLabel` then puts the date under the first tick and wherever the day turns
+on ranges of a day or less, and the year under the first tick and wherever the
+year turns on longer ones. The hover readout and the Pours table add the year
+to any date outside the current one. The amount chart's Fit/Full toggle (`axisScale`) picks its
 y-axis: Fit, the default, pads the range's lowest and highest value by 15%
 in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero.
 Its poured and pours figures, the pour markers on the amount chart and the

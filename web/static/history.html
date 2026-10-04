@@ -307,9 +307,9 @@
 
     function renderPours() {
       $('poursBox').hidden = pours.length === 0;
-      const clock = { hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h' };
       $('poursBody').innerHTML = pours.map(p => {
-        const when = new Date(p.ended_at * 1000).toLocaleString([], { month: 'short', day: 'numeric', ...clock });
+        const ended = new Date(p.ended_at * 1000);
+        const when = ended.toLocaleString([], { ...dateOpts(ended), ...clockOpts() });
         const took = Math.max(0, p.ended_at - p.started_at);
         const beer = p.beer_name?.trim();
         return `<tr>
@@ -347,9 +347,67 @@
       },
     };
 
-    function timeFormats() {
-      const clock = timeFormat === '24h' ? 'HH:mm' : 'h:mm a';
-      return { minute: clock, hour: clock, day: 'MMM d', week: 'MMM d', month: 'MMM yyyy' };
+    // ── Dates ───────────────────────────────────────
+    // A date carries its year only when it is not this year's, so the short
+    // ranges stay terse and a year-long one is never ambiguous.
+    function dateOpts(d) {
+      return { month: 'short', day: 'numeric',
+        ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) };
+    }
+
+    const clockOpts = () => ({ hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h' });
+
+    // Where the x-axis ticks fall in each range, on clock or calendar
+    // boundaries. Most ranges have at most seven, so Chart.js never has to
+    // thin them out and every label below is drawn; a year has one per month,
+    // whose short labels still fit on a desktop. A clock range ticks every so
+    // many minutes from midnight; the others tick at midnight on the days
+    // the test picks.
+    const AXIS_TICKS = {
+      '1h':  { kind: 'clock', minutes: 10 },
+      '6h':  { kind: 'clock', minutes: 60 },
+      '24h': { kind: 'clock', minutes: 240 },
+      '7d':  { kind: 'day', on: () => true },
+      '30d': { kind: 'day', on: d => [1, 6, 11, 16, 21, 26].includes(d.getDate()) },
+      '90d': { kind: 'day', on: d => d.getDate() === 1 || d.getDate() === 15 },
+      '180d': { kind: 'day', on: d => d.getDate() === 1 },
+      '1y':  { kind: 'month', on: d => d.getDate() === 1 },
+    };
+
+    function axisTicks(range, min, max) {
+      const spec = AXIS_TICKS[range];
+      const d = new Date(min);
+      d.setHours(0, 0, 0, 0);
+      const out = [];
+      // Stepping the Date, rather than adding milliseconds, keeps the ticks on
+      // local midnights and hours across daylight-saving changes.
+      while (d.getTime() <= max) {
+        if (d.getTime() >= min && (spec.kind === 'clock' || spec.on(d))) out.push({ value: d.getTime() });
+        if (spec.kind === 'clock') d.setMinutes(d.getMinutes() + spec.minutes);
+        else d.setDate(d.getDate() + 1);
+      }
+      return out;
+    }
+
+    // A clock range labels its ticks with times, and puts the date beneath the
+    // first one and wherever the day turns. Longer ranges label them with
+    // dates, or months over a year, and put the year beneath the first one and
+    // wherever the year turns.
+    function axisLabel(range) {
+      const { kind } = AXIS_TICKS[range];
+      const short = { month: 'short', day: 'numeric' };
+      return (value, index, ticks) => {
+        const d = new Date(value);
+        const prev = index > 0 ? new Date(ticks[index - 1].value) : null;
+        if (kind === 'clock') {
+          const time = d.toLocaleTimeString([], clockOpts());
+          return !prev || prev.toDateString() !== d.toDateString()
+            ? [time, d.toLocaleDateString([], short)] : time;
+        }
+        const label = d.toLocaleDateString([], kind === 'day' ? short : { month: 'short' });
+        return !prev || prev.getFullYear() !== d.getFullYear()
+          ? [label, String(d.getFullYear())] : label;
+      };
     }
 
     function chartOptions(range, yTitle, extraY = {}) {
@@ -367,8 +425,8 @@
             type: 'time',
             min: now - RANGES[range].ms,
             max: now,
-            time: { displayFormats: timeFormats() },
-            ticks: { maxTicksLimit: 8, maxRotation: 0 },
+            afterBuildTicks: scale => { scale.ticks = axisTicks(range, scale.min, scale.max); },
+            ticks: { maxRotation: 0, callback: axisLabel(range) },
             grid: { display: false },
           },
           y: {
@@ -499,10 +557,8 @@
       tip.replaceChildren();
       const time = document.createElement('div');
       time.className = 'chart-tooltip-time';
-      time.textContent = new Date(hoverTime).toLocaleString([], {
-        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-        hour12: timeFormat !== '24h',
-      });
+      const hovered = new Date(hoverTime);
+      time.textContent = hovered.toLocaleString([], { ...dateOpts(hovered), ...clockOpts() });
       tip.append(time);
 
       const row = (color, isDot, value, label) => {
