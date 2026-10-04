@@ -384,6 +384,14 @@ The pages are styled as one application, in the tap list's look:
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
   list and the Kegs page share.
+- `tile-menu.js` is the right-click menu on tap list and Kegs page tiles,
+  empty ones included: View history (`/history.html#keg=`), Edit tap
+  (`/taplist-setup.html#tap=`) and Edit keg (`/keg-setup.html#keg=`). An item
+  with nothing to link to, such as a tap with no keg or a scale on no tap, is
+  shown disabled. Nothing on a tile shows the menu is there, so the tap list
+  stays clean as a display. Shift+right-click opens the browser's own menu, and
+  a touch press and hold on the tap list's main grid still starts a drag. Its
+  styles are in `tiles.css`.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
   tables and toasts.

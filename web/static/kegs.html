@@ -25,6 +25,7 @@
 
   <script src="/beer-color.js"></script>
   <script src="/keg-graphic.js"></script>
+  <script src="/tile-menu.js"></script>
   <script>
     'use strict';
 
@@ -325,6 +326,15 @@
         else tile.before(dragSource);
       });
     }
+
+    // Right-click on any tile, empty ones included, for its history and
+    // settings. A scale on no tap has no tap to edit.
+    document.querySelector('.section').addEventListener('contextmenu', e => {
+      const tile = tileMenuWanted(e);
+      if (!tile) return;
+      const kegId = tile.dataset.kegId;
+      showTileMenu(e, { tapId: tapsByKeg[kegId]?.id ?? null, kegId });
+    });
 
     // ── Data ───────────────────────────────────────
     // Taps only supply each keg's beer name and colour, so they are fetched

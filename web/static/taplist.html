@@ -61,6 +61,7 @@
 
   <script src="/beer-color.js"></script>
   <script src="/keg-graphic.js"></script>
+  <script src="/tile-menu.js"></script>
   <script>
     'use strict';
 
@@ -340,6 +341,15 @@
     // Once a touch drag has started, stop the browser from scrolling with it.
     document.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
     grid.addEventListener('contextmenu', e => { if (press || drag) e.preventDefault(); });
+
+    // Right-click on any tile, empty ones included, for its history and
+    // settings. A tap whose keg has not loaded has nothing to link to yet.
+    document.querySelector('main').addEventListener('contextmenu', e => {
+      const tile = tileMenuWanted(e);
+      const tap = tile && taps.find(t => t.id === tile.dataset.tapId);
+      if (!tap) return;
+      showTileMenu(e, { tapId: tap.id, kegId: kegs[tap.keg_id] ? tap.keg_id : null });
+    });
 
     function clearPress() {
       if (press?.timer) clearTimeout(press.timer);

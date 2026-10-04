@@ -117,6 +117,34 @@
 .empty-section .tile { cursor: default; }
 .empty-section .tile:hover { border-color: var(--line); }
 
+/* ─── Tile menu ──────────────────────────────── */
+/* The right-click menu from tile-menu.js. */
+.tile-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 10rem;
+  padding: 0.3rem;
+  background: var(--tile);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  line-height: normal;
+}
+.tile-menu-item {
+  display: block;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  outline: none;
+}
+a.tile-menu-item:hover,
+a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--text); }
+.tile-menu-item[aria-disabled] { color: var(--faint); cursor: default; }
+
 .beer {
   margin: 0.35rem 0 0;
   font-family: var(--taplist-title-font, var(--sans));
