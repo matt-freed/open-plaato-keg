@@ -113,6 +113,41 @@ func (s *Server) handleTapOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "ordered_ids": req.OrderedIDs})
 }
 
+// handleTapLinks saves a drop on the Tap Setup board: the taps whose kegs
+// changed, applied together so two taps can swap kegs. It returns every tap,
+// so the page redraws the board as stored.
+func (s *Server) handleTapLinks(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Links []store.TapLink `json:"links"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Links) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "links must be a non-empty array")
+		return
+	}
+	for i := range req.Links {
+		req.Links[i].KegID = strings.TrimSpace(req.Links[i].KegID)
+	}
+	if err := s.store.LinkTaps(req.Links); err != nil {
+		var inUse *store.KegInUseError
+		if errors.As(err, &inUse) {
+			writeError(w, http.StatusConflict, "keg_in_use",
+				"that scale is already linked to "+tapDescription(inUse.Tap))
+			return
+		}
+		writeStoreError(w, err, "tap")
+		return
+	}
+	taps, err := s.store.ListTaps()
+	if err != nil {
+		writeStoreError(w, err, "taps")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "taps": taps})
+}
+
 // validBeerColor checks a colour given as an SRM or a named preset, writing
 // the error itself. A drink is one or the other, never both.
 func validBeerColor(w http.ResponseWriter, srm numberOrString, preset string) bool {

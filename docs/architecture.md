@@ -196,7 +196,7 @@ path and the API never contend for SQLite's lock.
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
-| `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap`) and to a display device |
+| `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
 | `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour |
 
 There are no foreign keys.
@@ -349,7 +349,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs` | List, connected ids, known ids, ordering |
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), pours (`/pours`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
+| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all), `/api/pours/csv` in device units, `/api/pours/{id}/delete` |
 | `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
 | `GET /ws` | WebSocket feed |
@@ -414,6 +414,19 @@ own with a back link to the list. The URL hash records the open item
 (`#tap=<id>`, `#new`, `#keg=<id>`), and each page's `showView` follows it, so
 Back and reload work. Keg Setup lists every known scale with whether it is
 connected, polling `/api/kegs/connected` since connections publish no event.
+
+Tap Setup's list is a board (`renderBoard`): each scale, in `/api/kegs` order,
+beside a slot holding the tap it feeds, and a "Not on a scale" tray below for
+taps with no keg, a keg that no longer exists, or one another tap already
+holds (from a database older than the one-tap check). `tap-board.js` drags the
+cards between slots with pointer events, as `tile-gestures.js` does: a mouse
+drags as soon as it moves, a finger holds first, and the page scrolls when the
+pointer nears the top or bottom edge. A card dropped on an occupied slot swaps
+with the tap there, which moves to the dropped card's old slot or the tray;
+`dropTap` sends both changes in one `/api/taps/links` call, redraws at once,
+and redraws again from the taps the server returns. Cards stay links, so a
+click without a drag opens the editor, whose keg dropdown remains the
+keyboard route.
 
 The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
 the chosen window: a preset from 1 hour to 1 year, or Custom, which opens two

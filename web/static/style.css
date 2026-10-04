@@ -455,6 +455,74 @@ hr {
 .list-row-aside.is-empty { color: var(--muted); }
 .list-row-go { font-size: 1.2rem; line-height: 1; color: var(--muted); }
 
+/* ─── Tap Setup board ───────────────────────── */
+/* Each scale beside the tap it feeds, with taps on no scale in a tray below.
+   tap-board.js drags the cards between slots. */
+.board-help { color: var(--muted); font-size: 0.88rem; margin-bottom: 1rem; }
+.tap-board { display: grid; gap: 0.5rem; }
+.board-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) 2fr;
+  align-items: center;
+  gap: 0.75rem;
+}
+.board-scale-name { display: block; font-weight: 600; }
+.board-scale-meta { display: block; font-size: 0.82rem; color: var(--muted); }
+.board-slot {
+  min-height: 3.6rem;
+  padding: 0.25rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.board-slot.is-over { background: var(--tile-2); border-color: var(--action); border-style: solid; }
+.board-slot-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 3.1rem;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+.board-tray-head {
+  margin: 1.5rem 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.board-tray { display: grid; gap: 0.25rem; }
+
+/* A card fills its slot rather than bleeding into the tile's padding as a
+   plain list row does. */
+.tap-card.list-row {
+  width: 100%;
+  margin: 0;
+  background: var(--tile);
+  border-color: var(--line);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.tap-card.is-held { border-color: var(--action); }
+.tap-card.is-dragging { opacity: 0.35; }
+.tap-card-ghost.list-row {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  border-color: var(--action);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  cursor: grabbing;
+}
+body.is-board-dragging, body.is-board-dragging * { cursor: grabbing; }
+
+@media (max-width: 600px) {
+  .board-row { grid-template-columns: 1fr; gap: 0.35rem; }
+  .board-row + .board-row { margin-top: 0.5rem; }
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;
