@@ -429,8 +429,10 @@ history is not recoverable.
 
 The All Pours page (`pours.html`), linked from History, lists `/api/pours` for
 every keg, including pours hidden from a cleared or deleted scale's history,
-which are tagged. It reaches further back than History (90 days, a year, all
-time), since pours are never pruned. Beer and scale filters run in the browser
+which are tagged. It reaches back to all time, since pours are never pruned,
+while History stops at the log retention. Each row shows the pour's time, beer,
+style, ABV, scale, how long it took (`ended_at - started_at`) and amount; the
+tap number is left to the CSV to make room. Beer and scale filters run in the browser
 over the loaded range; the URL hash records range and filters. A summary gives
 the count, the total poured (summed per unit, as scales can be in oz or ml)
 and a per-beer breakdown. Download CSV fetches `/api/pours/csv` in device
