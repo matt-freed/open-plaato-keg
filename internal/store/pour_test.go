@@ -388,3 +388,50 @@ func TestWritePoursCSV(t *testing.T) {
 		t.Errorf("row = %q\nwant  %q", lines[1], want)
 	}
 }
+
+func TestSetLatestPours(t *testing.T) {
+	s := newTestStore(t)
+	kegIn(t, s, "keg-1", 1, 2, 18.0)
+	kegIn(t, s, "keg-2", 1, 2, 18.0)
+	for i, ended := range []int64{1_000, 3_000, 2_000} {
+		if _, err := s.db.Exec(`INSERT INTO pours (keg_id, started_at, ended_at, amount, unit)
+			VALUES ('keg-1', ?, ?, ?, 'litre')`, ended-10, ended, 0.1*float64(i+1)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The newest of all, but hidden from the keg's history.
+	if _, err := s.db.Exec(`INSERT INTO pours (keg_id, started_at, ended_at, amount, unit, hidden_from_keg)
+		VALUES ('keg-1', 3990, 4000, 0.9, 'litre', 1)`); err != nil {
+		t.Fatal(err)
+	}
+
+	kegs, _ := s.ListKegs()
+	if err := s.SetLatestPours(kegs, follow()); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range kegs {
+		switch k.ID {
+		case "keg-1":
+			if k.LatestPour == nil || k.LatestPour.EndedAt != 3_000 || !nearly(k.LatestPour.Display.Amount, 200) {
+				t.Errorf("keg-1 latest = %+v, want the visible pour ending at 3000, 200 ml", k.LatestPour)
+			}
+		case "keg-2":
+			if k.LatestPour != nil {
+				t.Errorf("keg-2 latest = %+v, want none", k.LatestPour)
+			}
+		}
+	}
+}
+
+// LatestPour is filled in for the browser only and never stored on the keg.
+func TestLatestPourIsNeverStored(t *testing.T) {
+	s := newTestStore(t)
+	kegIn(t, s, "keg-1", 1, 2, 18.0)
+	if _, err := s.UpdateKeg("keg-1", func(k *Keg) { k.LatestPour = &Pour{Amount: 1} }); err != nil {
+		t.Fatal(err)
+	}
+	k, _ := s.GetKeg("keg-1")
+	if k.LatestPour != nil {
+		t.Errorf("LatestPour = %+v after a round trip, want nil", k.LatestPour)
+	}
+}

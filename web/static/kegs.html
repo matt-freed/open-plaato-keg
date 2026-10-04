@@ -37,6 +37,7 @@
     // Which figure each keg graphic shows large: one setting for every scale,
     // chosen on Dashboard Setup.
     let amountDisplay = 'amount';
+    let timeFormat = '12h';
 
     function esc(s) {
       return String(s).replace(/[&<>"']/g, c =>
@@ -100,7 +101,8 @@
             <span class="wifi" hidden></span>
           </div>
           <h2 class="beer"></h2>
-          <div class="specs"></div>
+          <div class="specs status"></div>
+          <div class="specs last-pour"></div>
           <div class="readings"></div>
         </div>
         <div class="tile-keg">
@@ -120,8 +122,9 @@
       const unit = rawUnit === 'litre' ? 'L' : rawUnit;
       const temp = d.keg_temperature ?? keg.keg_temperature ?? null;
       const tempUnit = d.temperature_unit ?? keg.temperature_unit ?? '';
-      const pour = d.last_pour ?? keg.last_pour ?? 0;
-      const pourUnit = d.last_pour_unit || unit;
+      // The newest recorded pour, not the device's own last-pour pin, so the
+      // tile agrees with History and All Pours.
+      const lastPour = keg.latest_pour?.display ? keg.latest_pour : null;
       const pct = Number.isFinite(keg.percent_of_beer_left)
         ? Math.max(0, Math.min(100, keg.percent_of_beer_left)) : null;
       const isCO2 = keg.keg_mode === 2;
@@ -160,13 +163,6 @@
               <span class="reading-label">${isCO2 ? 'CO₂ left' : 'Left'}</span>
             </div>`,
       ];
-      if (!isCO2 && pour > 0) {
-        readings.push(`
-          <div class="reading">
-            <span class="reading-value">${Math.round(pour)}<small>${esc(pourUnit)}</small></span>
-            <span class="reading-label">Last pour</span>
-          </div>`);
-      }
       tile.querySelector('.readings').innerHTML = readings.join('');
 
       // The graphic is rebuilt only when the scale switches mode, so the
@@ -185,7 +181,14 @@
         ? `${num(pct, 1) ?? '—'}<small>%</small>`
         : `${num(amount, isCO2 ? 2 : 1) ?? '—'}<small>${esc(unit)}</small>`;
 
-      tile.querySelector('.specs').innerHTML = statusLine(keg);
+      tile.querySelector('.specs.status').innerHTML = statusLine(keg);
+      // Its own line under the status, left empty (and so hidden) when there
+      // is no pour to show.
+      tile.querySelector('.specs.last-pour').innerHTML = !isCO2 && lastPour
+        ? `<span title="${esc(new Date(lastPour.ended_at * 1000).toLocaleString())}">Last pour ` +
+          `${Math.round(lastPour.display.amount)} ${esc(lastPour.display.unit)}</span>` +
+          `<span>${esc(pourWhen(lastPour.ended_at))}</span>`
+        : '';
 
       // Wi-Fi sits with the connection state in the top row. An offline scale
       // shows the Offline badge instead, since its last signal is stale.
@@ -222,6 +225,17 @@
       if (s < 3600) return `${Math.floor(s / 60)}m ago`;
       if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
       return `${Math.floor(s / 86400)}d ago`;
+    }
+
+    // pourWhen gives a pour's time of day, with its date when it was not
+    // today: "4:34 PM" or "Sep 28, 4:34 PM".
+    function pourWhen(unixTime) {
+      const when = new Date(unixTime * 1000);
+      const clock = when.toLocaleTimeString([], {
+        hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h',
+      });
+      if (when.toDateString() === new Date().toDateString()) return clock;
+      return `${when.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${clock}`;
     }
 
     function render() {
@@ -306,9 +320,17 @@
       } catch (_) {}
     }
 
+    // Only for the last pour's time, so a failure keeps the current format.
+    async function loadTimeFormat() {
+      try {
+        const res = await fetch('/api/config/time-format');
+        if (res.ok) timeFormat = (await res.json()).time_format || '12h';
+      } catch (_) {}
+    }
+
     async function loadAll() {
       try {
-        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps(), loadAmountDisplay()]);
+        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps(), loadAmountDisplay(), loadTimeFormat()]);
         if (!kegsRes.ok) throw new Error(kegsRes.status);
         for (const id in kegs) delete kegs[id];
         for (const k of await kegsRes.json()) kegs[k.id] = k;

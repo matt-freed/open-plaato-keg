@@ -38,7 +38,7 @@ sequenceDiagram
     G2->>G2: pending[id] = KegUpdated, signal wake
     G2-->>G3: wake
     G3->>DB: GetKeg(id)
-    G3->>G3: fill(k, units): Connected, SetDisplay
+    G3->>G3: fill(k, units): Connected, SetDisplay, SetLatestPours
     G3->>G4: client.send <- {"type":"keg", ...}
     G4->>Browser: WebSocket text frame
     Browser->>Browser: render()
@@ -123,9 +123,12 @@ Woken, it calls `takePending()` to swap the map out, then:
 - reads the display-unit preference once for the batch;
 - re-reads the **whole** keg with `store.GetKeg(id)` — the event carried only an
   id, so the message carries whatever is stored now;
-- calls `fill`, which sets `connected` from the connection registry and calls
-  `k.SetDisplay(units)` to add the `display` block. The top-level fields stay
-  in the device's own units. The snapshot a newly connected tab is sent goes
+- calls `fill`, which sets `connected` from the connection registry, calls
+  `k.SetDisplay(units)` to add the `display` block, and calls
+  `store.SetLatestPours` to add `latest_pour`, the newest pour in the keg's
+  history. The top-level fields stay in the device's own units. A pour is
+  recorded in the same transaction as the packet that ends it, so the update
+  that packet triggers already carries the new pour. The snapshot a newly connected tab is sent goes
   through `fill` too, so every keg frame carries the same `connected` the REST
   API returns.
 

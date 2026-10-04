@@ -234,8 +234,9 @@ Two values get special treatment:
 
 - **`last_pour`**, the device's own pin 59, is rejected outside a plausible
   range (`pourRange`, roughly 2 to 48 oz in the keg's unit), which filters out
-  spikes such as a fridge compressor starting. It only feeds the "Last pour"
-  reading on the Kegs page; recorded pours do not use it.
+  spikes such as a fridge compressor starting. It is kept and served, but
+  nothing in the UI shows it any more: the Kegs page's last pour comes from
+  recorded pours.
 - **`beer_left_unit`** is derived from `unit`, `measure_unit` and `keg_mode`
   rather than taken from the device's pin 74, which can go stale after a mode
   change.
@@ -388,7 +389,11 @@ and a per-beer breakdown. Download CSV fetches `/api/pours/csv` in device
 units.
 
 The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
-its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
+its heading. A second specs line under the status line shows the keg's
+`latest_pour`, the newest pour still in its history: its size, then its time
+(`pourWhen`: the time of day, with the date in front when it was not today, in
+the chosen clock format). A scale with no such pour, such as one whose history was just
+cleared, shows none. It fetches `/api/taps` to show the beer on the tap a scale feeds
 and to fill the keg in that beer's colour. The specs row under each
 tile's name shows how long ago the device last sent data (`last_seen`) and how
 long ago BarHelper last accepted a reading (`barhelper_last_sent`, left out when
@@ -430,7 +435,9 @@ Stored values always stay in the units the device reported. Conversion to the
 user's preferred units is a presentation step, applied only where the browser
 reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
 paths, the history JSON and the two pours JSON endpoints. The converted values
-go in a `display` block alongside the original fields; it is never stored.
+go in a `display` block alongside the original fields; it is never stored. The
+same keg boundaries also add `latest_pour` with `store.SetLatestPours`, which
+is not a column either.
 `ConvertPours` converts each pour from its own stored unit and always scales it
 to a pour-sized sub-unit (oz, ml or g), even when following the device.
 BarHelper, the CSV exports and the Keg Setup page all use device units.

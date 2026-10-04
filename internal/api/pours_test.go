@@ -138,3 +138,39 @@ func TestMinPourEndpoint(t *testing.T) {
 		t.Errorf("config MinPour = %+v, want 60 ml", cfg.MinPour)
 	}
 }
+
+// Both keg handlers carry the newest pour still in the keg's history.
+func TestKegsCarryTheLatestPour(t *testing.T) {
+	a := newTestAPI(t)
+	pourFrom(a, "keg-1")
+	metricVolumeKeg(a, "keg-2")
+
+	var kegs []store.Keg
+	a.decode(a.do(http.MethodGet, "/api/kegs", nil), &kegs)
+	for _, k := range kegs {
+		switch k.ID {
+		case "keg-1":
+			if k.LatestPour == nil || k.LatestPour.Display == nil || k.LatestPour.Display.Unit != "ml" {
+				t.Errorf("keg-1 latest_pour = %+v, want its 500 ml pour", k.LatestPour)
+			}
+		case "keg-2":
+			if k.LatestPour != nil {
+				t.Errorf("keg-2 latest_pour = %+v, want none", k.LatestPour)
+			}
+		}
+	}
+
+	var k store.Keg
+	a.decode(a.do(http.MethodGet, "/api/kegs/keg-1", nil), &k)
+	if k.LatestPour == nil {
+		t.Fatal("GET /api/kegs/keg-1 has no latest_pour")
+	}
+
+	// Clearing the history clears the tile's last pour too.
+	assertStatus(t, a.do(http.MethodPost, "/api/kegs/keg-1/log/clear", nil), http.StatusOK)
+	k = store.Keg{}
+	a.decode(a.do(http.MethodGet, "/api/kegs/keg-1", nil), &k)
+	if k.LatestPour != nil {
+		t.Errorf("latest_pour = %+v after clearing, want none", k.LatestPour)
+	}
+}

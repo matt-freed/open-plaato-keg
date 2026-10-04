@@ -124,9 +124,14 @@ func insertPour(tx *sql.Tx, k *Keg, startedAt, endedAt int64, amount float64, un
 const pourColumns = `id, keg_id, started_at, ended_at, amount, unit,
 	beer_name, beer_style, abv, tap_number, scale_label, hidden_from_keg`
 
-func (s *Store) queryPours(where string, args ...any) ([]*Pour, error) {
-	rows, err := s.db.Query("SELECT "+pourColumns+" FROM pours WHERE "+where+
-		" ORDER BY ended_at DESC, id DESC", args...)
+// queryPours returns the pours matching where, newest first, at most limit of
+// them when limit is positive.
+func (s *Store) queryPours(where string, limit int, args ...any) ([]*Pour, error) {
+	query := "SELECT " + pourColumns + " FROM pours WHERE " + where + " ORDER BY ended_at DESC, id DESC"
+	if limit > 0 {
+		query += " LIMIT " + strconv.Itoa(limit)
+	}
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +157,7 @@ func (s *Store) queryPours(where string, args ...any) ([]*Pour, error) {
 // ListKegPours returns the pours shown in one keg's history between two
 // times, newest first. Pours hidden by clearing that history are left out.
 func (s *Store) ListKegPours(id string, from, to time.Time) ([]*Pour, error) {
-	return s.queryPours("keg_id = ? AND hidden_from_keg = 0 AND ended_at >= ? AND ended_at <= ?",
+	return s.queryPours("keg_id = ? AND hidden_from_keg = 0 AND ended_at >= ? AND ended_at <= ?", 0,
 		id, from.Unix(), to.Unix())
 }
 
@@ -163,7 +168,26 @@ func (s *Store) ListPours(from, to time.Time) ([]*Pour, error) {
 	if !from.IsZero() {
 		lo = from.Unix()
 	}
-	return s.queryPours("ended_at >= ? AND ended_at <= ?", lo, to.Unix())
+	return s.queryPours("ended_at >= ? AND ended_at <= ?", 0, lo, to.Unix())
+}
+
+// SetLatestPours fills in each keg's LatestPour: the newest pour in its
+// history, converted into the display units, or nil if it has none. A pour
+// hidden by clearing the history does not count, so a cleared scale shows no
+// last pour until it pours again.
+func (s *Store) SetLatestPours(kegs []*Keg, u DisplayUnits) error {
+	for _, k := range kegs {
+		pours, err := s.queryPours("keg_id = ? AND hidden_from_keg = 0", 1, k.ID)
+		if err != nil {
+			return err
+		}
+		k.LatestPour = nil
+		if len(pours) > 0 {
+			ConvertPours(pours, u)
+			k.LatestPour = pours[0]
+		}
+	}
+	return nil
 }
 
 // DeletePour removes one pour, or returns ErrNotFound.

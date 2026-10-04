@@ -79,7 +79,8 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   Everything else stays in the units the device reported — the stored columns,
   BarHelper, the log and pours CSV exports and every value on the Keg Setup
   page. The converted values
-  live in a `display` block that is deliberately absent from `kegColumns`.
+  live in a `display` block that is deliberately absent from `kegColumns`, as
+  is `latest_pour`, which the same keg boundaries add.
 - Every WebSocket frame carries a `type`.
 - A pour is one `is_pouring` window, sized from the amount left before it
   opened to the amount left when it closed, and recorded once by `trackPour`

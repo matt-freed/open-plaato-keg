@@ -85,3 +85,52 @@ func TestBroadcastCarriesDisplayBlock(t *testing.T) {
 
 	assertUSVolume(t, decodeKeg(t, readMessage(t, conn)))
 }
+
+// pourOn plays one half-litre pouring window on a keg stored by metricKeg.
+func pourOn(t *testing.T, st *store.Store, id string) {
+	t.Helper()
+	for _, body := range []string{"vw\x0049\x00255", "vw\x0051\x009.500", "vw\x0049\x000"} {
+		frames := []blynk.Frame{{Cmd: blynk.CmdHardware, MsgID: 1, Body: []byte(body)}}
+		if _, err := st.ApplyPacket(id, plaato.Decode(frames, false)); err != nil {
+			t.Fatalf("ApplyPacket: %v", err)
+		}
+	}
+}
+
+// Both send paths carry the newest pour, in the display units, so the Kegs
+// page's last pour changes as soon as one is recorded.
+func assertLatestPour(t *testing.T, k store.Keg) {
+	t.Helper()
+	p := k.LatestPour
+	if p == nil || p.Display == nil {
+		t.Fatalf("latest_pour = %+v, want the recorded pour", p)
+	}
+	// Half a litre is 16.9 US fl oz.
+	if p.Display.Unit != "oz" || p.Display.Amount < 16.8 || p.Display.Amount > 17.0 || p.EndedAt == 0 {
+		t.Errorf("latest_pour = %+v %+v, want ~16.9 oz with a time", p, p.Display)
+	}
+}
+
+func TestConnectSnapshotCarriesLatestPour(t *testing.T) {
+	_, st, _, url := newTestHub(t)
+	metricKeg(t, st, "keg-1")
+	pourOn(t, st, "keg-1")
+	usVolume(t, st)
+
+	conn := dialWS(t, url)
+	assertLatestPour(t, decodeKeg(t, readMessage(t, conn)))
+}
+
+func TestBroadcastCarriesLatestPour(t *testing.T) {
+	hub, st, bus, url := newTestHub(t)
+	usVolume(t, st)
+	metricKeg(t, st, "keg-1")
+
+	conn := dialWS(t, url)
+	waitForClients(t, hub, 1)
+	readMessage(t, conn) // the connect snapshot, before any pour
+
+	pourOn(t, st, "keg-1")
+	bus.Publish(events.Event{Kind: events.KegUpdated, KegID: "keg-1"})
+	assertLatestPour(t, decodeKeg(t, readMessage(t, conn)))
+}

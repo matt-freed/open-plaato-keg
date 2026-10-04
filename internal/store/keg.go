@@ -92,6 +92,10 @@ type Keg struct {
 	// user's display-unit preference. It is nil everywhere else, which is what
 	// keeps converted values off the device-write and forwarding paths.
 	Display *KegDisplay `json:"display,omitempty"`
+	// LatestPour is the newest pour in the keg's history, filled in by
+	// SetLatestPours at the same boundaries as Display. Like Display it is
+	// never stored on the keg row.
+	LatestPour *Pour `json:"latest_pour,omitempty"`
 }
 
 // KegDisplay carries a keg's readings converted into the units the user chose
