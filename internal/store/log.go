@@ -123,16 +123,32 @@ func (s *Store) ReadLog(id string, from, to time.Time) ([]LogEntry, error) {
 
 // ClearLog deletes every reading recorded for one keg and returns how many
 // rows were removed. The keg itself, and every other keg's history, is kept.
+//
+// The keg's pours are hidden from its history rather than deleted: they are
+// the long-term record and stay in the list of all pours.
 func (s *Store) ClearLog(id string) (int64, error) {
-	res, err := s.db.Exec("DELETE FROM keg_log WHERE keg_id = ?", id)
+	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	defer tx.Rollback()
+
+	res, err := tx.Exec("DELETE FROM keg_log WHERE keg_id = ?", id)
+	if err != nil {
+		return 0, err
+	}
+	removed, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec("UPDATE pours SET hidden_from_keg = 1 WHERE keg_id = ?", id); err != nil {
+		return 0, err
+	}
+	return removed, tx.Commit()
 }
 
 // PruneLog deletes readings older than LogRetention and returns how many rows
-// were removed.
+// were removed. Pours are never pruned.
 func (s *Store) PruneLog(now time.Time) (int64, error) {
 	res, err := s.db.Exec("DELETE FROM keg_log WHERE ts < ?", now.Add(-LogRetention).Unix())
 	if err != nil {

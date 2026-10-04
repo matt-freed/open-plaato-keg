@@ -75,11 +75,17 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   never taken from the device's own pin 74.
 - Display units are a presentation preference, applied only where the browser
   reads a keg: the two `internal/api` keg handlers and the two `internal/ws`
-  send paths, plus the history JSON. Everything else stays in the units the
-  device reported — the stored columns, BarHelper, the log CSV export and
-  every value on the Keg Setup page. The converted values
+  send paths, plus the history JSON and the two pours JSON endpoints.
+  Everything else stays in the units the device reported — the stored columns,
+  BarHelper, the log and pours CSV exports and every value on the Keg Setup
+  page. The converted values
   live in a `display` block that is deliberately absent from `kegColumns`.
 - Every WebSocket frame carries a `type`.
+- A pour is one `is_pouring` window, sized from the amount left before it
+  opened to the amount left when it closed, and recorded once by `trackPour`
+  only if it clears the minimum pour then. Never re-derive pours from
+  `keg_log`, and never re-filter stored pours by the current minimum. Each pour
+  keeps its own copy of the beer details and is never pruned.
 - `testdata/capture` is a recording of a real keg session. It is the reference
   for protocol work; regenerate expectations from the current pin map rather
   than trusting older snapshots.

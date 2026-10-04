@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"log/slog"
 	"time"
 
@@ -66,10 +67,15 @@ var pourRange = map[string][2]float64{
 var defaultPourRange = [2]float64{0.05, 1.4}
 
 // ApplyPacket merges a decoded packet into the stored keg and returns the
-// updated record.
+// updated record. A pour that the packet ends is recorded in the same
+// transaction.
 func (s *Store) ApplyPacket(id string, pkt plaato.Packet) (*Keg, error) {
-	return s.UpdateKeg(id, func(k *Keg) {
-		k.LastSeen = time.Now().Unix()
+	return s.updateKegTx(id, func(tx *sql.Tx, k *Keg) error {
+		now := time.Now()
+		wasPouring := k.IsPouring != nil && *k.IsPouring
+		prevAmount := k.AmountLeft
+
+		k.LastSeen = now.Unix()
 		for _, p := range pkt.Props {
 			if p.Transient {
 				continue
@@ -99,6 +105,7 @@ func (s *Store) ApplyPacket(id string, pkt plaato.Packet) (*Keg, error) {
 			}
 			k.Extra[key] = value
 		}
+		return trackPour(tx, k, wasPouring, prevAmount, now)
 	})
 }
 
@@ -123,9 +130,14 @@ func plausiblePour(k *Keg, value any) bool {
 }
 
 // SetPouring records a pouring state change without touching anything else.
-// Used to clear a stale "pouring" flag when a keg disconnects.
+// Used to clear a stale "pouring" flag when a keg disconnects, which also ends
+// any pour in progress, measured against the last amount the keg reported.
 func (s *Store) SetPouring(id string, pouring bool) (*Keg, error) {
-	return s.UpdateKeg(id, func(k *Keg) { k.IsPouring = &pouring })
+	return s.updateKegTx(id, func(tx *sql.Tx, k *Keg) error {
+		wasPouring := k.IsPouring != nil && *k.IsPouring
+		k.IsPouring = &pouring
+		return trackPour(tx, k, wasPouring, k.AmountLeft, time.Now())
+	})
 }
 
 func asFloat(v any) *float64 {

@@ -66,4 +66,39 @@ INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tast
 INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tasting_notes,keg_id,srm,color_preset,kegged_date) VALUES('a5106a35',6,'Winter Warmer','','Old Ale',8.199999999999999289,40.0,'#7a2e12','','','',22.0,'','2026-09-15');
 INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tasting_notes,keg_id,srm,color_preset,kegged_date) VALUES('efa282b5',8,'Cold Brew Porter','','Coffee Porter',6.099999999999999645,30.0,'#2a170c','','','',32.0,'','');
 INSERT INTO app_config(key,value) VALUES('display_unit_system','us');
+-- Pours: the same pours the history above was shaped by, as the server would
+-- have recorded them, each with a copy of its tap's beer. The query repeats
+-- the history's pour pattern, so the two agree. Kegerator 3's offline hours
+-- have no pours, and an older scale since deleted left a few pours behind,
+-- hidden from any scale's history but still on All Pours.
+WITH RECURSIVE
+  steps(n) AS (SELECT 0 UNION ALL SELECT n + 1 FROM steps WHERE n < 8640),
+  kegs_(id, seed) AS (VALUES
+    ('00000000000000000000000000000001', 1), ('00000000000000000000000000000002', 2),
+    ('00000000000000000000000000000003', 3), ('00000000000000000000000000000004', 4),
+    ('00000000000000000000000000000005', 5), ('00000000000000000000000000000006', 6)),
+  poured AS (
+    SELECT k.id, s.n, 0.35 + ((s.n * 31 + k.seed * 17) % 40) / 100.0 AS amount
+    FROM kegs_ k CROSS JOIN steps s
+    WHERE (s.n * 7919 + k.seed * 104729) % 97 = 0
+      AND NOT (k.id = '00000000000000000000000000000005' AND s.n BETWEEN 1700 AND 1760)),
+  first_tap AS (
+    SELECT keg_id, name, style, abv, MIN(tap_number) AS tap_number
+    FROM taps WHERE keg_id <> '' GROUP BY keg_id)
+INSERT INTO pours(keg_id,started_at,ended_at,amount,unit,beer_name,beer_style,abv,tap_number,scale_label,hidden_from_keg)
+SELECT p.id,
+  CAST(strftime('%s','now') AS INTEGER) - p.n * 300 - (8 + p.n % 25),
+  CAST(strftime('%s','now') AS INTEGER) - p.n * 300,
+  p.amount,
+  CASE WHEN p.id = '00000000000000000000000000000001' THEN 'kg' ELSE 'litre' END,
+  COALESCE(t.name, ''), COALESCE(t.style, ''), t.abv, t.tap_number, k.label, 0
+FROM poured p
+JOIN kegs k ON k.id = p.id
+LEFT JOIN first_tap t ON t.keg_id = p.id;
+INSERT INTO pours(keg_id,started_at,ended_at,amount,unit,beer_name,beer_style,abv,tap_number,scale_label,hidden_from_keg)
+SELECT '00000000000000000000000000000009',
+  CAST(strftime('%s','now') AS INTEGER) - d * 86400 - 14,
+  CAST(strftime('%s','now') AS INTEGER) - d * 86400,
+  0.47, 'litre', 'Summer Saison', 'Saison', 5.6, 6, 'Old Kegerator', 1
+FROM (SELECT 25 AS d UNION ALL SELECT 26 UNION ALL SELECT 27 UNION ALL SELECT 28);
 COMMIT;

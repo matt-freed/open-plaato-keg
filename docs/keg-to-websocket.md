@@ -88,12 +88,17 @@ The connection registered its keg id when the device logged in, and it is
 already confirmed as a keg (`amount_left` is itself a keg-identifying pin).
 Unconfirmed devices get no further than this.
 
-### 6. Persistence — `internal/store/apply.go`, `ApplyPacket` → `keg.go`, `UpdateKeg`
+### 6. Persistence — `internal/store/apply.go`, `ApplyPacket` → `keg.go`, `updateKegTx`
 
 In one transaction: `SELECT` the keg row, apply the `amount_left` setter from
 `kegSetters`, stamp `last_seen` (only `ApplyPacket` does; API edits through
-`UpdateKeg` leave it alone) and derive `beer_left_unit`, then
-`INSERT OR REPLACE` and `COMMIT`. The store has a single SQLite connection, so
+`UpdateKeg` leave it alone), run `trackPour` (`pour.go`), derive
+`beer_left_unit`, then `INSERT OR REPLACE` and `COMMIT`. `trackPour` notes the
+start of a pouring window when `is_pouring` turns on and, when it turns off,
+inserts a `pours` row in the same transaction if the drop clears the minimum
+pour. A plain amount reading like this one, outside a pouring window, never
+creates a pour. No WebSocket frame announces a new pour; the History and All
+Pours pages read pours when they load. The store has a single SQLite connection, so
 this queues behind any API query already running.
 
 ### 7. Side effects — `ingest` (still G1)
@@ -224,8 +229,8 @@ costs nothing.
 
 Steps 7 to 12 are shared by everything that publishes a keg event:
 
-- **A keg disconnecting** — `finish` clears the pouring flag with `SetPouring`
-  and publishes `KegUpdated`.
+- **A keg disconnecting** — `finish` clears the pouring flag with `SetPouring`,
+  which also ends and records any pour in progress, and publishes `KegUpdated`.
 - **An edit in the UI** — `internal/api/kegs.go` updates the store and publishes
   `KegUpdated`.
 - **Deleting a keg** — `internal/api/kegs.go` publishes `KegRemoved`. The flush

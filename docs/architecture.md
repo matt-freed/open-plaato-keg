@@ -157,8 +157,9 @@ acknowledgement per read echoing the first frame's message id**, and calls
    `firmware_version`). A Plaato Airlock sends indistinguishable metadata, and
    accepting that would create phantom kegs.
 3. Until confirmed, metadata is buffered and nothing is stored.
-4. Once confirmed: `store.ApplyPacket`, a throttled history row, a
-   `KegUpdated` event on the bus, and the latest volume to BarHelper.
+4. Once confirmed: `store.ApplyPacket` (which also records a pour when the
+   packet ends one), a throttled history row, a `KegUpdated` event on the bus,
+   and the latest volume to BarHelper.
 
 **`Registry`** maps keg id → live `*Conn` behind an `RWMutex`. It is how
 anything outside a device's own goroutine reaches that device.
@@ -168,7 +169,8 @@ anything outside a device's own goroutine reaches that device.
 - `Unregister` removes an entry only if it still points at the caller's
   connection, so a displaced connection's cleanup cannot remove its
   replacement. When it does remove the entry, `finish` clears the keg's pouring
-  flag, since a device that drops mid-pour never reports the pour ending.
+  flag with `SetPouring`, since a device that drops mid-pour never reports the
+  pour ending. That also ends and records the pour in progress.
 - `Conn.Send` serialises writes, because acknowledgements from the read loop
   and commands from HTTP handlers share one socket.
 
@@ -193,8 +195,9 @@ path and the API never contend for SQLite's lock.
 |---|---|
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
+| `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
 | `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap`) and to a display device |
-| `app_config` | Key/value settings: theme, display units, amount display, home page, time format |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour |
 
 There are no foreign keys.
 
@@ -210,24 +213,29 @@ There are no foreign keys.
   when the device last sent a data packet, stamped only by `ApplyPacket`.
   `barhelper_last_sent` is when BarHelper last accepted a reading, written by
   `RecordBarHelperSent`; 0 means never.
+- **`pour_started_at`** and **`pour_start_amount`** hold the pour in progress
+  (see Pours below). They are server state, so they are stored but tagged
+  `json:"-"`.
 
 `kegColumns` is the single list that drives both the `INSERT` and the `SELECT`,
 so the column list, the values and the scan destinations cannot drift apart.
 
 ### Applying a packet
 
-`ApplyPacket` → `UpdateKeg` runs a read-modify-write in one transaction: load
+`ApplyPacket` → `updateKegTx` runs a read-modify-write in one transaction: load
 the row (or start a new one), apply each non-transient property through
-`kegSetters`, merge metadata and unknown pins, stamp `last_seen`, derive
-`beer_left_unit`, then `INSERT OR REPLACE`. Because a packet carries only the
+`kegSetters`, merge metadata and unknown pins, stamp `last_seen`, run
+`trackPour`, derive `beer_left_unit`, then `INSERT OR REPLACE`. `UpdateKeg` is
+the same without access to the transaction. Because a packet carries only the
 pins that changed, fields it does not mention keep their stored values. The
 first confirmed packet from a new keg id creates its row.
 
 Two values get special treatment:
 
-- **`last_pour`** is rejected outside a plausible range (roughly 2 to 48 oz in
-  the keg's unit), which filters out spikes such as a fridge compressor
-  starting.
+- **`last_pour`**, the device's own pin 59, is rejected outside a plausible
+  range (`pourRange`, roughly 2 to 48 oz in the keg's unit), which filters out
+  spikes such as a fridge compressor starting. It only feeds the "Last pour"
+  reading on the Kegs page; recorded pours do not use it.
 - **`beer_left_unit`** is derived from `unit`, `measure_unit` and `keg_mode`
   rather than taken from the device's pin 74, which can go stale after a mode
   change.
@@ -238,6 +246,41 @@ After each stored packet, `ingest` writes a `keg_log` row if the keg has at
 least one loggable reading and the in-memory `LogThrottle` allows it — at most
 one row per keg per minute. The row is a snapshot of the stored keg, not just
 the packet. Rows older than 90 days are pruned once a day.
+
+### Pours
+
+A pour is one pouring window reported by the keg. `trackPour` in
+`internal/store/pour.go` runs inside `ApplyPacket` and `SetPouring`, with the
+keg's pouring flag and amount from before the change:
+
+- **Start.** `is_pouring` turns on. The start time and the amount left from
+  *before* the packet go in `pour_started_at` and `pour_start_amount`, so a pour
+  that starts in the same packet as the first falling reading is measured from
+  the right place, and a restart mid-pour does not lose it.
+- **End.** `is_pouring` turns off, or the keg disconnects and `finish` calls
+  `SetPouring(false)`. The size is the start amount minus the amount left after
+  the packet, in the keg's `beer_left_unit`. The firmware sends its settled
+  amount before it clears pin 49.
+- **Recorded** only if the keg is in beer mode, both amounts are known, and the
+  size is at least the minimum pour and at most `maxPourGal` (128 US fl oz,
+  converted into the keg's unit). The cap catches a lifted keg or a vibration
+  spike while still allowing a pitcher. Anything else is logged at debug level
+  and dropped.
+
+Scale jitter outside a pouring window can never become a pour. The minimum
+pour (`MinPour`, default 2 oz, entered in oz or ml on Dashboard Setup) is read
+by `minPourTx` when a pour ends and converted into the keg's unit by
+`MinPour.In`. It is applied once, so changing it only affects future pours.
+
+`insertPour` copies the beer's name, style, ABV and tap number from the first
+tap by tap number that draws from the keg, plus the keg's label, so editing the
+tap or kegging a new beer later does not rewrite past pours. Each pour also
+records its own unit, unlike `keg_log`.
+
+Pours are never pruned. `ClearLog` and `DeleteKeg` set `hidden_from_keg` rather
+than deleting them: they drop out of that keg's history (`ListKegPours`) but
+stay in the list of all pours (`ListPours`). `DeletePour` removes one pour
+everywhere.
 
 ## Live updates — `internal/events` and `internal/ws`
 
@@ -272,10 +315,11 @@ A chi router with `Recoverer` and `RealIP` middleware:
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
 | `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), delete |
+| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), pours (`/pours`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
-| `/api/config/…` | Home page, time format, display units, amount display, theme |
+| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all), `/api/pours/csv` in device units, `/api/pours/{id}/delete` |
+| `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -285,12 +329,13 @@ browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
-Keg Setup, history and their setup pages. A tap holds all of its drink's
+Keg Setup, history, All Pours and their setup pages. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
 title from its `heading` attribute, the Tap List, Kegs and History links, the
-Configure menu with the server version, and marks the current page. Pages load
+Configure menu with the server version, and marks the current page. All Pours
+has no link of its own; it is reached from History, which stays marked there. Pages load
 it in `<head>` without `defer`, so the element is defined before the parser
 reaches it. The tap list sets the beer count beside its title through the
 element's `count` property.
@@ -322,14 +367,25 @@ the chosen range. Amount and temperature are two charts sharing a time axis
 rather than one chart with two y-axes, and a line breaks where readings stop
 for more than ten minutes. The amount chart's Fit/Full toggle (`axisScale`) picks its
 y-axis: Fit, the default, pads the range's lowest and highest value by 15%
-in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero. Its summary works out poured and pours in the
-browser, in `findPours`, from drops in the amount left larger than the scale's
-jitter: the logged `is_pouring` flag is sampled once a minute, which misses
-most pours, so it is not used.
+in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero.
+Its poured and pours figures, the pour markers on the amount chart and the
+Pours table below the charts all come from the stored pours in
+`/api/kegs/{id}/pours`; a marker sits at the pour's end time, on the nearest
+logged reading. Each row of the table can be deleted.
 Clear history posts to `/api/kegs/{id}/log/clear`, which `handleClearKegLog`
 serves with `store.ClearLog`: every reading for that keg goes, in every range,
-while the keg and the other kegs' history stay. The page asks for confirmation
-first, since the history is not recoverable.
+and its pours leave the page, while the keg and the other kegs' history stay.
+The pours remain on All Pours. The page asks for confirmation first, since the
+history is not recoverable.
+
+The All Pours page (`pours.html`), linked from History, lists `/api/pours` for
+every keg, including pours hidden from a cleared or deleted scale's history,
+which are tagged. It reaches further back than History (90 days, a year, all
+time), since pours are never pruned. Beer and scale filters run in the browser
+over the loaded range; the URL hash records range and filters. A summary gives
+the count, the total poured (summed per unit, as scales can be in oz or ml)
+and a per-beer breakdown. Download CSV fetches `/api/pours/csv` in device
+units.
 
 The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. It fetches `/api/taps` to show the beer on the tap a scale feeds
@@ -373,9 +429,11 @@ the colours had no effect, so they are treated as unset.
 Stored values always stay in the units the device reported. Conversion to the
 user's preferred units is a presentation step, applied only where the browser
 reads a keg: the two keg handlers in `internal/api`, the two WebSocket send
-paths and the history JSON. The converted values go in a `display` block
-alongside the original fields; it is never stored. BarHelper, the CSV export
-and the Keg Setup page all use device units.
+paths, the history JSON and the two pours JSON endpoints. The converted values
+go in a `display` block alongside the original fields; it is never stored.
+`ConvertPours` converts each pour from its own stored unit and always scales it
+to a pour-sized sub-unit (oz, ml or g), even when following the device.
+BarHelper, the CSV exports and the Keg Setup page all use device units.
 
 ### Amount display
 
@@ -461,7 +519,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   `internal/store/schema.sql`. Its keg 1 shares the capture's token. Its
   history is generated by a recursive query when the file is loaded: 30 days
   at five-minute steps, ending at the load time and at each keg's current
-  reading, from plain arithmetic so every load gives the same shape.
+  reading, from plain arithmetic so every load gives the same shape. A second
+  query records the same pours in `pours`, plus a few from a deleted scale
+  that only show on All Pours.
 - CI (`.github/workflows/ci.yaml`) checks `gofmt`, runs `go vet`,
   `go test -race ./...` and `go build ./...`.
 - Releases (`.github/workflows/release.yaml`) run on every push to `main`: the
@@ -472,6 +532,15 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   directory must be writable by that user.
 
 ## Known limitations
+
+- **No pour backfill.** Pours are recorded from when this server version first
+  sees a pouring window; the minute history from before it is not converted.
+- **Shutdown mid-pour.** For the reason below, a pour in progress at shutdown is
+  not ended. Its start is stored, so it ends, and is recorded, when the keg
+  reconnects and reports the flag off.
+- **Amount settling after the flag.** A pour is sized from the amount left when
+  the flag clears. Firmware that cleared pin 49 before sending its settled
+  reading would under-report the pour.
 
 - **Shutdown and pouring state.** `Registry.CloseAll` empties the map before
   closing connections, so `finish` cannot unregister them and skips clearing
