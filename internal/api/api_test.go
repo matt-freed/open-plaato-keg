@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -423,6 +424,90 @@ func TestLongHistoryRangeIsSampled(t *testing.T) {
 	assertStatus(t, rec, http.StatusOK)
 	if lines := strings.Count(rec.Body.String(), "\n"); lines != 11 {
 		t.Errorf("csv has %d lines, want a header and all 10 rows", lines)
+	}
+}
+
+// The step a window is averaged to depends only on its length, so a custom
+// window gets the same step as a preset of the same length, and no window
+// sends more than maxChartPoints readings.
+func TestSampleStep(t *testing.T) {
+	day := 24 * time.Hour
+	cases := []struct {
+		window time.Duration
+		want   time.Duration
+	}{
+		{time.Hour, 0},
+		{24 * time.Hour, 0},
+		{36 * time.Hour, 10 * time.Minute},
+		{7 * day, 10 * time.Minute},
+		{30 * day, 30 * time.Minute},
+		{90 * day, 2 * time.Hour},
+		{180 * day, 3 * time.Hour},
+		{365 * day, 8 * time.Hour},
+		{3 * 365 * day, 24 * time.Hour},
+		{10 * 365 * day, 3 * day},
+	}
+	for _, c := range cases {
+		got := sampleStep(c.window)
+		if got != c.want {
+			t.Errorf("sampleStep(%v) = %v, want %v", c.window, got, c.want)
+		}
+		if got > 0 && c.window/got > maxChartPoints {
+			t.Errorf("sampleStep(%v) = %v gives %d points", c.window, got, c.window/got)
+		}
+	}
+}
+
+// A custom window reads exactly the times asked for, and its pours too.
+func TestCustomHistoryWindow(t *testing.T) {
+	a := newTestAPI(t)
+	k := a.storeKeg("keg-1", "vw\x0051\x003.000")
+	base := time.Now().Add(-100 * 24 * time.Hour).Truncate(time.Hour)
+	for i := range 5 {
+		if err := a.store.AppendLog(k, base.Add(time.Duration(i)*time.Hour)); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+
+	// Hours 1 to 3 of the five, two hours long, so every reading is sent.
+	from, to := base.Add(time.Hour).Unix(), base.Add(3*time.Hour).Unix()
+	q := "?from=" + strconv.FormatInt(from, 10) + "&to=" + strconv.FormatInt(to, 10)
+
+	rec := a.do(http.MethodGet, "/api/kegs/keg-1/log"+q, nil)
+	assertStatus(t, rec, http.StatusOK)
+	if got := rec.Header().Get("X-Log-Step-Seconds"); got != "0" {
+		t.Errorf("X-Log-Step-Seconds = %q, want 0 for a two-hour window", got)
+	}
+	var entries []store.LogEntry
+	a.decode(rec, &entries)
+	if len(entries) != 3 {
+		t.Errorf("got %d entries, want the 3 inside the window", len(entries))
+	}
+
+	rec = a.do(http.MethodGet, "/api/kegs/keg-1/log/csv"+q, nil)
+	assertStatus(t, rec, http.StatusOK)
+	if lines := strings.Count(rec.Body.String(), "\n"); lines != 4 {
+		t.Errorf("csv has %d lines, want a header and 3 rows", lines)
+	}
+
+	assertStatus(t, a.do(http.MethodGet, "/api/kegs/keg-1/pours"+q, nil), http.StatusOK)
+}
+
+func TestCustomHistoryWindowRejectsBadTimes(t *testing.T) {
+	a := newTestAPI(t)
+	a.storeKeg("keg-1", "vw\x0051\x003.000")
+	for _, q := range []string{
+		"?from=100",        // to missing
+		"?from=abc&to=200", // not a number
+		"?from=200&to=100", // ends before it starts
+		"?from=200&to=200", // empty
+	} {
+		for _, path := range []string{"/log", "/log/csv", "/pours"} {
+			rec := a.do(http.MethodGet, "/api/kegs/keg-1"+path+q, nil)
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("%s%s: status %d, want 400", path, q, rec.Code)
+			}
+		}
 	}
 }
 

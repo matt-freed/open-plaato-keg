@@ -262,14 +262,22 @@ once a day after that:
   already reduced to one aligned row, so a second run changes nothing. Pours
   are stored separately and are unaffected.
 
-Reads for the chart are averaged too. `logRanges` in `internal/api/history.go`
-gives each range a step: none up to 24 hours, then 10 minutes for 7 days, 30
-minutes for 30 days, and 2, 3 and 8 hours for 90 days, 180 days and a year,
-so no chart exceeds 1,440 points. Past 30 days each step is a whole number of
-compacted hours. `ReadLogSampled` groups by `ts / step`, timestamps each point
-at the average time of its readings, and averages them the same way as
-`CompactLog`. `handleKegLog` reports the step in `X-Log-Step-Seconds`. The CSV
-export is never averaged; it is every row stored for the range.
+History requests name their window one of two ways, resolved by
+`historyWindow` in `internal/api/history.go`: a preset `?range=` from
+`logRanges`, ending now, or a custom `?from=&to=` in unix seconds. A custom
+window that is malformed or ends before it starts is a 400. `/log`, `/log/csv`
+and the keg's `/pours` all accept both.
+
+Reads for the chart are averaged too. `sampleStep` picks the step from the
+window's length alone: the smallest of `sampleSteps` that keeps it to 1,440
+points (`maxChartPoints`), and none for a day or less. The presets come out at
+10 minutes for 7 days, 30 minutes for 30 days, and 2, 3 and 8 hours for 90
+days, 180 days and a year, and a custom window of the same length gets the
+same step. Past an hour each step is a whole number of compacted hours.
+`ReadLogSampled` groups by `ts / step`, timestamps each point at the average
+time of its readings, and averages them the same way as `CompactLog`.
+`handleKegLog` reports the step in `X-Log-Step-Seconds`. The CSV export is
+never averaged; it is every row stored for the window.
 
 ### Pours
 
@@ -387,15 +395,23 @@ Back and reload work. Keg Setup lists every known scale with whether it is
 connected, polling `/api/kegs/connected` since connections publish no event.
 
 The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
-the chosen range. Amount and temperature are two charts sharing a time axis
-rather than one chart with two y-axes, and a line breaks where readings stop
-for more than ten minutes, or three steps on an averaged range. Ranges run from
-1 hour to 1 year. `AXIS_TICKS` places the time axis's ticks on clock or calendar
-boundaries: at most seven for most ranges, so Chart.js never thins them out,
-and one per month over a year.
+the chosen window: a preset from 1 hour to 1 year, or Custom, which opens two
+`datetime-local` inputs filled with the window already shown and changes
+nothing until Apply. A custom window is kept in the URL as
+`range=custom&from=…&to=…` in unix seconds. Amount and temperature are two
+charts sharing a time axis rather than one chart with two y-axes. `gapsAfter`
+breaks a line where readings stop for longer than ten minutes, three steps,
+and three times the median spacing of the points around it, so hourly
+compacted history stays continuous even in a short custom window while a
+scale that went offline still shows as a break. Each line's gaps come from the
+points it draws, and a broken segment is drawn transparent.
+`tickSpec` places the time axis's ticks on clock or calendar boundaries,
+chosen by the window's length so a custom window looks like the preset of the
+same length: at most seven up to six months, so Chart.js never thins them out,
+and one per month up to about a year.
 `axisLabel` then puts the date under the first tick and wherever the day turns
-on ranges of a day or less, and the year under the first tick and wherever the
-year turns on longer ones. The hover readout and the Pours table add the year
+on windows of up to a few days, and the year under the first tick and wherever
+the year turns on longer ones. The hover readout and the Pours table add the year
 to any date outside the current one. The amount chart's Fit/Full toggle (`axisScale`) picks its
 y-axis: Fit, the default, pads the range's lowest and highest value by 15%
 in `fitAxis`, so a pour from a nearly full keg is a visible step; Full starts the axis at zero.
