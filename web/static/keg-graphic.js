@@ -62,3 +62,26 @@ function kegSvg() {
 function kegLevelTransform(pct) {
   return `translateY(${BODY_H * (1 - (pct ?? 0) / 100)}px)`;
 }
+
+// Less than a 12 oz glass left counts as empty. It is judged on the device's
+// own reading and unit, as kilograms per unit, with a litre of beer taken to
+// weigh a kilogram like everywhere in package units.
+const EMPTY_BELOW_KG = 12 / 128 * 3.78541;
+const KG_PER_BEER_UNIT = { litre: 1, kg: 1, lbs: 0.453592, gal: 3.78541 };
+
+// isKegEmpty says whether a keg is down to its last glass. A CO₂ cylinder, or
+// a keg whose unit is not known yet, is empty only once it reads below zero.
+function isKegEmpty(keg) {
+  if (!Number.isFinite(keg?.amount_left)) return false;
+  const kgPerUnit = keg.keg_mode === 2 ? null : KG_PER_BEER_UNIT[keg.beer_left_unit];
+  return kgPerUnit ? keg.amount_left * kgPerUnit < EMPTY_BELOW_KG : keg.amount_left < 0;
+}
+
+// keepEmptyInPlace merges a reordering of the tiles above the Empty section
+// back into the full saved order. Each moved id takes the next slot that one
+// of them held, so an empty keg keeps its place and returns to it once full.
+function keepEmptyInPlace(fullOrder, movedOrder) {
+  const moved = new Set(movedOrder);
+  let next = 0;
+  return fullOrder.map(id => moved.has(id) ? movedOrder[next++] : id);
+}

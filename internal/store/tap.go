@@ -123,15 +123,7 @@ func (s *Store) SaveTap(t *Tap) error {
 	defer tx.Rollback()
 
 	if t.KegID != "" {
-		other := &Tap{}
-		err := tx.QueryRow(
-			"SELECT id, tap_number, name FROM taps WHERE keg_id = ? AND id != ? ORDER BY tap_number LIMIT 1",
-			t.KegID, t.ID,
-		).Scan(&other.ID, &other.TapNumber, &other.Name)
-		switch {
-		case err == nil:
-			return &KegInUseError{Tap: other}
-		case !errors.Is(err, sql.ErrNoRows):
+		if err := checkKegFree(tx, t.KegID, t.ID); err != nil {
 			return err
 		}
 	}
@@ -141,6 +133,65 @@ func (s *Store) SaveTap(t *Tap) error {
 		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
 		t.Description, t.TastingNotes, t.KeggedDate, t.KegID); err != nil {
 		return err
+	}
+	return tx.Commit()
+}
+
+// checkKegFree returns a KegInUseError if a tap other than tapID draws from
+// kegID.
+func checkKegFree(tx *sql.Tx, kegID, tapID string) error {
+	other := &Tap{}
+	err := tx.QueryRow(
+		"SELECT id, tap_number, name FROM taps WHERE keg_id = ? AND id != ? ORDER BY tap_number LIMIT 1",
+		kegID, tapID,
+	).Scan(&other.ID, &other.TapNumber, &other.Name)
+	switch {
+	case err == nil:
+		return &KegInUseError{Tap: other}
+	case errors.Is(err, sql.ErrNoRows):
+		return nil
+	default:
+		return err
+	}
+}
+
+// TapLink sets the keg a tap draws from; an empty KegID unlinks it.
+type TapLink struct {
+	TapID string `json:"tap_id"`
+	KegID string `json:"keg_id"`
+}
+
+// LinkTaps changes which keg each named tap draws from, all at once, which is
+// how the Tap Setup board saves a drop. Every link is applied before any keg
+// is checked, so two taps can swap kegs in one call; a keg left on two taps
+// fails the whole call with a KegInUseError. Only the kegs named are checked,
+// so a database that already has some other keg on two taps can still be
+// rearranged. An unknown tap id fails it with ErrNotFound.
+func (s *Store) LinkTaps(links []TapLink) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, l := range links {
+		res, err := tx.Exec("UPDATE taps SET keg_id = ? WHERE id = ?", l.KegID, l.TapID)
+		if err != nil {
+			return err
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n == 0 {
+			return ErrNotFound
+		}
+	}
+	for _, l := range links {
+		if l.KegID == "" {
+			continue
+		}
+		if err := checkKegFree(tx, l.KegID, l.TapID); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }

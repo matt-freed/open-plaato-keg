@@ -32,18 +32,6 @@
     .status a { color: var(--text); }
     .status:empty { display: none; }
 
-    .tile.dragging {
-      cursor: grabbing;
-      pointer-events: none;
-      z-index: 1000;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
-      border-color: rgba(255, 255, 255, 0.18);
-    }
-    .tile-placeholder {
-      border: 2px dashed rgba(255, 255, 255, 0.12);
-      border-radius: var(--radius);
-    }
-    body.is-dragging { cursor: grabbing; }
   </style>
 </head>
 <body>
@@ -53,14 +41,22 @@
   <main>
     <p class="status" id="status">Loading taps…</p>
     <div class="grid" id="grid"></div>
+    <section class="empty-section" id="emptySection" hidden>
+      <h2 class="empty-section-heading">Empty</h2>
+      <div class="grid" id="emptyGrid"></div>
+    </section>
   </main>
 
   <script src="/beer-color.js"></script>
   <script src="/keg-graphic.js"></script>
+  <script src="/tile-menu.js"></script>
+  <script src="/tile-gestures.js"></script>
   <script>
     'use strict';
 
     const grid = document.getElementById('grid');
+    const emptyGrid = document.getElementById('emptyGrid');
+    const emptySection = document.getElementById('emptySection');
     const statusEl = document.getElementById('status');
 
     let taps = [];
@@ -141,6 +137,7 @@
           <div class="tile-meta">
             <span class="keg-name"></span>
             <span class="pouring">Pouring</span>
+            <span class="empty">Empty</span>
           </div>
           <h2 class="beer"></h2>
           <div class="specs"></div>
@@ -175,6 +172,7 @@
         : Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : null;
 
       tile.classList.toggle('is-pouring', keg?.is_pouring === true);
+      tile.classList.toggle('is-empty', isKegEmpty(keg));
 
       tile.querySelector('.keg-name').textContent =
         keg ? (keg.label || 'Keg ' + keg.id.slice(0, 6)) : '';
@@ -225,236 +223,80 @@
     function render() {
       // Rebuilding mid-drag would pull the tile out from under the pointer;
       // the drop renders instead.
-      if (drag) { renderPending = true; return; }
+      if (gestures.active) { renderPending = true; return; }
 
       document.querySelector('site-header').count =
         taps.length ? `${taps.length} ${taps.length === 1 ? 'beer' : 'beers'}` : '';
 
       if (!taps.length) {
         grid.replaceChildren();
+        emptyGrid.replaceChildren();
+        emptySection.hidden = true;
         statusEl.innerHTML =
           'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
         return;
       }
       statusEl.textContent = '';
 
-      const existing = new Map([...grid.children].map(t => [t.dataset.tapId, t]));
-      const ordered = taps.map(tap => {
+      const existing = new Map([...grid.children, ...emptyGrid.children].map(t => [t.dataset.tapId, t]));
+      const full = [], empty = [];
+      for (const tap of taps) {
         const tile = existing.get(tap.id) ?? createTile(tap);
         existing.delete(tap.id);
         updateTile(tile, tap, kegs[tap.keg_id]);
-        return tile;
-      });
+        (tile.classList.contains('is-empty') ? empty : full).push(tile);
+      }
       existing.forEach(t => t.remove());
 
-      // Only move nodes whose position changed; appending every tile would
-      // restart their transitions.
-      ordered.forEach((tile, i) => {
-        if (grid.children[i] !== tile) grid.insertBefore(tile, grid.children[i] ?? null);
+      placeTiles(grid, full);
+      placeTiles(emptyGrid, empty);
+      emptySection.hidden = !empty.length;
+    }
+
+    // placeTiles puts tiles into a grid in order. Only nodes whose position
+    // changed are moved; appending every tile would restart their transitions.
+    function placeTiles(container, tiles) {
+      tiles.forEach((tile, i) => {
+        if (container.children[i] !== tile) container.insertBefore(tile, container.children[i] ?? null);
       });
+      while (container.children.length > tiles.length) container.lastElementChild.remove();
     }
 
     function updateKegTiles(kegId) {
-      if (drag) { renderPending = true; return; }
+      if (gestures.active) { renderPending = true; return; }
       for (const tap of taps) {
         if (tap.keg_id !== kegId) continue;
-        const tile = grid.querySelector(`.tile[data-tap-id="${CSS.escape(tap.id)}"]`);
-        if (tile) updateTile(tile, tap, kegs[kegId]);
-      }
-    }
-
-    // ── Drag to rearrange ──────────────────────────
-    // Pointer events rather than HTML5 drag and drop, which does not work on
-    // touch screens. A mouse drags as soon as it moves; a finger has to press
-    // and hold first, so the page can still be scrolled.
-    const DRAG_THRESHOLD = 6;
-    const LONG_PRESS_MS = 350;
-
-    let press = null;
-    let drag = null;
-    let renderPending = false;
-
-    grid.addEventListener('pointerdown', e => {
-      if (e.button !== 0 || drag) return;
-      const tile = e.target.closest('.tile');
-      if (!tile) return;
-      press = { tile, id: e.pointerId, type: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
-      if (e.pointerType === 'touch') {
-        press.timer = setTimeout(() => {
-          if (!press) return;
-          navigator.vibrate?.(10);
-          startDrag(press);
-        }, LONG_PRESS_MS);
-      }
-    });
-
-    window.addEventListener('pointermove', e => {
-      if (drag) {
-        if (e.pointerId === drag.id) moveDrag(e.clientX, e.clientY);
-        return;
-      }
-      if (!press || e.pointerId !== press.id) return;
-      press.x = e.clientX;
-      press.y = e.clientY;
-      if (Math.hypot(press.x - press.x0, press.y - press.y0) < DRAG_THRESHOLD) return;
-      if (press.type === 'touch') { clearPress(); return; } // the user is scrolling
-      startDrag(press);
-    });
-
-    window.addEventListener('pointerup', e => {
-      if (drag && e.pointerId === drag.id) endDrag(true);
-      clearPress();
-    });
-    window.addEventListener('pointercancel', e => {
-      if (drag && e.pointerId === drag.id) endDrag(true);
-      clearPress();
-    });
-    window.addEventListener('keydown', e => {
-      if (e.key === 'Escape' && drag) endDrag(false);
-    });
-    // Once a touch drag has started, stop the browser from scrolling with it.
-    document.addEventListener('touchmove', e => { if (drag) e.preventDefault(); }, { passive: false });
-    grid.addEventListener('contextmenu', e => { if (press || drag) e.preventDefault(); });
-
-    function clearPress() {
-      if (press?.timer) clearTimeout(press.timer);
-      press = null;
-    }
-
-    function startDrag(p) {
-      const { tile } = p;
-      clearPress();
-      const rect = tile.getBoundingClientRect();
-
-      const placeholder = document.createElement('div');
-      placeholder.className = 'tile-placeholder';
-      tile.before(placeholder);
-
-      drag = {
-        tile, placeholder, id: p.id,
-        x0: p.x0, y0: p.y0,
-        startOrder: [...grid.children].filter(el => el !== placeholder).map(el => el.dataset.tapId),
-        lastX: p.x, lastY: p.y,
-        scrollSpeed: 0,
-      };
-
-      tile.getAnimations().forEach(a => a.cancel());
-      tile.classList.add('dragging');
-      document.body.classList.add('is-dragging');
-      Object.assign(tile.style, {
-        position: 'fixed',
-        left: rect.left + 'px',
-        top: rect.top + 'px',
-        width: rect.width + 'px',
-        height: rect.height + 'px',
-      });
-      moveDrag(p.x, p.y);
-    }
-
-    function moveDrag(x, y) {
-      drag.lastX = x;
-      drag.lastY = y;
-      drag.tile.style.transform =
-        `translate(${x - drag.x0}px, ${y - drag.y0}px) rotate(1.2deg) scale(1.03)`;
-
-      // Scroll when the pointer nears the top or bottom edge.
-      const edge = 70;
-      drag.scrollSpeed = y < edge ? -(edge - y) / 4 : y > innerHeight - edge ? (y - innerHeight + edge) / 4 : 0;
-      if (drag.scrollSpeed && !drag.scrolling) {
-        drag.scrolling = true;
-        requestAnimationFrame(autoScroll);
-      }
-
-      reposition(x, y);
-    }
-
-    function autoScroll() {
-      if (!drag || !drag.scrollSpeed) { if (drag) drag.scrolling = false; return; }
-      window.scrollBy(0, drag.scrollSpeed);
-      reposition(drag.lastX, drag.lastY);
-      requestAnimationFrame(autoScroll);
-    }
-
-    // reposition moves the placeholder to the slot under the pointer. It hit
-    // tests against layout boxes rather than on-screen ones, so tiles that are
-    // still sliding into place cannot be hit twice and make the order flicker.
-    function reposition(x, y) {
-      const g = grid.getBoundingClientRect();
-      const tiles = [...grid.querySelectorAll('.tile:not(.dragging)')];
-      const over = tiles.find(t => {
-        const left = g.left + t.offsetLeft, top = g.top + t.offsetTop;
-        return x >= left && x < left + t.offsetWidth && y >= top && y < top + t.offsetHeight;
-      });
-      if (!over) return;
-
-      const items = [...grid.children];
-      const from = items.indexOf(drag.placeholder);
-      const to = items.indexOf(over);
-      animateLayout(() => {
-        if (to > from) over.after(drag.placeholder);
-        else over.before(drag.placeholder);
-      });
-    }
-
-    // animateLayout runs a DOM change and slides every tile from where it was
-    // to where it ended up.
-    function animateLayout(change) {
-      const tiles = [...grid.querySelectorAll('.tile:not(.dragging)')];
-      const before = new Map(tiles.map(t => [t, t.getBoundingClientRect()]));
-      change();
-      for (const t of tiles) {
-        t.getAnimations().forEach(a => a.cancel());
-        const a = before.get(t), b = t.getBoundingClientRect();
-        const dx = a.left - b.left, dy = a.top - b.top;
-        if (dx || dy) {
-          t.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
-            { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+        const tile = document.querySelector(`.tile[data-tap-id="${CSS.escape(tap.id)}"]`);
+        if (!tile) continue;
+        updateTile(tile, tap, kegs[kegId]);
+        // A keg that empties or is refilled changes section.
+        if (tile.classList.contains('is-empty') !== (tile.parentElement === emptyGrid)) {
+          render();
+          return;
         }
       }
     }
 
-    function endDrag(commit) {
-      const { tile, placeholder, startOrder } = drag;
-
-      if (!commit) {
-        // Put the placeholder back where the tile started.
-        animateLayout(() => {
-          const rest = startOrder.filter(id => id !== tile.dataset.tapId);
-          const i = startOrder.indexOf(tile.dataset.tapId);
-          const next = rest[i] && grid.querySelector(`.tile[data-tap-id="${CSS.escape(rest[i])}"]`);
-          grid.insertBefore(placeholder, next || null);
-        });
-      }
-
-      // Settle the lifted tile into its slot.
-      const from = tile.getBoundingClientRect();
-      placeholder.replaceWith(tile);
-      tile.classList.remove('dragging');
-      document.body.classList.remove('is-dragging');
-      tile.removeAttribute('style');
-      updateTileAccent(tile);
-      const to = tile.getBoundingClientRect();
-      tile.animate(
-        [{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) rotate(1.2deg) scale(1.03)` },
-         { transform: 'none' }],
-        { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
-
-      drag = null;
-
-      const order = [...grid.children].map(t => t.dataset.tapId);
-      if (commit && order.join() !== startOrder.join()) saveOrder(order);
-
-      if (renderPending) {
-        renderPending = false;
-        render();
-      }
-    }
-
-    // Clearing the inline style drops the per-tap colour; put it back.
-    function updateTileAccent(tile) {
-      const tap = taps.find(t => t.id === tile.dataset.tapId);
-      if (tap) tile.style.setProperty('--accent', beerColor(tap));
-    }
+    // ── Drag to rearrange, and the tile menu ──────
+    // Only tiles in the main grid can be dragged; empty ones keep their place.
+    // A tap whose keg has not loaded has no keg to link to yet.
+    let renderPending = false;
+    const gestures = attachTileGestures({
+      root: document.querySelector('main'),
+      grid,
+      idOf: tile => tile.dataset.tapId,
+      menuFor: tile => {
+        const tap = taps.find(t => t.id === tile.dataset.tapId);
+        return tap && { tapId: tap.id, kegId: kegs[tap.keg_id] ? tap.keg_id : null };
+      },
+      onReorder: order => saveOrder(keepEmptyInPlace(taps.map(t => t.id), order)),
+      onEnd: () => {
+        if (renderPending) {
+          renderPending = false;
+          render();
+        }
+      },
+    });
 
     async function saveOrder(order) {
       const byId = new Map(taps.map(t => [t.id, t]));
@@ -515,7 +357,7 @@
     }
 
     loadAll();
-    setInterval(() => { if (!drag) loadAll(); }, 60000);
+    setInterval(() => { if (!gestures.active) loadAll(); }, 60000);
     connect();
   </script>
 </body>

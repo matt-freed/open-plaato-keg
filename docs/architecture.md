@@ -196,7 +196,7 @@ path and the API never contend for SQLite's lock.
 | `kegs` | One row per keg: device-reported values, app-only values, metadata |
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
-| `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap`) and to a display device |
+| `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
 | `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour |
 
 There are no foreign keys.
@@ -349,7 +349,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/kegs` | List, connected ids, known ids, ordering |
 | `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), pours (`/pours`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction |
+| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all), `/api/pours/csv` in device units, `/api/pours/{id}/delete` |
 | `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
 | `GET /ws` | WebSocket feed |
@@ -382,7 +382,28 @@ The pages are styled as one application, in the tap list's look:
   page: the heading, specs, readings and the keg graphic.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
-  use it.
+  use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
+  list and the Kegs page share.
+- `tile-gestures.js` is the pointer handling for tap list and Kegs page tiles,
+  through `attachTileGestures`: dragging to reorder, and opening the tile menu.
+  It uses pointer events rather than HTML5 drag and drop, which does not work
+  on touch screens. A mouse drags as soon as it moves and opens the menu with a
+  right-click; Shift+right-click gives the browser's own menu. A finger presses
+  and holds to open the menu, then moves to drag, as on a phone's home screen;
+  moving before the hold scrolls the page. It builds its own press and hold
+  rather than waiting for the browser's `contextmenu` event, which iOS Safari
+  never sends for touch. Only tiles above the Empty section can be dragged;
+  every tile has the menu.
+- `tile-menu.js` is the menu itself, on every tile, empty ones included: View
+  history (`/history.html#keg=`), Edit tap (`/taplist-setup.html#tap=`) and
+  Edit keg (`/keg-setup.html#keg=`). An item with nothing to link to, such as a
+  tap with no keg or a scale on no tap, is shown disabled. Nothing on a tile
+  shows the menu is there, so the tap list stays clean as a display. One
+  opened by touch sits above the finger rather than under it. The edit links
+  carry `?from=taplist` or `?from=kegs`, and the two setup pages then show a
+  link back to that screen beside "All taps" or "All scales"
+  (`showReturnLinks`). Opened any other way, they show only the list link.
+- The dragging and menu styles are in `tiles.css`.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
   tables and toasts.
@@ -393,6 +414,21 @@ own with a back link to the list. The URL hash records the open item
 (`#tap=<id>`, `#new`, `#keg=<id>`), and each page's `showView` follows it, so
 Back and reload work. Keg Setup lists every known scale with whether it is
 connected, polling `/api/kegs/connected` since connections publish no event.
+
+Tap Setup's list is a board (`renderBoard`): each scale, in `/api/kegs` order,
+beside a slot holding the tap it feeds, and a "Not on a scale" tray below for
+taps with no keg, a keg that no longer exists, or one another tap already
+holds (from a database older than the one-tap check). The two columns hold at
+every width, tightening on a phone rather than stacking, so a scale and its tap
+always read as a pair. `tap-board.js` drags the
+cards between slots with pointer events, as `tile-gestures.js` does: a mouse
+drags as soon as it moves, a finger holds first, and the page scrolls when the
+pointer nears the top or bottom edge. A card dropped on an occupied slot swaps
+with the tap there, which moves to the dropped card's old slot or the tray;
+`dropTap` sends both changes in one `/api/taps/links` call, redraws at once,
+and redraws again from the taps the server returns. Cards stay links, so a
+click without a drag opens the editor, whose keg dropdown remains the
+keyboard route.
 
 The History page (`history.html`) charts one scale's `/api/kegs/{id}/log` for
 the chosen window: a preset from 1 hour to 1 year, or Custom, which opens two
@@ -455,6 +491,20 @@ with no live connection (`connected` is false), whose readings and graphic are
 dimmed. A disconnect publishes a keg update, so the offline badge appears as
 soon as the server notices: at once for a clean close, and within
 `ReadTimeout` (60 seconds) for a scale that drops off the network.
+
+Both the Kegs page and the tap list mark an empty keg with an "Empty" badge in
+the top row. The rest of the tile is dimmed and its keg graphic greyed, while
+the top row stays at full strength. `isKegEmpty` in `keg-graphic.js` decides:
+a keg is empty with less than a 12 oz glass left, judged on the device-reported
+`amount_left` in `beer_left_unit` and, for a weight, with the same
+litre-per-kilogram assumption as package `units`. A CO₂ cylinder, or a keg
+whose unit is not known yet, is empty only below zero. An uncalibrated scale
+reports zero, so it shows as empty too. The styles are shared in `tiles.css`.
+Empty tiles also move to their own "Empty" section below the grid, in their
+saved order. They cannot be dragged or dropped onto, so a reorder moves only
+the tiles above. `keepEmptyInPlace` merges that order back into the full one,
+leaving each empty keg's slot where it was, so a refilled keg returns to its
+old place.
 
 `beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,

@@ -283,3 +283,88 @@ func TestKegFeedsOneTap(t *testing.T) {
 		t.Errorf("linking the freed keg to another tap: %v", err)
 	}
 }
+
+func TestLinkTaps(t *testing.T) {
+	s := newTestStore(t)
+	for _, tap := range []*Tap{
+		{ID: "a", TapNumber: intPtr(1), Name: "IPA", KegID: "keg-1"},
+		{ID: "b", TapNumber: intPtr(2), Name: "Stout", KegID: "keg-2"},
+		{ID: "c", TapNumber: intPtr(3), Name: "Cider"},
+	} {
+		if err := s.SaveTap(tap); err != nil {
+			t.Fatalf("SaveTap: %v", err)
+		}
+	}
+	kegOf := func(id string) string {
+		t.Helper()
+		tap, err := s.GetTap(id)
+		if err != nil {
+			t.Fatalf("GetTap %s: %v", id, err)
+		}
+		return tap.KegID
+	}
+	want := func(links map[string]string) {
+		t.Helper()
+		for id, keg := range links {
+			if got := kegOf(id); got != keg {
+				t.Errorf("tap %s keg = %q, want %q", id, got, keg)
+			}
+		}
+	}
+
+	// A swap would trip the one-tap-per-keg check partway through if the links
+	// were checked one at a time.
+	if err := s.LinkTaps([]TapLink{{"a", "keg-2"}, {"b", "keg-1"}}); err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	want(map[string]string{"a": "keg-2", "b": "keg-1"})
+
+	if err := s.LinkTaps([]TapLink{{"c", "keg-3"}}); err != nil {
+		t.Fatalf("link: %v", err)
+	}
+	if err := s.LinkTaps([]TapLink{{"c", ""}}); err != nil {
+		t.Fatalf("unlink: %v", err)
+	}
+	want(map[string]string{"c": ""})
+
+	// A keg left on two taps refuses the whole call.
+	var inUse *KegInUseError
+	err := s.LinkTaps([]TapLink{{"c", "keg-3"}, {"a", "keg-1"}})
+	if !errors.As(err, &inUse) {
+		t.Fatalf("conflict = %v, want a KegInUseError", err)
+	}
+	if inUse.Tap.ID != "b" {
+		t.Errorf("conflicting tap = %q, want b", inUse.Tap.ID)
+	}
+	want(map[string]string{"a": "keg-2", "b": "keg-1", "c": ""})
+
+	if err := s.LinkTaps([]TapLink{{"c", "keg-3"}, {"nope", "keg-4"}}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown tap = %v, want ErrNotFound", err)
+	}
+	want(map[string]string{"c": ""})
+}
+
+// A keg already on two taps, from before the check existed, does not stop
+// other kegs being rearranged, and moving one of its taps away resolves it.
+func TestLinkTapsWithLegacyDuplicate(t *testing.T) {
+	s := newTestStore(t)
+	for _, tap := range []*Tap{
+		{ID: "a", TapNumber: intPtr(1)},
+		{ID: "b", TapNumber: intPtr(2)},
+		{ID: "c", TapNumber: intPtr(3)},
+	} {
+		if err := s.SaveTap(tap); err != nil {
+			t.Fatalf("SaveTap: %v", err)
+		}
+	}
+	if _, err := s.db.Exec("UPDATE taps SET keg_id = 'dup' WHERE id IN ('a', 'b')"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.LinkTaps([]TapLink{{"c", "keg-9"}}); err != nil {
+		t.Errorf("linking an unrelated keg: %v", err)
+	}
+	if err := s.LinkTaps([]TapLink{{"b", ""}}); err != nil {
+		t.Errorf("unlinking a duplicate: %v", err)
+	}
+}

@@ -17,10 +17,16 @@
   <section class="section">
     <p class="empty-state" id="status">Loading scales…</p>
     <div class="grid" id="kegContainer"></div>
+    <div class="empty-section" id="emptySection" hidden>
+      <h2 class="empty-section-heading">Empty</h2>
+      <div class="grid" id="emptyContainer"></div>
+    </div>
   </section>
 
   <script src="/beer-color.js"></script>
   <script src="/keg-graphic.js"></script>
+  <script src="/tile-menu.js"></script>
+  <script src="/tile-gestures.js"></script>
   <script>
     'use strict';
 
@@ -28,11 +34,12 @@
     // beer on the tap it feeds, its readings, and a keg graphic filled to the
     // level left, in the beer's colour when a tap links to it.
     const kegContainer = document.getElementById('kegContainer');
+    const emptyContainer = document.getElementById('emptyContainer');
+    const emptySection = document.getElementById('emptySection');
     const statusEl = document.getElementById('status');
 
     const kegs = {};
     let tapsByKeg = {};
-    let dragSource = null;
     let renderPending = false;
     // Which figure each keg graphic shows large: one setting for every scale,
     // chosen on Dashboard Setup.
@@ -90,12 +97,12 @@
       const tile = document.createElement('article');
       tile.className = 'tile keg-tile';
       tile.dataset.kegId = keg.id;
-      tile.draggable = true;
       tile.innerHTML = `
         <div class="tile-info">
           <div class="tile-meta">
             <span class="keg-name"></span>
             <span class="pouring">Pouring</span>
+            <span class="empty">Empty</span>
             <span class="leak">Leak</span>
             <span class="offline">Offline</span>
             <span class="wifi" hidden></span>
@@ -109,7 +116,6 @@
           <div class="keg-graphic"></div>
           <span class="keg-amount"></span>
         </div>`;
-      attachDragHandlers(tile);
       return tile;
     }
 
@@ -135,6 +141,7 @@
       tile.classList.toggle('is-pouring', keg.is_pouring === true);
       tile.classList.toggle('is-leaking', keg.leak_detection === 1);
       tile.classList.toggle('is-offline', keg.connected !== true);
+      tile.classList.toggle('is-empty', isKegEmpty(keg));
       tile.classList.toggle('is-co2', isCO2);
       tile.classList.toggle('is-clear', !!tap && isClear(tap));
       if (tap) tile.style.setProperty('--accent', beerColor(tap));
@@ -241,61 +248,61 @@
     function render() {
       // Reordering mid-drag would move tiles under the pointer; the drop
       // renders instead.
-      if (dragSource) { renderPending = true; return; }
+      if (gestures.active) { renderPending = true; return; }
       const list = sortKegs(Object.values(kegs));
       if (!list.length) {
         kegContainer.replaceChildren();
+        emptyContainer.replaceChildren();
+        emptySection.hidden = true;
         statusEl.textContent = 'No scales yet. Once a Plaato Keg connects, it appears here.';
         return;
       }
       statusEl.textContent = '';
 
-      const existing = new Map([...kegContainer.children].map(t => [t.dataset.kegId, t]));
+      const existing = new Map([...kegContainer.children, ...emptyContainer.children].map(t => [t.dataset.kegId, t]));
+      const full = [], empty = [];
       list.forEach((keg, i) => {
         const tile = existing.get(keg.id) ?? createTile(keg);
         existing.delete(keg.id);
+        // The index is the place in the full order, so an empty scale keeps
+        // its "Scale N" name.
         updateTile(tile, keg, i);
-        if (kegContainer.children[i] !== tile) kegContainer.insertBefore(tile, kegContainer.children[i] ?? null);
+        (tile.classList.contains('is-empty') ? empty : full).push(tile);
       });
       existing.forEach(t => t.remove());
+
+      placeTiles(kegContainer, full);
+      placeTiles(emptyContainer, empty);
+      emptySection.hidden = !empty.length;
     }
 
-    // ── Drag to rearrange ──────────────────────────
-    function persistKegOrder() {
-      const ids = [...kegContainer.children].map(t => t.dataset.kegId);
+    function placeTiles(container, tiles) {
+      tiles.forEach((tile, i) => {
+        if (container.children[i] !== tile) container.insertBefore(tile, container.children[i] ?? null);
+      });
+      while (container.children.length > tiles.length) container.lastElementChild.remove();
+    }
+
+    // ── Drag to rearrange, and the tile menu ──────
+    // Only tiles above the Empty section can be dragged, so the empty ones
+    // keep their saved places. A scale on no tap has no tap to edit.
+    const gestures = attachTileGestures({
+      root: document.querySelector('.section'),
+      grid: kegContainer,
+      idOf: tile => tile.dataset.kegId,
+      menuFor: tile => ({ tapId: tapsByKeg[tile.dataset.kegId]?.id ?? null, kegId: tile.dataset.kegId }),
+      onReorder: persistKegOrder,
+      onEnd: () => { if (renderPending) { renderPending = false; render(); } },
+    });
+
+    function persistKegOrder(moved) {
+      const ids = keepEmptyInPlace(sortKegs(Object.values(kegs)).map(k => k.id), moved);
       ids.forEach((id, i) => { if (kegs[id]) kegs[id].sort_order = i; });
       fetch('/api/kegs/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ordered_ids: ids }),
       }).catch(err => console.error('Error saving keg order:', err));
-    }
-
-    function attachDragHandlers(tile) {
-      tile.addEventListener('dragstart', () => {
-        dragSource = tile;
-        tile.classList.add('is-dragging');
-      });
-      tile.addEventListener('dragend', () => {
-        tile.classList.remove('is-dragging');
-        dragSource = null;
-        kegContainer.querySelectorAll('.drag-over').forEach(t => t.classList.remove('drag-over'));
-        persistKegOrder();
-        if (renderPending) { renderPending = false; render(); }
-      });
-      tile.addEventListener('dragover', e => {
-        e.preventDefault();
-        if (dragSource && dragSource !== tile) tile.classList.add('drag-over');
-      });
-      tile.addEventListener('dragleave', () => tile.classList.remove('drag-over'));
-      tile.addEventListener('drop', e => {
-        e.preventDefault();
-        tile.classList.remove('drag-over');
-        if (!dragSource || dragSource === tile) return;
-        const tiles = [...kegContainer.children];
-        if (tiles.indexOf(dragSource) < tiles.indexOf(tile)) tile.after(dragSource);
-        else tile.before(dragSource);
-      });
     }
 
     // ── Data ───────────────────────────────────────
@@ -358,7 +365,7 @@
     }
 
     loadAll();
-    setInterval(() => { if (!dragSource) loadAll(); }, 60000);
+    setInterval(() => { if (!gestures.active) loadAll(); }, 60000);
     // Keeps the "ago" times current between updates.
     setInterval(render, 15000);
     connect();

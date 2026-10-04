@@ -32,7 +32,10 @@
 
     <!-- Editor view -->
     <div id="editView" hidden>
-      <a class="back-link" href="#">← All taps</a>
+      <div class="back-links">
+        <a class="back-link" href="#">← All taps</a>
+        <a class="back-link return-link" hidden></a>
+      </div>
         <div class="box">
           <div class="form-head">
             <h2 class="title is-5" id="formTitle">New Tap</h2>
@@ -131,7 +134,7 @@
 
           <div class="field">
             <label class="label">Linked Keg Sensor</label>
-            <p class="help">The scale that provides live fill and temperature data for this tap. Each scale feeds one tap; to move one here, unlink it from its current tap first.</p>
+            <p class="help">The scale that provides live fill and temperature data for this tap. Each scale feeds one tap; to move one here, unlink it from its current tap first, or drag the tap on the list of all taps.</p>
             <div class="control">
               <div class="select is-fullwidth">
                 <select id="linkedKeg">
@@ -155,6 +158,7 @@
   <div id="toast" class="notification toast is-hidden"></div>
 
   <script src="/beer-color.js"></script>
+  <script src="/tap-board.js"></script>
   <script>
     let currentTapId = null;
     let allTaps = [];
@@ -175,7 +179,7 @@
       ]);
       allTaps = await tapsRes.json();
       allKegs = await kegsRes.json();
-      renderTapList();
+      if (!board.active) renderBoard();
       populateDropdowns();
     }
 
@@ -184,30 +188,110 @@
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     }
 
-    // The scale a tap draws from, named as the editor's sensor list names it.
-    function linkedKegName(tap) {
-      if (!tap.keg_id) return 'No scale linked';
-      const index = allKegs.findIndex(k => k.id === tap.keg_id);
-      if (index < 0) return 'Scale not found';
-      return allKegs[index].label?.trim() || `Scale ${index + 1}`;
+    // kegName names a scale as the editor's sensor list does.
+    function kegName(keg) {
+      return keg.label?.trim() || `Scale ${allKegs.indexOf(keg) + 1}`;
     }
 
-    function renderTapList() {
+    // ── Board ─────────────────────────────────────
+    // The list view pairs each scale with the tap it feeds. Taps are dragged
+    // between scales (tap-board.js); a tap on no scale waits in the tray. A
+    // database from before a scale was limited to one tap can have a scale on
+    // two: the first takes the slot and the rest wait in the tray, marked, to
+    // be dragged elsewhere.
+    function renderBoard() {
       const container = document.getElementById('tapListContainer');
       if (!allTaps.length) {
         container.innerHTML = '<p class="has-text-grey">No taps yet. Add one to start your tap list.</p>';
         return;
       }
-      container.innerHTML = allTaps.map(tap => `
-        <a class="list-row" href="#tap=${encodeURIComponent(tap.id)}">
+
+      const onScale = new Map();
+      const tray = [];
+      for (const tap of allTaps) {
+        const keg = tap.keg_id && allKegs.find(k => k.id === tap.keg_id);
+        if (!tap.keg_id) tray.push([tap, '']);
+        else if (!keg) tray.push([tap, 'Scale not found']);
+        else if (onScale.has(keg.id)) tray.push([tap, `Also on ${kegName(keg)}`]);
+        else onScale.set(keg.id, tap);
+      }
+
+      const rows = allKegs.map(keg => {
+        const tap = onScale.get(keg.id);
+        const left = keg.amount_left != null
+          ? `${keg.amount_left.toFixed(1)} ${keg.beer_left_unit || ''} left` : 'No reading yet';
+        return `
+          <div class="board-row">
+            <div class="board-scale">
+              <span class="board-scale-name">${esc(kegName(keg))}</span>
+              <span class="board-scale-meta">${esc(left)}</span>
+            </div>
+            <div class="board-slot" data-slot="${esc(keg.id)}">
+              ${tap ? tapCard(tap) : '<span class="board-slot-empty">Drop a tap here</span>'}
+            </div>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = `
+        ${allKegs.length
+          ? `<p class="board-help">Drag a tap beside the scale it pours from. Dropping it on a scale that has a tap swaps the two.</p>
+             <div class="tap-board">${rows}</div>`
+          : '<p class="board-help">No scales yet. Once a keg connects it appears in <a href="/keg-setup.html">Keg Setup</a>, and its taps can be placed here.</p>'}
+        <h3 class="board-tray-head">Not on a scale</h3>
+        <div class="board-slot board-tray" data-slot="">
+          ${tray.map(([tap, note]) => tapCard(tap, note)).join('')
+            || '<span class="board-slot-empty">Drop a tap here to unlink it</span>'}
+        </div>`;
+    }
+
+    function tapCard(tap, note = '') {
+      return `
+        <a class="list-row tap-card" data-tap-id="${esc(tap.id)}" href="#tap=${encodeURIComponent(tap.id)}">
           <span class="list-row-dot" style="background:${esc(beerColor(tap))};"></span>
           <span class="list-row-text">
             <span class="list-row-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
             <span class="list-row-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
           </span>
-          <span class="list-row-aside${tap.keg_id ? '' : ' is-empty'}">${esc(linkedKegName(tap))}</span>
+          ${note ? `<span class="list-row-aside is-empty">${esc(note)}</span>` : ''}
           <span class="list-row-go" aria-hidden="true">›</span>
-        </a>`).join('');
+        </a>`;
+    }
+
+    // dropTap saves a card dropped on a scale (kegId) or the tray (null). A
+    // tap already on that scale moves to where the dropped one came from, so
+    // dropping on an occupied scale swaps the two. The board is redrawn at
+    // once and again from what the server stored.
+    async function dropTap(tapId, kegId) {
+      const tap = allTaps.find(t => t.id === tapId);
+      if (!tap) return;
+      // A tap whose scale is gone came from the tray, so a swap unlinks.
+      const from = allKegs.some(k => k.id === tap.keg_id) ? tap.keg_id : '';
+      const links = [{ tap_id: tapId, keg_id: kegId || '' }];
+      const occupant = kegId && allTaps.find(t => t.keg_id === kegId && t.id !== tapId);
+      if (occupant) links.push({ tap_id: occupant.id, keg_id: from });
+
+      const previous = allTaps;
+      allTaps = allTaps.map(t => {
+        const link = links.find(l => l.tap_id === t.id);
+        return link ? { ...t, keg_id: link.keg_id } : t;
+      });
+      renderBoard();
+
+      try {
+        const res = await fetch('/api/taps/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ links }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(body.detail || body.error || res.status);
+        allTaps = body.taps;
+      } catch (e) {
+        allTaps = previous;
+        showToast('Could not move the tap: ' + e.message, 'danger');
+      }
+      renderBoard();
+      populateDropdowns();
     }
 
     // ── Views ─────────────────────────────────────
@@ -231,6 +315,22 @@
       document.getElementById('listView').hidden = editing;
       document.getElementById('editView').hidden = !editing;
       window.scrollTo(0, 0);
+    }
+
+    // A page opened from a tile's menu also links back to the screen it came
+    // from, named by ?from= so a reload keeps the link.
+    function showReturnLinks() {
+      const target = {
+        taplist: { href: '/taplist.html', label: '← Tap List' },
+        kegs: { href: '/kegs.html', label: '← Kegs' },
+      }[new URLSearchParams(location.search).get('from')];
+      for (const link of document.querySelectorAll('.return-link')) {
+        link.hidden = !target;
+        if (target) {
+          link.href = target.href;
+          link.textContent = target.label;
+        }
+      }
     }
 
     // backToList returns to the list, as the editor's Back link does.
@@ -352,6 +452,8 @@
     }
 
     const color = colorPicker(document.getElementById('colorField'));
+    const board = attachTapBoard({ root: document.getElementById('tapListContainer'), onDrop: dropTap });
+    showReturnLinks();
     window.addEventListener('hashchange', showView);
     loadAll().then(showView);
   </script>

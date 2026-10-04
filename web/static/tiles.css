@@ -12,6 +12,13 @@
     minmax(max(min(100%, 340px), calc((100% - 2 * var(--gap)) / 3)), 1fr));
   gap: var(--gap);
 }
+/* Two across below 1200px, before three columns get cramped. */
+@media (max-width: 1199px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill,
+      minmax(max(min(100%, 340px), calc((100% - var(--gap)) / 2)), 1fr));
+  }
+}
 
 /* ─── Tile ───────────────────────────────────── */
 .tile {
@@ -74,6 +81,84 @@
 }
 .tile.is-pouring .pouring { display: inline-flex; }
 @keyframes pulse { 50% { opacity: 0.25; } }
+/* An empty keg, as isKegEmpty in keg-graphic.js decides. */
+.empty {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.empty::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tile.is-empty .empty { display: inline-flex; }
+/* The tile recedes so the taps still pouring stand out, but the top row with
+   its badges stays at full strength. */
+.tile.is-empty :is(.beer, .specs, .desc, .readings, .tile-keg) { opacity: 0.4; }
+.tile.is-empty .tile-keg { filter: grayscale(1); }
+
+/* Empty kegs gather in their own section under the grid. They hold their
+   place in the saved order but cannot be dragged, or dropped onto. */
+.empty-section { margin-top: clamp(1.6rem, 3vw, 2.4rem); }
+.empty-section[hidden] { display: none; }
+.empty-section-heading {
+  margin: 0 0 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.empty-section .tile { cursor: default; }
+.empty-section .tile:hover { border-color: var(--line); }
+
+/* ─── Dragging ───────────────────────────────── */
+/* The lifted tile and the gap it leaves, from tile-gestures.js. */
+.tile.dragging {
+  cursor: grabbing;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.tile-placeholder {
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+}
+body.is-dragging { cursor: grabbing; }
+
+/* ─── Tile menu ──────────────────────────────── */
+/* The right-click menu from tile-menu.js. */
+.tile-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 10rem;
+  padding: 0.3rem;
+  background: var(--tile);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  line-height: normal;
+}
+.tile-menu-item {
+  display: block;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  white-space: nowrap;
+  outline: none;
+}
+a.tile-menu-item:hover,
+a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--text); }
+.tile-menu-item[aria-disabled] { color: var(--faint); cursor: default; }
 
 .beer {
   margin: 0.35rem 0 0;

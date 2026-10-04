@@ -816,3 +816,41 @@ func TestTapKegConflict(t *testing.T) {
 		t.Errorf("body = %+v, want keg_in_use naming Tap 3 (Red Barn Amber)", body)
 	}
 }
+
+func TestTapLinks(t *testing.T) {
+	a := newTestAPI(t)
+	for _, tap := range []*store.Tap{
+		{ID: "a", Name: "1", KegID: "keg-1"},
+		{ID: "b", Name: "2", KegID: "keg-2"},
+		{ID: "c", Name: "3"},
+	} {
+		if err := a.store.SaveTap(tap); err != nil {
+			t.Fatalf("SaveTap: %v", err)
+		}
+	}
+
+	rec := a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{
+		{"tap_id": "a", "keg_id": "keg-2"},
+		{"tap_id": "b", "keg_id": "keg-1"},
+	}})
+	assertStatus(t, rec, http.StatusOK)
+	var resp struct {
+		Taps []store.Tap `json:"taps"`
+	}
+	a.decode(rec, &resp)
+	if len(resp.Taps) != 3 || resp.Taps[0].KegID != "keg-2" || resp.Taps[1].KegID != "keg-1" {
+		t.Errorf("taps after swap = %+v", resp.Taps)
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{
+		{"tap_id": "c", "keg_id": "keg-1"},
+	}})
+	assertStatus(t, rec, http.StatusConflict)
+
+	rec = a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{}})
+	assertStatus(t, rec, http.StatusBadRequest)
+	rec = a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{
+		{"tap_id": "nope", "keg_id": ""},
+	}})
+	assertStatus(t, rec, http.StatusNotFound)
+}
