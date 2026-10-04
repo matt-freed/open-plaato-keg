@@ -382,7 +382,8 @@ The pages are styled as one application, in the tap list's look:
   page: the heading, specs, readings and the keg graphic.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
-  use it.
+  use it. It also holds `isKegEmpty`, which the tap list and the Kegs page
+  share.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
   tables and toasts.
@@ -455,6 +456,15 @@ with no live connection (`connected` is false), whose readings and graphic are
 dimmed. A disconnect publishes a keg update, so the offline badge appears as
 soon as the server notices: at once for a clean close, and within
 `ReadTimeout` (60 seconds) for a scale that drops off the network.
+
+Both the Kegs page and the tap list mark an empty keg with an "Empty" badge in
+the top row. The rest of the tile is dimmed and its keg graphic greyed, while
+the top row stays at full strength. `isKegEmpty` in `keg-graphic.js` decides:
+a keg is empty with less than a 12 oz glass left, judged on the device-reported
+`amount_left` in `beer_left_unit` and, for a weight, with the same
+litre-per-kilogram assumption as package `units`. A CO₂ cylinder, or a keg
+whose unit is not known yet, is empty only below zero. An uncalibrated scale
+reports zero, so it shows as empty too. The styles are shared in `tiles.css`.
 
 `beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,

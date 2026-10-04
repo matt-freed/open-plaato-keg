@@ -96,6 +96,7 @@
           <div class="tile-meta">
             <span class="keg-name"></span>
             <span class="pouring">Pouring</span>
+            <span class="empty">Empty</span>
             <span class="leak">Leak</span>
             <span class="offline">Offline</span>
             <span class="wifi" hidden></span>
@@ -135,6 +136,7 @@
       tile.classList.toggle('is-pouring', keg.is_pouring === true);
       tile.classList.toggle('is-leaking', keg.leak_detection === 1);
       tile.classList.toggle('is-offline', keg.connected !== true);
+      tile.classList.toggle('is-empty', isKegEmpty(keg));
       tile.classList.toggle('is-co2', isCO2);
       tile.classList.toggle('is-clear', !!tap && isClear(tap));
       if (tap) tile.style.setProperty('--accent', beerColor(tap));

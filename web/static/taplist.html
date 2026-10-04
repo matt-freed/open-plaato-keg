@@ -141,6 +141,7 @@
           <div class="tile-meta">
             <span class="keg-name"></span>
             <span class="pouring">Pouring</span>
+            <span class="empty">Empty</span>
           </div>
           <h2 class="beer"></h2>
           <div class="specs"></div>
@@ -175,6 +176,7 @@
         : Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : null;
 
       tile.classList.toggle('is-pouring', keg?.is_pouring === true);
+      tile.classList.toggle('is-empty', isKegEmpty(keg));
 
       tile.querySelector('.keg-name').textContent =
         keg ? (keg.label || 'Keg ' + keg.id.slice(0, 6)) : '';

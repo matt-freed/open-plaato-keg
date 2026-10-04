@@ -81,6 +81,26 @@
 }
 .tile.is-pouring .pouring { display: inline-flex; }
 @keyframes pulse { 50% { opacity: 0.25; } }
+/* An empty keg, as isKegEmpty in keg-graphic.js decides. */
+.empty {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.empty::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tile.is-empty .empty { display: inline-flex; }
+/* The tile recedes so the taps still pouring stand out, but the top row with
+   its badges stays at full strength. */
+.tile.is-empty :is(.beer, .specs, .desc, .readings, .tile-keg) { opacity: 0.4; }
+.tile.is-empty .tile-keg { filter: grayscale(1); }
 
 .beer {
   margin: 0.35rem 0 0;
