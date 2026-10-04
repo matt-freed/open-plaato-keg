@@ -32,7 +32,10 @@
 
     <!-- Editor view -->
     <div id="editView" hidden>
-      <a class="back-link" href="#">← All taps</a>
+      <div class="back-links">
+        <a class="back-link" href="#">← All taps</a>
+        <a class="back-link return-link" hidden></a>
+      </div>
         <div class="box">
           <div class="form-head">
             <h2 class="title is-5" id="formTitle">New Tap</h2>
@@ -233,6 +236,22 @@
       window.scrollTo(0, 0);
     }
 
+    // A page opened from a tile's menu also links back to the screen it came
+    // from, named by ?from= so a reload keeps the link.
+    function showReturnLinks() {
+      const target = {
+        taplist: { href: '/taplist.html', label: '← Tap List' },
+        kegs: { href: '/kegs.html', label: '← Kegs' },
+      }[new URLSearchParams(location.search).get('from')];
+      for (const link of document.querySelectorAll('.return-link')) {
+        link.hidden = !target;
+        if (target) {
+          link.href = target.href;
+          link.textContent = target.label;
+        }
+      }
+    }
+
     // backToList returns to the list, as the editor's Back link does.
     function backToList() {
       if (location.hash) location.hash = '';
@@ -352,6 +371,7 @@
     }
 
     const color = colorPicker(document.getElementById('colorField'));
+    showReturnLinks();
     window.addEventListener('hashchange', showView);
     loadAll().then(showView);
   </script>

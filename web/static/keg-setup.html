@@ -47,7 +47,10 @@
 
           <!-- Editor view -->
           <div id="editView" hidden>
-          <a class="back-link" href="#">← All scales</a>
+          <div class="back-links">
+            <a class="back-link" href="#">← All scales</a>
+            <a class="back-link return-link" hidden></a>
+          </div>
           <div class="edit-head">
             <h2 id="editTitle"></h2>
             <span class="status-pill" id="editStatus"></span>
@@ -313,7 +316,10 @@
           </div>
 
           <!-- The settings run long, so the way back is at the bottom too. -->
-          <a class="button" href="#">← All scales</a>
+          <div class="buttons">
+            <a class="button" href="#">← All scales</a>
+            <a class="button return-link" hidden></a>
+          </div>
           </div>
         </div>
     </section>
@@ -460,6 +466,22 @@
         document.getElementById("listView").hidden = !!id;
         document.getElementById("editView").hidden = !id;
         window.scrollTo(0, 0);
+      }
+
+      // A page opened from a tile"s menu also links back to the screen it came
+      // from, named by ?from= so a reload keeps the link.
+      function showReturnLinks() {
+        const target = {
+          taplist: { href: "/taplist.html", label: "← Tap List" },
+          kegs: { href: "/kegs.html", label: "← Kegs" },
+        }[new URLSearchParams(location.search).get("from")];
+        for (const link of document.querySelectorAll(".return-link")) {
+          link.hidden = !target;
+          if (target) {
+            link.href = target.href;
+            link.textContent = target.label;
+          }
+        }
       }
 
       function backToList() {
@@ -712,6 +734,7 @@
         console.log("WebSocket closed");
       });
 
+      showReturnLinks();
       window.addEventListener("hashchange", showView);
       loadKegs().then(showView);
       // Connection status has no event of its own, so it is polled.

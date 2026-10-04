@@ -14,10 +14,12 @@ function showTileMenu(x, y, { tapId, kegId }, { touch = false } = {}) {
   closeTileMenu();
 
   const enc = encodeURIComponent;
+  // The setup pages link back to the screen the menu was opened on.
+  const from = { '/taplist.html': '?from=taplist', '/kegs.html': '?from=kegs' }[location.pathname] ?? '';
   const items = [
     ['View history', kegId && `/history.html#keg=${enc(kegId)}`],
-    ['Edit tap', tapId && `/taplist-setup.html#tap=${enc(tapId)}`],
-    ['Edit keg', kegId && `/keg-setup.html#keg=${enc(kegId)}`],
+    ['Edit tap', tapId && `/taplist-setup.html${from}#tap=${enc(tapId)}`],
+    ['Edit keg', kegId && `/keg-setup.html${from}#keg=${enc(kegId)}`],
   ];
 
   const menu = document.createElement('div');

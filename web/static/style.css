@@ -464,6 +464,9 @@ hr {
   text-decoration: none;
 }
 .back-link:hover { text-decoration: underline; }
+/* The way back to the list, and to the screen a tile's menu was opened on. */
+.back-links { display: flex; flex-wrap: wrap; gap: 0 1.25rem; }
+.return-link[hidden] { display: none; }
 
 /* Whether a scale is connected. */
 .status-pill {

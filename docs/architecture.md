@@ -399,7 +399,10 @@ The pages are styled as one application, in the tap list's look:
   Edit keg (`/keg-setup.html#keg=`). An item with nothing to link to, such as a
   tap with no keg or a scale on no tap, is shown disabled. Nothing on a tile
   shows the menu is there, so the tap list stays clean as a display. One
-  opened by touch sits above the finger rather than under it.
+  opened by touch sits above the finger rather than under it. The edit links
+  carry `?from=taplist` or `?from=kegs`, and the two setup pages then show a
+  link back to that screen beside "All taps" or "All scales"
+  (`showReturnLinks`). Opened any other way, they show only the list link.
 - The dragging and menu styles are in `tiles.css`.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
