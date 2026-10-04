@@ -50,9 +50,6 @@ func ConvertLogEntries(entries []LogEntry, k *Keg, u DisplayUnits) {
 // thousands of near-identical rows an hour.
 const LogInterval = time.Minute
 
-// LogRetention is how long history is kept before Prune discards it.
-const LogRetention = 90 * 24 * time.Hour
-
 // LogThrottle tracks when each keg was last recorded.
 type LogThrottle struct {
 	mu   sync.Mutex
@@ -147,10 +144,13 @@ func (s *Store) ClearLog(id string) (int64, error) {
 	return removed, tx.Commit()
 }
 
-// PruneLog deletes readings older than LogRetention and returns how many rows
-// were removed. Pours are never pruned.
-func (s *Store) PruneLog(now time.Time) (int64, error) {
-	res, err := s.db.Exec("DELETE FROM keg_log WHERE ts < ?", now.Add(-LogRetention).Unix())
+// PruneLog deletes readings older than retention and returns how many rows
+// were removed. A retention of zero keeps everything. Pours are never pruned.
+func (s *Store) PruneLog(now time.Time, retention time.Duration) (int64, error) {
+	if retention <= 0 {
+		return 0, nil
+	}
+	res, err := s.db.Exec("DELETE FROM keg_log WHERE ts < ?", now.Add(-retention).Unix())
 	if err != nil {
 		return 0, err
 	}

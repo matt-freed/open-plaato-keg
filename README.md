@@ -120,6 +120,7 @@ server at startup rather than being silently ignored.
 | `HTTP_LISTENER_PORT` | `8085` | Port for the web UI, REST API and WebSocket |
 | `DATABASE_FILE_PATH` | `/db/open-plaato-keg.db` | SQLite database. |
 | `INCLUDE_UNKNOWN_DATA` | `false` | Keep virtual pins this server does not recognise, under the keg's `extra` field |
+| `LOG_RETENTION_DAYS` | `365` | Days of keg history (`keg_log`) to keep; `0` keeps it forever. Pours are never pruned. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
 | `BARHELPER_ENABLED` | `false` | Forward volume readings to BarHelper |
 | `BARHELPER_ENDPOINT` | BarHelper's custom keg monitor URL | Override for testing |

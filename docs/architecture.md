@@ -246,7 +246,9 @@ Two values get special treatment:
 After each stored packet, `ingest` writes a `keg_log` row if the keg has at
 least one loggable reading and the in-memory `LogThrottle` allows it — at most
 one row per keg per minute. The row is a snapshot of the stored keg, not just
-the packet. Rows older than 90 days are pruned once a day.
+the packet. Rows older than the configured retention (`LOG_RETENTION_DAYS`,
+365 by default) are deleted by `PruneLog` at startup and once a day after that;
+a retention of 0 turns pruning off.
 
 ### Pours
 

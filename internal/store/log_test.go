@@ -125,15 +125,16 @@ func TestReadLogIsPerKeg(t *testing.T) {
 func TestPruneLog(t *testing.T) {
 	s := newTestStore(t)
 	now := time.Unix(1_700_000_000, 0)
+	retention := 30 * 24 * time.Hour
 
-	if err := s.AppendLog(&Keg{ID: "keg-1"}, now.Add(-LogRetention-time.Hour)); err != nil {
+	if err := s.AppendLog(&Keg{ID: "keg-1"}, now.Add(-retention-time.Hour)); err != nil {
 		t.Fatalf("AppendLog: %v", err)
 	}
 	if err := s.AppendLog(&Keg{ID: "keg-1"}, now.Add(-time.Hour)); err != nil {
 		t.Fatalf("AppendLog: %v", err)
 	}
 
-	removed, err := s.PruneLog(now)
+	removed, err := s.PruneLog(now, retention)
 	if err != nil {
 		t.Fatalf("PruneLog: %v", err)
 	}
@@ -228,5 +229,23 @@ func TestWriteLogCSV(t *testing.T) {
 	// Missing values are empty fields, not zeros.
 	if !strings.HasSuffix(strings.TrimSpace(lines[2]), ",,,,") {
 		t.Errorf("empty row = %q, want empty fields rather than zeros", lines[2])
+	}
+}
+
+// A retention of zero means keep history forever.
+func TestPruneLogZeroRetentionKeepsEverything(t *testing.T) {
+	s := newTestStore(t)
+	now := time.Unix(1_700_000_000, 0)
+
+	if err := s.AppendLog(&Keg{ID: "keg-1"}, now.Add(-10*365*24*time.Hour)); err != nil {
+		t.Fatalf("AppendLog: %v", err)
+	}
+
+	removed, err := s.PruneLog(now, 0)
+	if err != nil {
+		t.Fatalf("PruneLog: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("pruned %d rows with zero retention, want 0", removed)
 	}
 }
