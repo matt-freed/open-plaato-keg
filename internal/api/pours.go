@@ -37,15 +37,18 @@ func pourWindow(r *http.Request) (from, to time.Time) {
 }
 
 // handleKegPours lists the pours in one keg's history for the History page,
-// over the same ranges as its log.
+// over the same window as its log.
 func (s *Server) handleKegPours(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if _, err := s.store.GetKeg(id); err != nil {
 		writeStoreError(w, err, "keg")
 		return
 	}
-	to := time.Now()
-	pours, err := s.store.ListKegPours(id, to.Add(-parseRange(r, "24h")), to)
+	from, to, ok := historyWindow(w, r, "24h")
+	if !ok {
+		return
+	}
+	pours, err := s.store.ListKegPours(id, from, to)
 	if err != nil {
 		writeStoreError(w, err, "pours")
 		return

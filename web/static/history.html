@@ -23,6 +23,10 @@
       .scale-option { flex-direction: column; justify-content: center; gap: 0.1rem; line-height: 1.15; }
       .scale-option .scale-name { font-size: 0.72rem; font-weight: 500; color: var(--faint); }
       .scale-option.is-selected .scale-name { color: var(--muted); }
+      /* A custom window: start and end on one row, wrapping on a phone. */
+      .custom-range-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+      .custom-range-row .input { width: auto; padding: 0.4rem 0.6rem; font-size: 0.88rem; }
+      .custom-range .help { margin-top: 0.4rem; }
       .page-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-bottom: 0.75rem; }
 
       /* The range's figures, set like the tap list's readings. */
@@ -99,7 +103,21 @@
             <button class="button" type="button" data-value="24h">24 hours</button>
             <button class="button" type="button" data-value="7d">7 days</button>
             <button class="button" type="button" data-value="30d">30 days</button>
+            <button class="button" type="button" data-value="90d">3 months</button>
+            <button class="button" type="button" data-value="180d">6 months</button>
+            <button class="button" type="button" data-value="1y">1 year</button>
+            <button class="button" type="button" data-value="custom">Custom</button>
           </div>
+        </div>
+        <div class="field custom-range" id="customRange" hidden>
+          <span class="label">Custom range</span>
+          <form class="custom-range-row" id="customForm" novalidate>
+            <input class="input" type="datetime-local" id="customFrom" aria-label="Start">
+            <span>to</span>
+            <input class="input" type="datetime-local" id="customTo" aria-label="End">
+            <button class="button is-primary" type="submit">Apply</button>
+          </form>
+          <p class="help is-danger" id="customError" hidden></p>
         </div>
       </div>
 
@@ -178,11 +196,37 @@
       '24h': { ms: 24 * 3600e3, label: 'Last 24 hours' },
       '7d':  { ms: 7 * 86400e3, label: 'Last 7 days' },
       '30d': { ms: 30 * 86400e3, label: 'Last 30 days' },
+      '90d': { ms: 90 * 86400e3, label: 'Last 3 months' },
+      '180d': { ms: 180 * 86400e3, label: 'Last 6 months' },
+      '1y':  { ms: 365 * 86400e3, label: 'Last year' },
     };
     const RANGE_ORDER = Object.keys(RANGES);
     // Readings are logged at most once a minute, so a longer silence is the
     // scale being offline; the line breaks there rather than bridging it.
     const GAP_MS = 10 * 60e3;
+    // Windows past a day arrive averaged into steps, whose size the server
+    // reports, and history older than the compaction cutoff is stored hourly.
+    // Either way points sit further apart than a minute, so see gapsAfter.
+    let stepMs = 0;
+    // The times the loaded entries cover, which the charts span. Redrawing
+    // after a toggle keeps this rather than sliding a preset on to now.
+    let shownWindow = null;
+
+    // gapsAfter returns the timestamps (ms) after which the line breaks. A
+    // silence is a gap when it is longer than ten minutes, three steps, and
+    // three times the median spacing of the points around it. The last keeps
+    // hourly compacted history continuous in a short window while a scale
+    // that went offline still shows as a break.
+    function gapsAfter(times) {
+      const diffs = times.slice(1).map((t, i) => t - times[i]);
+      const gaps = new Set();
+      diffs.forEach((d, i) => {
+        const near = diffs.slice(Math.max(0, i - 5), i + 6).sort((a, b) => a - b);
+        const median = near[Math.floor(near.length / 2)];
+        if (d > Math.max(GAP_MS, 3 * stepMs, 3 * median)) gaps.add(times[i]);
+      });
+      return gaps;
+    }
 
     let kegs = [];
     const tapsByKeg = {};
@@ -225,20 +269,57 @@
 
     // ── State in the URL ────────────────────────────
     // #keg=<id>&range=<range> records what is shown, so reload, Back and a
-    // shared link all reopen the same view.
+    // shared link all reopen the same view. A custom window is
+    // range=custom&from=<unix>&to=<unix>; one that is malformed or ends before
+    // it starts falls back to the last 24 hours.
     function readHash() {
       const p = new URLSearchParams(location.hash.slice(1));
       const id = p.get('keg');
-      return {
-        keg: kegs.some(k => k.id === id) ? id : kegs[0]?.id ?? null,
-        range: RANGES[p.get('range')] ? p.get('range') : '24h',
-      };
+      const keg = kegs.some(k => k.id === id) ? id : kegs[0]?.id ?? null;
+      if (p.get('range') === 'custom') {
+        const from = Number(p.get('from')), to = Number(p.get('to'));
+        if (Number.isInteger(from) && Number.isInteger(to) && from < to) {
+          return { keg, range: 'custom', from: from * 1000, to: to * 1000 };
+        }
+      }
+      return { keg, range: RANGES[p.get('range')] ? p.get('range') : '24h' };
     }
 
+    // setHash changes what is shown. Choosing a preset drops any custom times.
     function setHash(next) {
       const cur = readHash();
-      const p = new URLSearchParams({ keg: next.keg ?? cur.keg, range: next.range ?? cur.range });
+      const range = next.range ?? cur.range;
+      const p = new URLSearchParams({ keg: next.keg ?? cur.keg, range });
+      if (range === 'custom') {
+        p.set('from', Math.floor((next.from ?? cur.from) / 1000));
+        p.set('to', Math.floor((next.to ?? cur.to) / 1000));
+      }
       location.hash = p.toString();
+    }
+
+    // The times a view covers, in ms. A preset ends now.
+    function viewWindow(view) {
+      if (view.range === 'custom') return { from: view.from, to: view.to };
+      const to = Date.now();
+      return { from: to - RANGES[view.range].ms, to };
+    }
+
+    // The query that asks the server for the same times.
+    function windowQuery(view) {
+      return view.range === 'custom'
+        ? `from=${Math.floor(view.from / 1000)}&to=${Math.floor(view.to / 1000)}`
+        : `range=${view.range}`;
+    }
+
+    const formatWhen = ms => {
+      const d = new Date(ms);
+      return d.toLocaleString([], { ...dateOpts(d), ...clockOpts() });
+    };
+
+    function viewLabel(view) {
+      return view.range === 'custom'
+        ? `${formatWhen(view.from)} – ${formatWhen(view.to)}`
+        : RANGES[view.range].label;
     }
 
     function select(groupId, value) {
@@ -268,8 +349,12 @@
       const { total, unit: pourUnit } = pourTotal(pours);
       pourPoints = pours.map(p => ({ pour: p, entry: nearestEntry(p.ended_at * 1000) })).filter(pp => pp.entry);
       const temps = entries.map(e => e.keg_temperature).filter(Number.isFinite);
-      const last = [...entries].reverse().find(e => Number.isFinite(e.amount_left));
-      const lastPct = [...entries].reverse().find(e => Number.isFinite(e.percent_of_beer_left));
+      // What is left now is the keg's current reading. The last entry of a
+      // long range is an average over its step, so it is only the fallback.
+      const leftNow = Number.isFinite(keg?.display?.amount_left) ? keg.display.amount_left
+        : [...entries].reverse().find(e => Number.isFinite(e.amount_left))?.amount_left;
+      const pctNow = Number.isFinite(keg?.percent_of_beer_left) ? keg.percent_of_beer_left
+        : [...entries].reverse().find(e => Number.isFinite(e.percent_of_beer_left))?.percent_of_beer_left;
       const avg = temps.length ? temps.reduce((s, t) => s + t, 0) / temps.length : NaN;
 
       const stat = (value, unit, label) => `
@@ -280,9 +365,8 @@
       $('stats').innerHTML = [
         stat(pours.length ? String(Math.round(total)) : '0', pourUnit, 'Poured'),
         stat(String(pours.length), '', pours.length === 1 ? 'Pour' : 'Pours'),
-        stat(fmt(last?.amount_left, 2), u.amount,
-          Number.isFinite(lastPct?.percent_of_beer_left)
-            ? `Left now · ${Math.round(lastPct.percent_of_beer_left)}%` : 'Left now'),
+        stat(fmt(leftNow, 2), u.amount,
+          Number.isFinite(pctNow) ? `Left now · ${Math.round(pctNow)}%` : 'Left now'),
         stat(deg(avg), u.temp, 'Average temp'),
         stat(temps.length ? `${deg(Math.min(...temps))}–${deg(Math.max(...temps))}` : '—', u.temp, 'Temp range'),
       ].join('');
@@ -293,9 +377,9 @@
 
     function renderPours() {
       $('poursBox').hidden = pours.length === 0;
-      const clock = { hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h' };
       $('poursBody').innerHTML = pours.map(p => {
-        const when = new Date(p.ended_at * 1000).toLocaleString([], { month: 'short', day: 'numeric', ...clock });
+        const ended = new Date(p.ended_at * 1000);
+        const when = ended.toLocaleString([], { ...dateOpts(ended), ...clockOpts() });
         const took = Math.max(0, p.ended_at - p.started_at);
         const beer = p.beer_name?.trim();
         return `<tr>
@@ -333,13 +417,80 @@
       },
     };
 
-    function timeFormats() {
-      const clock = timeFormat === '24h' ? 'HH:mm' : 'h:mm a';
-      return { minute: clock, hour: clock, day: 'MMM d', week: 'MMM d', month: 'MMM yyyy' };
+    // ── Dates ───────────────────────────────────────
+    // A date carries its year only when it is not this year's, so the short
+    // ranges stay terse and a year-long one is never ambiguous.
+    function dateOpts(d) {
+      return { month: 'short', day: 'numeric',
+        ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) };
     }
 
-    function chartOptions(range, yTitle, extraY = {}) {
-      const now = Date.now();
+    const clockOpts = () => ({ hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h' });
+
+    // Where the x-axis ticks fall for a window of a given length, on clock or
+    // calendar boundaries. Up to six months there are at most seven, so
+    // Chart.js never has to thin them out and every label below is drawn; a
+    // year has one per month, whose short labels still fit on a desktop. A
+    // clock window ticks every so many minutes from midnight; the others tick
+    // at midnight on the days the test picks. The presets fall in these bands
+    // too, so a custom window of the same length looks the same.
+    const DAY_MS = 86400e3;
+    function tickSpec(span) {
+      const date = d => d.getDate();
+      if (span <= 1.5 * 3600e3) return { kind: 'clock', minutes: 10 };
+      if (span <= 3 * 3600e3) return { kind: 'clock', minutes: 30 };
+      if (span <= 7 * 3600e3) return { kind: 'clock', minutes: 60 };
+      if (span <= 14 * 3600e3) return { kind: 'clock', minutes: 120 };
+      if (span <= 1.5 * DAY_MS) return { kind: 'clock', minutes: 240 };
+      if (span <= 3.5 * DAY_MS) return { kind: 'clock', minutes: 720 };
+      if (span <= 8 * DAY_MS) return { kind: 'day', on: () => true };
+      if (span <= 16 * DAY_MS) return { kind: 'day', on: d => date(d) % 2 === 1 && date(d) < 31 };
+      if (span <= 45 * DAY_MS) return { kind: 'day', on: d => [1, 6, 11, 16, 21, 26].includes(date(d)) };
+      if (span <= 100 * DAY_MS) return { kind: 'day', on: d => date(d) === 1 || date(d) === 15 };
+      if (span <= 200 * DAY_MS) return { kind: 'day', on: d => date(d) === 1 };
+      if (span <= 400 * DAY_MS) return { kind: 'month', on: d => date(d) === 1 };
+      if (span <= 800 * DAY_MS) return { kind: 'month', on: d => date(d) === 1 && d.getMonth() % 2 === 0 };
+      if (span <= 1500 * DAY_MS) return { kind: 'month', on: d => date(d) === 1 && d.getMonth() % 3 === 0 };
+      return { kind: 'month', on: d => date(d) === 1 && d.getMonth() === 0 };
+    }
+
+    function axisTicks(min, max) {
+      const spec = tickSpec(max - min);
+      const d = new Date(min);
+      d.setHours(0, 0, 0, 0);
+      const out = [];
+      // Stepping the Date, rather than adding milliseconds, keeps the ticks on
+      // local midnights and hours across daylight-saving changes.
+      while (d.getTime() <= max) {
+        if (d.getTime() >= min && (spec.kind === 'clock' || spec.on(d))) out.push({ value: d.getTime() });
+        if (spec.kind === 'clock') d.setMinutes(d.getMinutes() + spec.minutes);
+        else d.setDate(d.getDate() + 1);
+      }
+      return out;
+    }
+
+    // A clock window labels its ticks with times, and puts the date beneath
+    // the first one and wherever the day turns. Longer windows label them with
+    // dates, or months beyond six months, and put the year beneath the first
+    // one and wherever the year turns.
+    function axisLabel(span) {
+      const { kind } = tickSpec(span);
+      const short = { month: 'short', day: 'numeric' };
+      return (value, index, ticks) => {
+        const d = new Date(value);
+        const prev = index > 0 ? new Date(ticks[index - 1].value) : null;
+        if (kind === 'clock') {
+          const time = d.toLocaleTimeString([], clockOpts());
+          return !prev || prev.toDateString() !== d.toDateString()
+            ? [time, d.toLocaleDateString([], short)] : time;
+        }
+        const label = d.toLocaleDateString([], kind === 'day' ? short : { month: 'short' });
+        return !prev || prev.getFullYear() !== d.getFullYear()
+          ? [label, String(d.getFullYear())] : label;
+      };
+    }
+
+    function chartOptions(win, yTitle, extraY = {}) {
       return {
         responsive: true,
         maintainAspectRatio: false,
@@ -351,10 +502,10 @@
         scales: {
           x: {
             type: 'time',
-            min: now - RANGES[range].ms,
-            max: now,
-            time: { displayFormats: timeFormats() },
-            ticks: { maxTicksLimit: 8, maxRotation: 0 },
+            min: win.from,
+            max: win.to,
+            afterBuildTicks: scale => { scale.ticks = axisTicks(scale.min, scale.max); },
+            ticks: { maxRotation: 0, callback: axisLabel(win.to - win.from) },
             grid: { display: false },
           },
           y: {
@@ -387,7 +538,7 @@
       charts = [];
     }
 
-    function renderCharts(keg, range) {
+    function renderCharts(keg, win) {
       destroyCharts();
       Chart.defaults.color = token('--muted');
       Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
@@ -404,6 +555,16 @@
 
       const value = e => pct ? e.percent_of_beer_left : e.amount_left;
       const line = list => list.map(e => ({ x: e.timestamp * 1000, y: value(e) ?? null }));
+      // A segment across a gap is drawn invisibly, line and fill alike. A
+      // reading that was not reported is skipped rather than breaking the
+      // line, so each line's gaps come from the points it actually draws.
+      const segmentFor = points => {
+        const gaps = gapsAfter(points.filter(p => p.y != null).map(p => p.x));
+        const hide = c => gaps.has(c.p0.parsed.x) ? 'transparent' : undefined;
+        return { borderColor: hide, backgroundColor: hide };
+      };
+      const amountPoints = line(entries);
+      const tempPoints = entries.map(e => ({ x: e.timestamp * 1000, y: e.keg_temperature ?? null }));
       const fit = axisScale === 'fit';
       const fullY = pct ? { min: 0, max: 100 } : { beginAtZero: true };
 
@@ -412,7 +573,7 @@
         data: {
           datasets: [
             {
-              data: line(entries),
+              data: amountPoints,
               borderColor: action,
               backgroundColor: withAlpha(action, 0.1),
               borderWidth: 2,
@@ -422,7 +583,8 @@
               fill: 'start',
               pointRadius: 0,
               tension: 0.15,
-              spanGaps: GAP_MS,
+              spanGaps: true,
+              segment: segmentFor(amountPoints),
             },
             {
               // Pours, ringed in the tile colour so they stay clear of the line.
@@ -435,7 +597,7 @@
             },
           ],
         },
-        options: chartOptions(range, amountLabel, fit ? fitAxis(entries.map(value), pct) : fullY),
+        options: chartOptions(win, amountLabel, fit ? fitAxis(entries.map(value), pct) : fullY),
         plugins: [crosshair],
       }));
 
@@ -443,17 +605,18 @@
         type: 'line',
         data: {
           datasets: [{
-            data: entries.map(e => ({ x: e.timestamp * 1000, y: e.keg_temperature ?? null })),
+            data: tempPoints,
             borderColor: '#8fb3ff',
             borderWidth: 2,
             borderJoinStyle: 'round',
             borderCapStyle: 'round',
             pointRadius: 0,
             tension: 0.15,
-            spanGaps: GAP_MS,
+            spanGaps: true,
+            segment: segmentFor(tempPoints),
           }],
         },
-        options: chartOptions(range, u.temp ? `Temp (${u.temp})` : 'Temp'),
+        options: chartOptions(win, u.temp ? `Temp (${u.temp})` : 'Temp'),
         plugins: [crosshair],
       }));
     }
@@ -485,10 +648,8 @@
       tip.replaceChildren();
       const time = document.createElement('div');
       time.className = 'chart-tooltip-time';
-      time.textContent = new Date(hoverTime).toLocaleString([], {
-        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-        hour12: timeFormat !== '24h',
-      });
+      const hovered = new Date(hoverTime);
+      time.textContent = hovered.toLocaleString([], { ...dateOpts(hovered), ...clockOpts() });
       tip.append(time);
 
       const row = (color, isDot, value, label) => {
@@ -538,26 +699,42 @@
 
     // ── Loading ─────────────────────────────────────
     async function show() {
-      const { keg: id, range } = readHash();
+      const view = readHash();
+      const { keg: id, range } = view;
       if (!id) return;
       select('scaleChoice', id);
       select('rangeChoice', range);
-      $('downloadBtn').href = `/api/kegs/${encodeURIComponent(id)}/log/csv?range=${range}`;
-      $('statsTitle').textContent = RANGES[range].label;
+      showCustom(view);
+      const win = viewWindow(view);
+      const query = windowQuery(view);
+      $('downloadBtn').href = `/api/kegs/${encodeURIComponent(id)}/log/csv?${query}`;
+      $('statsTitle').textContent = viewLabel(view);
 
       const seq = ++loadSeq;
       $('page').classList.add('is-loading');
       try {
-        const [res, pourRes] = await Promise.all([
-          fetch(`/api/kegs/${encodeURIComponent(id)}/log?range=${range}`),
-          fetch(`/api/kegs/${encodeURIComponent(id)}/pours?range=${range}`),
+        const [res, pourRes, kegRes] = await Promise.all([
+          fetch(`/api/kegs/${encodeURIComponent(id)}/log?${query}`),
+          fetch(`/api/kegs/${encodeURIComponent(id)}/pours?${query}`),
+          // The keg's current readings, for "Left now"; the list loaded with
+          // the page may be stale by now.
+          fetch(`/api/kegs/${encodeURIComponent(id)}`).catch(() => null),
         ]);
         if (!res.ok) throw new Error(res.status);
         if (!pourRes.ok) throw new Error(pourRes.status);
-        const [list, pourList] = await Promise.all([res.json(), pourRes.json()]);
+        const [list, pourList, fresh] = await Promise.all([
+          res.json(), pourRes.json(),
+          kegRes?.ok ? kegRes.json().catch(() => null) : null,
+        ]);
         if (seq !== loadSeq) return; // a newer choice has already been made
         entries = list;
         pours = pourList;
+        shownWindow = win;
+        stepMs = (Number(res.headers.get('X-Log-Step-Seconds')) || 0) * 1000;
+        if (fresh) {
+          const i = kegs.findIndex(k => k.id === id);
+          if (i >= 0) kegs[i] = fresh;
+        }
       } catch (_) {
         if (seq !== loadSeq) return;
         $('page').classList.remove('is-loading');
@@ -581,11 +758,11 @@
       $('charts').hidden = empty;
       if (empty) {
         destroyCharts();
-        const longer = RANGE_ORDER[RANGE_ORDER.indexOf(range) + 1];
+        const longer = range === 'custom' ? null : RANGE_ORDER[RANGE_ORDER.indexOf(range) + 1];
         const text = $('noDataText');
-        text.textContent = longer
-          ? `No readings from ${displayName(keg)} in the ${RANGES[range].label.toLowerCase()}.`
-          : `No readings from ${displayName(keg)} in the last 30 days.`;
+        text.textContent = range === 'custom'
+          ? `No readings from ${displayName(keg)} between ${viewLabel(view).replace(' – ', ' and ')}.`
+          : `No readings from ${displayName(keg)} in the ${RANGES[range].label.toLowerCase()}.`;
         if (longer) {
           text.append(document.createElement('br'));
           const more = document.createElement('a');
@@ -596,8 +773,53 @@
         }
         return;
       }
-      renderCharts(keg, range);
+      renderCharts(keg, win);
     }
+
+    // ── Custom window ───────────────────────────────
+    // datetime-local inputs speak local time as "YYYY-MM-DDTHH:MM".
+    function toLocalInput(ms) {
+      const d = new Date(ms);
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function fillCustom(win) {
+      $('customFrom').value = toLocalInput(win.from);
+      $('customTo').value = toLocalInput(win.to);
+    }
+
+    // The custom inputs show while a custom window is shown, filled with it.
+    // Choosing a preset hides them again.
+    function showCustom(view) {
+      const custom = view.range === 'custom';
+      if (custom) fillCustom(view);
+      $('customRange').hidden = !custom;
+      $('customError').hidden = true;
+    }
+
+    // Choosing Custom opens the inputs on the window already shown, so it can
+    // be adjusted, and changes nothing until Apply.
+    function openCustom() {
+      select('rangeChoice', 'custom');
+      if ($('customRange').hidden) fillCustom(shownWindow ?? viewWindow(readHash()));
+      $('customRange').hidden = false;
+      $('customError').hidden = true;
+      $('customFrom').focus();
+    }
+
+    $('customForm').addEventListener('submit', e => {
+      e.preventDefault();
+      // An unparseable value gives NaN, which fails both checks below.
+      const from = new Date($('customFrom').value).getTime();
+      const to = new Date($('customTo').value).getTime();
+      const error = !Number.isFinite(from) || !Number.isFinite(to)
+        ? 'Choose a start and an end.'
+        : to <= from ? 'The end must be after the start.' : '';
+      $('customError').textContent = error;
+      $('customError').hidden = !error;
+      if (!error) setHash({ range: 'custom', from, to });
+    });
 
     $('scaleChoice').addEventListener('click', e => {
       const b = e.target.closest('.button');
@@ -605,23 +827,23 @@
     });
     $('rangeChoice').addEventListener('click', e => {
       const b = e.target.closest('.button');
-      if (b) setHash({ range: b.dataset.value });
+      if (!b) return;
+      if (b.dataset.value === 'custom') openCustom();
+      else setHash({ range: b.dataset.value });
     });
     $('axisChoice').addEventListener('click', e => {
       const b = e.target.closest('.button');
       if (!b || b.dataset.value === axisScale) return;
       axisScale = b.dataset.value;
       select('axisChoice', axisScale);
-      const { keg: id, range } = readHash();
-      if (entries.length) renderCharts(kegs.find(k => k.id === id), range);
+      if (entries.length) renderCharts(kegs.find(k => k.id === readHash().keg), shownWindow);
     });
     $('measureChoice').addEventListener('click', e => {
       const b = e.target.closest('.button');
       if (!b || b.dataset.value === measure) return;
       measure = b.dataset.value;
       select('measureChoice', measure);
-      const { keg: id, range } = readHash();
-      if (entries.length) renderCharts(kegs.find(k => k.id === id), range);
+      if (entries.length) renderCharts(kegs.find(k => k.id === readHash().keg), shownWindow);
     });
     // ── Clearing ────────────────────────────────────
     let toastTimer;

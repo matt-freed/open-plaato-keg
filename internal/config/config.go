@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is the fully resolved runtime configuration.
@@ -19,6 +20,12 @@ type Config struct {
 	// IncludeUnknownData reports unmapped virtual pins in the keg's extra data
 	// instead of discarding them.
 	IncludeUnknownData bool
+	// LogRetention is how long keg history is kept before it is pruned. Zero
+	// keeps it forever.
+	LogRetention time.Duration
+	// LogCompactAfter is how long keg history keeps every reading before
+	// older readings are combined into hourly averages. Zero never combines.
+	LogCompactAfter time.Duration
 
 	BarHelper BarHelperConfig
 }
@@ -53,6 +60,12 @@ func Load() (Config, error) {
 	}
 	cfg.DatabaseFilePath = envString("DATABASE_FILE_PATH", "/db/open-plaato-keg.db")
 	if cfg.IncludeUnknownData, err = envBool("INCLUDE_UNKNOWN_DATA", false); err != nil {
+		return cfg, err
+	}
+	if cfg.LogRetention, err = envDays("LOG_RETENTION_DAYS", 365); err != nil {
+		return cfg, err
+	}
+	if cfg.LogCompactAfter, err = envDays("LOG_COMPACT_AFTER_DAYS", 30); err != nil {
 		return cfg, err
 	}
 
@@ -94,6 +107,26 @@ func envInt(name string, def int) (int, error) {
 		return 0, fmt.Errorf("%s: %d is not a valid port", name, n)
 	}
 	return n, nil
+}
+
+// maxRetentionDays keeps the retention well inside what a time.Duration can
+// hold, which is about 292 years.
+const maxRetentionDays = 36500
+
+// envDays parses a whole number of days. Zero is allowed and means "forever".
+func envDays(name string, def int) (time.Duration, error) {
+	days := def
+	if v, ok := os.LookupEnv(name); ok && v != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return 0, fmt.Errorf("%s: %q is not a whole number of days", name, v)
+		}
+		if n < 0 || n > maxRetentionDays {
+			return 0, fmt.Errorf("%s: %d is not between 0 and %d", name, n, maxRetentionDays)
+		}
+		days = n
+	}
+	return time.Duration(days) * 24 * time.Hour, nil
 }
 
 func envBool(name string, def bool) (bool, error) {

@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
     <style>
+      /* Scale follows the right-aligned ABV, so it needs its own space. */
+      .data-table .scale-col { padding-left: 1.25rem; }
       .controls {
         display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 1.5rem;
         margin-bottom: 1.25rem;
@@ -84,7 +86,7 @@
               <thead>
                 <tr>
                   <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th>
-                  <th class="num">Tap</th><th>Scale</th><th class="num">Amount</th><th class="actions"></th>
+                  <th class="scale-col">Scale</th><th class="num">Took</th><th class="num">Amount</th><th class="actions"></th>
                 </tr>
               </thead>
               <tbody id="poursBody"></tbody>
@@ -205,6 +207,11 @@
           <td class="num">${esc(totals(list))}</td>
         </tr>`).join('');
 
+      // How long the pour ran, as the History page shows it.
+      const took = p => {
+        const s = Math.max(0, p.ended_at - p.started_at);
+        return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+      };
       const opts = {
         year: range === '1y' || range === 'all' ? 'numeric' : undefined,
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -216,9 +223,9 @@
           <td class="${beerOf(p) === NO_BEER ? 'is-faint' : ''}">${esc(beerOf(p))}</td>
           <td>${esc(p.beer_style)}</td>
           <td class="num">${Number.isFinite(p.abv) ? `${p.abv.toFixed(1)}%` : ''}</td>
-          <td class="num">${p.tap_number ?? ''}</td>
-          <td>${esc(scaleOf(p))}${p.hidden_from_keg
+          <td class="scale-col">${esc(scaleOf(p))}${p.hidden_from_keg
             ? '<span class="hidden-tag" title="This scale’s history was cleared, so the pour only shows here.">history cleared</span>' : ''}</td>
+          <td class="num">${esc(took(p))}</td>
           <td class="num">${esc(size(p))}</td>
           <td class="actions"><button class="button is-small is-danger" type="button" data-delete="${p.id}">Delete</button></td>
         </tr>`).join('');

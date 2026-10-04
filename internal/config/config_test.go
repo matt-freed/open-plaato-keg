@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadDefaults(t *testing.T) {
 	cfg, err := Load()
@@ -15,6 +18,12 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.IncludeUnknownData {
 		t.Error("IncludeUnknownData should default to false")
+	}
+	if cfg.LogRetention != 365*24*time.Hour {
+		t.Errorf("LogRetention = %v, want 365 days", cfg.LogRetention)
+	}
+	if cfg.LogCompactAfter != 30*24*time.Hour {
+		t.Errorf("LogCompactAfter = %v, want 30 days", cfg.LogCompactAfter)
 	}
 	if cfg.BarHelper.Enabled {
 		t.Error("BarHelper should default to disabled")
@@ -64,6 +73,60 @@ func TestEnvIntRejectsBadPort(t *testing.T) {
 	t.Setenv("KEG_LISTENER_PORT", "70000")
 	if _, err := Load(); err == nil {
 		t.Fatal("Load accepted an out-of-range port")
+	}
+}
+
+func TestLogRetentionDays(t *testing.T) {
+	t.Setenv("LOG_RETENTION_DAYS", "30")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LogRetention != 30*24*time.Hour {
+		t.Errorf("LogRetention = %v, want 30 days", cfg.LogRetention)
+	}
+
+	t.Setenv("LOG_RETENTION_DAYS", "0")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LogRetention != 0 {
+		t.Errorf("LogRetention = %v, want 0 (keep forever)", cfg.LogRetention)
+	}
+
+	for _, v := range []string{"-1", "1.5", "a year", "36501"} {
+		t.Setenv("LOG_RETENTION_DAYS", v)
+		if _, err := Load(); err == nil {
+			t.Errorf("Load accepted LOG_RETENTION_DAYS=%q", v)
+		}
+	}
+}
+
+func TestLogCompactAfterDays(t *testing.T) {
+	t.Setenv("LOG_COMPACT_AFTER_DAYS", "7")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LogCompactAfter != 7*24*time.Hour {
+		t.Errorf("LogCompactAfter = %v, want 7 days", cfg.LogCompactAfter)
+	}
+
+	t.Setenv("LOG_COMPACT_AFTER_DAYS", "0")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LogCompactAfter != 0 {
+		t.Errorf("LogCompactAfter = %v, want 0 (never compact)", cfg.LogCompactAfter)
+	}
+
+	for _, v := range []string{"-1", "2.5", "a month", "36501"} {
+		t.Setenv("LOG_COMPACT_AFTER_DAYS", v)
+		if _, err := Load(); err == nil {
+			t.Errorf("Load accepted LOG_COMPACT_AFTER_DAYS=%q", v)
+		}
 	}
 }
 
