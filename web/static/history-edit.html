@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit History</title>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
+    <style>
+      .page-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+      .edit-head { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 1rem; }
+      .edit-head .title { margin: 0; }
+      .keg-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: var(--faint); word-break: break-all; }
+
+      /* Selection and saving on one row, the pager on the other side. */
+      .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+      .toolbar .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0; }
+      .pager { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+      .pager-label { font-size: 0.82rem; color: var(--muted); }
+
+      .edit-table td { padding-top: 0.3rem; padding-bottom: 0.3rem; }
+      .edit-table .check { width: 1%; }
+      .edit-table input[type="checkbox"] { width: 1.05rem; height: 1.05rem; accent-color: var(--action); cursor: pointer; }
+      .edit-table .input { width: 7.5rem; padding: 0.3rem 0.5rem; font-size: 0.88rem; text-align: right; font-variant-numeric: tabular-nums; }
+      .edit-table .select select { padding: 0.3rem 2rem 0.3rem 0.5rem; font-size: 0.88rem; }
+      /* A changed cell stands out until it is saved or discarded. */
+      .edit-table .is-changed { border-color: var(--action); box-shadow: 0 0 0 1px var(--action); }
+      .edit-table .is-invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+      .edit-table tr.is-selected td { background: color-mix(in srgb, var(--action) 8%, transparent); }
+      .is-loading .edit-table { opacity: 0.45; transition: opacity 0.15s; }
+    </style>
+</head>
+<body>
+  <site-header heading="Edit History"></site-header>
+
+  <section class="section">
+    <div class="container is-centered is-wide" id="page">
+      <div class="page-actions">
+        <a class="button is-small" id="backBtn" href="/history.html">&larr; History</a>
+      </div>
+
+      <p class="empty-state" id="pageStatus">Loading…</p>
+
+      <div class="box section-box" id="editor" hidden>
+        <div class="edit-head">
+          <h2 class="title is-4" id="kegTitle"></h2>
+          <span class="help" id="windowLabel"></span>
+          <span class="keg-id" id="kegId"></span>
+        </div>
+
+        <div class="toolbar">
+          <div class="buttons">
+            <button class="button is-small is-danger" type="button" id="deleteBtn" disabled>Delete selected</button>
+            <button class="button is-small is-primary" type="button" id="saveBtn" disabled>Save changes</button>
+            <button class="button is-small" type="button" id="discardBtn" disabled>Discard</button>
+          </div>
+          <div class="pager">
+            <button class="button is-small" type="button" id="earlierBtn">&larr; Earlier</button>
+            <span class="pager-label" id="pagerLabel"></span>
+            <button class="button is-small" type="button" id="laterBtn">Later &rarr;</button>
+          </div>
+        </div>
+
+        <p class="empty-state" id="noRows" hidden>No readings in this range.</p>
+
+        <div class="data-table-wrap" id="tableWrap">
+          <table class="data-table edit-table">
+            <thead>
+              <tr>
+                <th class="check"><input type="checkbox" id="selectAll" aria-label="Select every row on this page"></th>
+                <th>Time</th>
+                <th class="num" id="amountHead">Amount left</th>
+                <th class="num" id="tempHead">Temperature</th>
+                <th class="num">% left</th>
+                <th>Pouring</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+
+        <p class="help">
+          Amounts and temperatures are shown in the display units and stored in the scale's own.
+          An empty cell means the scale did not report that value. Recorded pours are kept as
+          they are: editing or deleting readings does not change them.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="notification toast is-hidden"></div>
+
+  <script>
+    'use strict';
+
+    const $ = id => document.getElementById(id);
+    const PAGE_SIZE = 100;
+    // The fields a row can change, as the API names them. Time and the keg
+    // are the row's identity and are never edited.
+    const NUMBER_FIELDS = ['amount_left', 'keg_temperature', 'percent_of_beer_left'];
+
+    let kegs = [];
+    const tapsByKeg = {};
+    let timeFormat = '12h';
+    let view = null;          // { keg, from, to } in unix seconds
+    // Where the shown page starts: { after } or { before } a timestamp, or
+    // {} for the start of the window. Reloading after a change reuses it.
+    let cursor = {};
+    let page = { entries: [], has_earlier: false, has_later: false };
+    // Values as loaded, by timestamp, so only what changed is sent.
+    let original = new Map();
+    const selected = new Set();
+    let loadSeq = 0;
+
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function kegName(keg, index) {
+      return keg.label?.trim() || `Scale ${index + 1}`;
+    }
+
+    // The scale as History names it: its beer, if a tap draws from it.
+    function displayName(keg) {
+      const name = kegName(keg, kegs.indexOf(keg));
+      const beer = tapsByKeg[keg.id]?.name?.trim();
+      return beer ? `${beer} (${name})` : name;
+    }
+
+    function dateOpts(d) {
+      return { month: 'short', day: 'numeric',
+        ...(d.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }) };
+    }
+    const clockOpts = () => ({ hour: 'numeric', minute: '2-digit', hour12: timeFormat !== '24h' });
+    const formatWhen = sec => {
+      const d = new Date(sec * 1000);
+      return d.toLocaleString([], { ...dateOpts(d), ...clockOpts() });
+    };
+    // Rows are a minute apart, so the table shows seconds too.
+    const formatRowTime = sec => {
+      const d = new Date(sec * 1000);
+      return d.toLocaleString([], { ...dateOpts(d), ...clockOpts(), second: '2-digit' });
+    };
+
+    let toastTimer;
+    function showToast(message, type) {
+      const t = $('toast');
+      t.textContent = message;
+      t.className = `notification toast is-${type}`;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
+    }
+
+    // ── State in the URL ────────────────────────────
+    // #keg=<id>&from=<unix>&to=<unix>, the fixed window History opened this
+    // page on. History sends a preset as the times it covered then, so paging
+    // does not drift while the page is open.
+    function readHash() {
+      const p = new URLSearchParams(location.hash.slice(1));
+      const id = p.get('keg');
+      const keg = kegs.some(k => k.id === id) ? id : kegs[0]?.id ?? null;
+      let from = Number(p.get('from')), to = Number(p.get('to'));
+      if (!Number.isInteger(from) || !Number.isInteger(to) || from >= to) {
+        to = Math.floor(Date.now() / 1000);
+        from = to - 86400;
+      }
+      return { keg, from, to };
+    }
+
+    function historyHref(v) {
+      return '/history.html#' + new URLSearchParams({ keg: v.keg, range: 'custom', from: v.from, to: v.to });
+    }
+
+    // ── Edits ───────────────────────────────────────
+    // A cell's value as the API takes it: a number, true/false, or null for
+    // "not reported". An unparseable number is undefined.
+    function cellValue(el) {
+      if (el.tagName === 'SELECT') return el.value === '' ? null : el.value === 'true';
+      const text = el.value.trim();
+      if (text === '') return null;
+      const n = Number(text);
+      return Number.isFinite(n) ? n : undefined;
+    }
+
+    // Edits on the page, by timestamp: only the fields that differ from what
+    // was loaded. Also reports whether any cell is invalid.
+    function collectEdits() {
+      const edits = [];
+      let invalid = false;
+      for (const tr of $('rows').querySelectorAll('tr')) {
+        const ts = Number(tr.dataset.ts);
+        const was = original.get(ts);
+        const edit = { timestamp: ts };
+        let changed = false;
+        for (const el of tr.querySelectorAll('[data-field]')) {
+          const v = cellValue(el);
+          const field = el.dataset.field;
+          const differs = v !== was[field];
+          el.classList.toggle('is-invalid', v === undefined);
+          el.classList.toggle('is-changed', v !== undefined && differs);
+          if (v === undefined) invalid = true;
+          else if (differs) { edit[field] = v; changed = true; }
+        }
+        if (changed) edits.push(edit);
+      }
+      return { edits, invalid };
+    }
+
+    function updateToolbar() {
+      const { edits, invalid } = collectEdits();
+      $('saveBtn').disabled = !edits.length || invalid;
+      $('saveBtn').textContent = edits.length ? `Save changes (${edits.length})` : 'Save changes';
+      $('discardBtn').disabled = !edits.length && !invalid;
+      $('deleteBtn').disabled = !selected.size;
+      $('deleteBtn').textContent = selected.size ? `Delete selected (${selected.size})` : 'Delete selected';
+      const boxes = $('rows').querySelectorAll('input[type="checkbox"]');
+      $('selectAll').checked = boxes.length > 0 && selected.size === boxes.length;
+      $('selectAll').indeterminate = selected.size > 0 && selected.size < boxes.length;
+    }
+
+    const hasUnsaved = () => !$('discardBtn').disabled;
+
+    // ── Rendering ───────────────────────────────────
+    // Numbers are shown to a precision the input can be edited at; a cell
+    // left alone is compared with this shown value, not the stored one, and
+    // is never sent.
+    const shown = v => Number.isFinite(v) ? Number(v.toFixed(3)) : null;
+
+    function render() {
+      original = new Map();
+      selected.clear();
+      const rows = page.entries.map(e => {
+        const was = {
+          amount_left: shown(e.amount_left),
+          keg_temperature: shown(e.keg_temperature),
+          percent_of_beer_left: shown(e.percent_of_beer_left),
+          is_pouring: e.is_pouring ?? null,
+        };
+        original.set(e.timestamp, was);
+        const num = (field, label) => `
+          <td class="num"><input class="input" type="text" inputmode="decimal" data-field="${field}"
+            aria-label="${label}" value="${was[field] ?? ''}"></td>`;
+        const pouring = was.is_pouring;
+        return `
+          <tr data-ts="${e.timestamp}">
+            <td class="check"><input type="checkbox" aria-label="Select this reading"></td>
+            <td>${esc(formatRowTime(e.timestamp))}</td>
+            ${num('amount_left', 'Amount left')}
+            ${num('keg_temperature', 'Temperature')}
+            ${num('percent_of_beer_left', 'Percent left')}
+            <td><div class="select"><select data-field="is_pouring" aria-label="Pouring">
+              <option value=""${pouring === null ? ' selected' : ''}>—</option>
+              <option value="true"${pouring === true ? ' selected' : ''}>Yes</option>
+              <option value="false"${pouring === false ? ' selected' : ''}>No</option>
+            </select></div></td>
+          </tr>`;
+      });
+      $('rows').innerHTML = rows.join('');
+      const empty = !page.entries.length;
+      $('noRows').hidden = !empty;
+      $('tableWrap').hidden = empty;
+      $('earlierBtn').disabled = !page.has_earlier;
+      $('laterBtn').disabled = !page.has_later;
+      $('pagerLabel').textContent = empty ? '' :
+        `${formatWhen(page.entries[0].timestamp)} – ${formatWhen(page.entries.at(-1).timestamp)}`;
+      updateToolbar();
+    }
+
+    // ── Loading ─────────────────────────────────────
+    async function load() {
+      const seq = ++loadSeq;
+      const q = new URLSearchParams({ from: view.from, to: view.to, limit: PAGE_SIZE, ...cursor });
+      $('page').classList.add('is-loading');
+      try {
+        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/rows?${q}`);
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        if (seq !== loadSeq) return;
+        // A delete can empty the page; step back to the one before it.
+        if (!data.entries.length && data.has_earlier && !('before' in cursor)) {
+          cursor = { before: (cursor.after ?? view.to) + 1 };
+          return load();
+        }
+        page = data;
+        const unit = data.amount_unit === 'litre' ? 'L' : data.amount_unit;
+        $('amountHead').textContent = unit ? `Amount left (${unit})` : 'Amount left';
+        $('tempHead').textContent = data.temperature_unit ? `Temperature (${data.temperature_unit})` : 'Temperature';
+      } catch (_) {
+        if (seq !== loadSeq) return;
+        $('page').classList.remove('is-loading');
+        showToast('Could not load the readings. Is the server running?', 'danger');
+        return;
+      }
+      $('page').classList.remove('is-loading');
+      render();
+    }
+
+    function show() {
+      view = readHash();
+      if (!view.keg) return;
+      const keg = kegs.find(k => k.id === view.keg);
+      $('backBtn').href = historyHref(view);
+      $('kegTitle').textContent = displayName(keg);
+      $('kegId').textContent = keg.id;
+      $('windowLabel').textContent = `${formatWhen(view.from)} – ${formatWhen(view.to)}`;
+      $('pageStatus').hidden = true;
+      $('editor').hidden = false;
+      cursor = {};
+      load();
+    }
+
+    // Leaving the page, or moving to another page of rows, drops unsaved
+    // edits, so either asks first.
+    const leaveOk = () => !hasUnsaved() || confirm('Discard your unsaved changes?');
+
+    $('earlierBtn').addEventListener('click', () => {
+      if (!page.entries.length || !leaveOk()) return;
+      cursor = { before: page.entries[0].timestamp };
+      load();
+    });
+    $('laterBtn').addEventListener('click', () => {
+      if (!page.entries.length || !leaveOk()) return;
+      cursor = { after: page.entries.at(-1).timestamp };
+      load();
+    });
+
+    $('rows').addEventListener('input', updateToolbar);
+    $('rows').addEventListener('change', e => {
+      if (e.target.type === 'checkbox') {
+        const tr = e.target.closest('tr');
+        const ts = Number(tr.dataset.ts);
+        if (e.target.checked) selected.add(ts); else selected.delete(ts);
+        tr.classList.toggle('is-selected', e.target.checked);
+      }
+      updateToolbar();
+    });
+    $('selectAll').addEventListener('change', e => {
+      for (const box of $('rows').querySelectorAll('input[type="checkbox"]')) {
+        box.checked = e.target.checked;
+        const tr = box.closest('tr');
+        tr.classList.toggle('is-selected', box.checked);
+        const ts = Number(tr.dataset.ts);
+        if (box.checked) selected.add(ts); else selected.delete(ts);
+      }
+      updateToolbar();
+    });
+
+    $('discardBtn').addEventListener('click', () => render());
+
+    $('saveBtn').addEventListener('click', async () => {
+      const { edits, invalid } = collectEdits();
+      if (!edits.length || invalid) return;
+      $('saveBtn').disabled = true;
+      try {
+        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: edits }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail || res.status);
+        }
+        showToast(edits.length === 1 ? 'Reading saved' : `${edits.length} readings saved`, 'success');
+      } catch (err) {
+        showToast('Could not save: ' + err.message, 'danger');
+        updateToolbar();
+        return;
+      }
+      load();
+    });
+
+    $('deleteBtn').addEventListener('click', async () => {
+      const timestamps = [...selected];
+      if (!timestamps.length) return;
+      const what = timestamps.length === 1 ? 'this reading' : `these ${timestamps.length} readings`;
+      if (!confirm(`Delete ${what}? Recorded pours are kept. It cannot be undone.`)) return;
+      try {
+        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timestamps }),
+        });
+        if (!res.ok) throw new Error(res.status);
+        const { deleted } = await res.json();
+        showToast(deleted === 1 ? 'Reading deleted' : `${deleted} readings deleted`, 'success');
+      } catch (err) {
+        showToast('Could not delete: ' + err.message, 'danger');
+        return;
+      }
+      load();
+    });
+
+    window.addEventListener('beforeunload', e => {
+      if (hasUnsaved()) e.preventDefault();
+    });
+    window.addEventListener('hashchange', show);
+
+    async function init() {
+      try {
+        const [kegsRes, tf, tapList] = await Promise.all([
+          fetch('/api/kegs'),
+          fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
+          // Only for naming the scale.
+          fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
+        ]);
+        if (!kegsRes.ok) throw new Error(kegsRes.status);
+        kegs = await kegsRes.json();
+        timeFormat = tf.time_format || '12h';
+        for (const tap of tapList) {
+          if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;
+        }
+      } catch (_) {
+        $('pageStatus').textContent = 'Could not load the scales. Is the server running?';
+        return;
+      }
+      if (!kegs.length) {
+        $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history can be edited here.';
+        return;
+      }
+      show();
+    }
+
+    init();
+  </script>
+</body>
+</html>

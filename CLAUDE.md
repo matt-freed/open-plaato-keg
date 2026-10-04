@@ -75,7 +75,9 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   never taken from the device's own pin 74.
 - Display units are a presentation preference, applied only where the browser
   reads a keg: the two `internal/api` keg handlers and the two `internal/ws`
-  send paths, plus the history JSON and the two pours JSON endpoints.
+  send paths, plus the history JSON and the two pours JSON endpoints. The
+  history editor's rows endpoint is shown in display units too, and its edits
+  are converted back to device units before they are stored.
   Everything else stays in the units the device reported — the stored columns,
   BarHelper, the log and pours CSV exports and every value on the Keg Setup
   page. The converted values

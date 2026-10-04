@@ -287,3 +287,28 @@ func TestNormalizeDisplayUnitsRejectsJunk(t *testing.T) {
 		t.Errorf("NormalizeDisplayMeasure(\"Weight\") = %q, want %q", got, DisplayMeasureWeight)
 	}
 }
+
+// An edit made in the display units is stored in the device's.
+func TestConvertLogEditsToDevice(t *testing.T) {
+	k := &Keg{Unit: i64p(1), MeasureUnit: i64p(2), KegMode: i64p(1), TemperatureUnit: strp("°C")}
+	edits := []LogEdit{
+		{Timestamp: 1, AmountLeft: LogValue[float64]{Set: true, Value: f64(5)},
+			KegTemperature:    LogValue[float64]{Set: true, Value: f64(32)},
+			PercentOfBeerLeft: LogValue[float64]{Set: true, Value: f64(50)}},
+		{Timestamp: 2, AmountLeft: LogValue[float64]{Set: true}},
+	}
+	ConvertLogEditsToDevice(edits, k, DisplayUnits{System: DisplaySystemUS, Measure: DisplayMeasureVolume})
+
+	if got := *edits[0].AmountLeft.Value; !nearly(got, 18.92705) {
+		t.Errorf("amount = %v, want 18.92705 litres", got)
+	}
+	if got := *edits[0].KegTemperature.Value; !nearly(got, 0) {
+		t.Errorf("temperature = %v, want 0", got)
+	}
+	if got := *edits[0].PercentOfBeerLeft.Value; !nearly(got, 50) {
+		t.Errorf("percent = %v, want 50 unchanged", got)
+	}
+	if edits[1].AmountLeft.Value != nil || !edits[1].AmountLeft.Set {
+		t.Error("a cleared value was filled in")
+	}
+}

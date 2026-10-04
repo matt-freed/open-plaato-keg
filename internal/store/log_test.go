@@ -2,6 +2,8 @@ package store
 
 import (
 	"bytes"
+	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -404,5 +406,141 @@ func TestCompactLogZeroKeepsEveryReading(t *testing.T) {
 	}
 	if removed != 0 {
 		t.Errorf("removed %d rows with compaction off, want 0", removed)
+	}
+}
+
+// seedLog writes n readings for a keg a minute apart from base, the i-th with
+// amount i.
+func seedLog(t *testing.T, s *Store, id string, base time.Time, n int) {
+	t.Helper()
+	for i := range n {
+		amount, temp := float64(i), 4.0
+		k := &Keg{ID: id, AmountLeft: &amount, KegTemperature: &temp}
+		if err := s.AppendLog(k, base.Add(time.Duration(i)*time.Minute)); err != nil {
+			t.Fatalf("AppendLog: %v", err)
+		}
+	}
+}
+
+func pageTimes(p LogPage) []int64 {
+	ts := make([]int64, len(p.Entries))
+	for i, e := range p.Entries {
+		ts[i] = e.Timestamp
+	}
+	return ts
+}
+
+func TestReadLogPage(t *testing.T) {
+	s := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0)
+	seedLog(t, s, "keg-1", base, 10)
+	seedLog(t, s, "keg-2", base, 3)
+	at := func(i int) int64 { return base.Unix() + int64(i)*60 }
+	// The window leaves out the first and last readings.
+	from, to := base.Add(time.Minute), base.Add(8*time.Minute)
+
+	check := func(name string, p LogPage, err error, want []int64, earlier, later bool) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := pageTimes(p); !slices.Equal(got, want) {
+			t.Errorf("%s: times = %v, want %v", name, got, want)
+		}
+		if p.HasEarlier != earlier || p.HasLater != later {
+			t.Errorf("%s: earlier, later = %v, %v, want %v, %v", name, p.HasEarlier, p.HasLater, earlier, later)
+		}
+	}
+
+	p, err := s.ReadLogPage("keg-1", from, to, 0, 0, 3)
+	check("first", p, err, []int64{at(1), at(2), at(3)}, false, true)
+	p, err = s.ReadLogPage("keg-1", from, to, at(3), 0, 3)
+	check("after", p, err, []int64{at(4), at(5), at(6)}, true, true)
+	p, err = s.ReadLogPage("keg-1", from, to, at(6), 0, 3)
+	check("last", p, err, []int64{at(7), at(8)}, true, false)
+	p, err = s.ReadLogPage("keg-1", from, to, 0, at(7), 3)
+	check("before", p, err, []int64{at(4), at(5), at(6)}, true, true)
+	p, err = s.ReadLogPage("keg-1", from, to, 0, at(3), 3)
+	check("before start", p, err, []int64{at(1), at(2)}, false, true)
+	p, err = s.ReadLogPage("keg-1", from, to, at(8), 0, 3)
+	check("past the end", p, err, []int64{}, true, false)
+	p, err = s.ReadLogPage("nobody", from, to, 0, 0, 3)
+	check("no readings", p, err, []int64{}, false, false)
+}
+
+func TestUpdateLogEntriesChangesOnlyWhatIsSet(t *testing.T) {
+	s := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0)
+	seedLog(t, s, "keg-1", base, 2)
+	pouring := true
+
+	err := s.UpdateLogEntries("keg-1", []LogEdit{{
+		Timestamp:      base.Unix(),
+		AmountLeft:     LogValue[float64]{Set: true, Value: f64(9.5)},
+		KegTemperature: LogValue[float64]{Set: true}, // cleared
+		IsPouring:      LogValue[bool]{Set: true, Value: &pouring},
+	}})
+	if err != nil {
+		t.Fatalf("UpdateLogEntries: %v", err)
+	}
+	entries, err := s.ReadLog("keg-1", base, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("ReadLog: %v", err)
+	}
+	e := entries[0]
+	if e.AmountLeft == nil || *e.AmountLeft != 9.5 {
+		t.Errorf("amount = %v, want 9.5", e.AmountLeft)
+	}
+	if e.KegTemperature != nil {
+		t.Errorf("temperature = %v, want cleared", *e.KegTemperature)
+	}
+	if e.IsPouring == nil || !*e.IsPouring {
+		t.Errorf("is_pouring = %v, want true", e.IsPouring)
+	}
+	if e.PercentOfBeerLeft != nil {
+		t.Errorf("percent = %v, want left unset", *e.PercentOfBeerLeft)
+	}
+	if other := entries[1]; *other.AmountLeft != 1 || *other.KegTemperature != 4 {
+		t.Errorf("an unedited row changed: %+v", other)
+	}
+}
+
+// One edit to a reading that is gone undoes the whole batch.
+func TestUpdateLogEntriesRollsBackWhenARowIsMissing(t *testing.T) {
+	s := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0)
+	seedLog(t, s, "keg-1", base, 1)
+
+	err := s.UpdateLogEntries("keg-1", []LogEdit{
+		{Timestamp: base.Unix(), AmountLeft: LogValue[float64]{Set: true, Value: f64(7)}},
+		{Timestamp: base.Unix() + 30, AmountLeft: LogValue[float64]{Set: true, Value: f64(7)}},
+	})
+	if !errors.Is(err, ErrLogEntryMissing) {
+		t.Fatalf("err = %v, want ErrLogEntryMissing", err)
+	}
+	entries, _ := s.ReadLog("keg-1", base, base.Add(time.Hour))
+	if *entries[0].AmountLeft != 0 {
+		t.Errorf("amount = %v after a failed batch, want 0 unchanged", *entries[0].AmountLeft)
+	}
+}
+
+func TestDeleteLogEntries(t *testing.T) {
+	s := newTestStore(t)
+	base := time.Unix(1_700_000_000, 0)
+	seedLog(t, s, "keg-1", base, 3)
+	seedLog(t, s, "keg-2", base, 3)
+
+	removed, err := s.DeleteLogEntries("keg-1", []int64{base.Unix(), base.Unix() + 120, base.Unix() + 5})
+	if err != nil {
+		t.Fatalf("DeleteLogEntries: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("removed %d rows, want 2", removed)
+	}
+	for id, want := range map[string]int{"keg-1": 1, "keg-2": 3} {
+		entries, _ := s.ReadLog(id, base, base.Add(time.Hour))
+		if len(entries) != want {
+			t.Errorf("%s has %d entries, want %d", id, len(entries), want)
+		}
 	}
 }

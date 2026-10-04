@@ -86,6 +86,7 @@
            its own. It downloads whatever scale and range are chosen. -->
       <div class="page-actions">
         <a class="button is-small" href="/pours.html">All pours &rarr;</a>
+        <a class="button is-small" id="editBtn" href="/history-edit.html">Edit</a>
         <button class="button is-small is-danger" type="button" id="clearBtn">Clear history</button>
         <a class="button is-small" id="downloadBtn" href="#" download>&#8595; Download CSV</a>
       </div>
@@ -708,6 +709,11 @@
       const win = viewWindow(view);
       const query = windowQuery(view);
       $('downloadBtn').href = `/api/kegs/${encodeURIComponent(id)}/log/csv?${query}`;
+      // The editor pages through a fixed window, so a preset goes as the
+      // times it covers now.
+      $('editBtn').href = '/history-edit.html#' + new URLSearchParams({
+        keg: id, from: Math.floor(win.from / 1000), to: Math.ceil(win.to / 1000),
+      });
       $('statsTitle').textContent = viewLabel(view);
 
       const seq = ++loadSeq;
@@ -927,6 +933,7 @@
         $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history appears here.';
         $('downloadBtn').hidden = true;
         $('clearBtn').hidden = true;
+        $('editBtn').hidden = true;
         return;
       }
       // A scale that feeds a tap is labelled by its beer, which is what the

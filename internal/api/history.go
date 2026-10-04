@@ -1,6 +1,9 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -164,4 +167,176 @@ func (s *Server) readLog(w http.ResponseWriter, r *http.Request, defaultRange st
 		return nil, nil, false
 	}
 	return entries, keg, true
+}
+
+// Paging limits for the history editor, which lists stored rows unaveraged.
+const (
+	defaultLogPageSize = 100
+	maxLogPageSize     = 500
+)
+
+// handleKegLogRows serves one page of a keg's stored readings for the history
+// editor, in the display units, with the unit labels the page heads its
+// columns with. ?after= or ?before= moves the page along the window.
+func (s *Server) handleKegLogRows(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	keg, err := s.store.GetKeg(id)
+	if err != nil {
+		writeStoreError(w, err, "keg")
+		return
+	}
+	from, to, ok := historyWindow(w, r, "24h")
+	if !ok {
+		return
+	}
+
+	q := r.URL.Query()
+	var after, before int64
+	limit := defaultLogPageSize
+	for name, dst := range map[string]*int64{"after": &after, "before": &before} {
+		if v := q.Get(name); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || n <= 0 {
+				writeError(w, http.StatusBadRequest, "invalid_value", name+" must be unix seconds")
+				return
+			}
+			*dst = n
+		}
+	}
+	if after > 0 && before > 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "give after or before, not both")
+		return
+	}
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_value", "limit must be a positive whole number")
+			return
+		}
+		limit = min(n, maxLogPageSize)
+	}
+
+	page, err := s.store.ReadLogPage(id, from, to, after, before, limit)
+	if err != nil {
+		writeStoreError(w, err, "keg history")
+		return
+	}
+	units := s.displayUnits()
+	store.ConvertLogEntries(page.Entries, keg, units)
+	keg.SetDisplay(units)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"entries":          page.Entries,
+		"has_earlier":      page.HasEarlier,
+		"has_later":        page.HasLater,
+		"amount_unit":      keg.Display.AmountUnit,
+		"temperature_unit": keg.Display.TemperatureUnit,
+	})
+}
+
+// handleUpdateKegLog applies the history editor's changes. Each entry names a
+// stored reading by its timestamp and carries only the values that changed:
+// an absent value is left as stored and a null one is cleared. Amounts and
+// temperatures arrive in the display units and are stored in the device's.
+func (s *Server) handleUpdateKegLog(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	keg, err := s.store.GetKeg(id)
+	if err != nil {
+		writeStoreError(w, err, "keg")
+		return
+	}
+	var body struct {
+		Entries []map[string]json.RawMessage `json:"entries"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if len(body.Entries) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "entries must list at least one reading")
+		return
+	}
+
+	edits := make([]store.LogEdit, len(body.Entries))
+	for i, fields := range body.Entries {
+		edit, err := parseLogEdit(fields)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_value", err.Error())
+			return
+		}
+		edits[i] = edit
+	}
+	store.ConvertLogEditsToDevice(edits, keg, s.displayUnits())
+
+	if err := s.store.UpdateLogEntries(id, edits); err != nil {
+		if errors.Is(err, store.ErrLogEntryMissing) {
+			writeError(w, http.StatusConflict, "conflict",
+				"some readings no longer exist; reload and try again")
+			return
+		}
+		writeStoreError(w, err, "keg history")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "updated": len(edits)})
+}
+
+// parseLogEdit reads one entry of an update, telling an absent value from a
+// null one.
+func parseLogEdit(fields map[string]json.RawMessage) (store.LogEdit, error) {
+	var e store.LogEdit
+	raw, ok := fields["timestamp"]
+	if !ok || json.Unmarshal(raw, &e.Timestamp) != nil || e.Timestamp <= 0 {
+		return e, errors.New("each entry needs the timestamp of the reading it changes")
+	}
+	for name, raw := range fields {
+		var err error
+		switch name {
+		case "timestamp":
+		case "amount_left":
+			err = parseLogFloat(raw, &e.AmountLeft)
+		case "keg_temperature":
+			err = parseLogFloat(raw, &e.KegTemperature)
+		case "percent_of_beer_left":
+			err = parseLogFloat(raw, &e.PercentOfBeerLeft)
+		case "is_pouring":
+			e.IsPouring.Set = true
+			err = json.Unmarshal(raw, &e.IsPouring.Value)
+		default:
+			return e, fmt.Errorf("%s cannot be edited", name)
+		}
+		if err != nil {
+			return e, fmt.Errorf("%s has an invalid value", name)
+		}
+	}
+	return e, nil
+}
+
+func parseLogFloat(raw json.RawMessage, dst *store.LogValue[float64]) error {
+	dst.Set = true
+	// JSON has no NaN or infinity, so any number that parses is finite.
+	return json.Unmarshal(raw, &dst.Value)
+}
+
+// handleDeleteKegLogEntries deletes the history editor's selected readings.
+// The keg's pours are kept.
+func (s *Server) handleDeleteKegLogEntries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := s.store.GetKeg(id); err != nil {
+		writeStoreError(w, err, "keg")
+		return
+	}
+	var body struct {
+		Timestamps []int64 `json:"timestamps"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if len(body.Timestamps) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "timestamps must list at least one reading")
+		return
+	}
+	removed, err := s.store.DeleteLogEntries(id, body.Timestamps)
+	if err != nil {
+		writeStoreError(w, err, "keg history")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "deleted": removed})
 }
