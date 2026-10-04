@@ -418,7 +418,9 @@ connected, polling `/api/kegs/connected` since connections publish no event.
 Tap Setup's list is a board (`renderBoard`): each scale, in `/api/kegs` order,
 beside a slot holding the tap it feeds, and a "Not on a scale" tray below for
 taps with no keg, a keg that no longer exists, or one another tap already
-holds (from a database older than the one-tap check). `tap-board.js` drags the
+holds (from a database older than the one-tap check). The two columns hold at
+every width, tightening on a phone rather than stacking, so a scale and its tap
+always read as a pair. `tap-board.js` drags the
 cards between slots with pointer events, as `tile-gestures.js` does: a mouse
 drags as soon as it moves, a finger holds first, and the page scrolls when the
 pointer nears the top or bottom edge. A card dropped on an occupied slot swaps
