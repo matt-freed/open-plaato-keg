@@ -16,8 +16,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
+	"github.com/matt-freed/open-plaato-keg/internal/logbuf"
 	"github.com/matt-freed/open-plaato-keg/internal/store"
 	"github.com/matt-freed/open-plaato-keg/internal/ws"
 )
@@ -30,14 +32,29 @@ type Server struct {
 	bus       *events.Bus
 	version   string
 	static    fs.FS
+	system    System
+}
+
+// System is what the System page reads and controls.
+type System struct {
+	// Logs holds the recent log records.
+	Logs *logbuf.Buffer
+	// Level is the live logging level, which the page can change until the
+	// next restart.
+	Level *slog.LevelVar
+	// Env is the configuration in effect, with secrets withheld.
+	Env []config.Setting
 }
 
 // NewServer returns a configured API server.
 func NewServer(st *store.Store, cmd *keg.Commander, hub *ws.Hub, bus *events.Bus,
-	version string, static fs.FS) *Server {
+	version string, static fs.FS, sys System) *Server {
+	if sys.Level == nil {
+		sys.Level = new(slog.LevelVar)
+	}
 	return &Server{
 		store: st, commander: cmd, hub: hub, bus: bus,
-		version: version, static: static,
+		version: version, static: static, system: sys,
 	}
 }
 
@@ -59,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", s.handleGetKeg)
+				r.Get("/connection", s.handleKegConnection)
 				r.Get("/log", s.handleKegLog)
 				r.Get("/log/csv", s.handleKegLogCSV)
 				r.Post("/log/clear", s.handleClearKegLog)
@@ -104,6 +122,12 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/min-pour", s.handleSetMinPour)
 			r.Get("/theme", s.handleGetTheme)
 			r.Post("/theme", s.handleSetTheme)
+		})
+
+		r.Route("/system", func(r chi.Router) {
+			r.Get("/env", s.handleSystemEnv)
+			r.Get("/logs", s.handleSystemLogs)
+			r.Post("/log-level", s.handleSetLogLevel)
 		})
 
 	})

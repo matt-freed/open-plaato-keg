@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -12,8 +13,10 @@ import (
 	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/blynk"
+	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
+	"github.com/matt-freed/open-plaato-keg/internal/logbuf"
 	"github.com/matt-freed/open-plaato-keg/internal/plaato"
 	"github.com/matt-freed/open-plaato-keg/internal/store"
 	"github.com/matt-freed/open-plaato-keg/internal/ws"
@@ -25,6 +28,8 @@ type testAPI struct {
 	handler http.Handler
 	store   *store.Store
 	bus     *events.Bus
+	logs    *logbuf.Buffer
+	level   *slog.LevelVar
 }
 
 func newTestAPI(t *testing.T) *testAPI {
@@ -39,9 +44,13 @@ func newTestAPI(t *testing.T) *testAPI {
 	bus := events.NewBus()
 	commander := keg.NewCommander(keg.NewRegistry())
 	hub := ws.NewHub(st, nil)
-	srv := NewServer(st, commander, hub, bus, "test", web.Static())
+	logs, level := logbuf.New(), new(slog.LevelVar)
+	cfg := config.Config{BarHelper: config.BarHelperConfig{APIKey: "test-api-key"}}
+	srv := NewServer(st, commander, hub, bus, "test", web.Static(), System{
+		Logs: logs, Level: level, Env: cfg.Settings(),
+	})
 
-	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus}
+	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus, logs: logs, level: level}
 }
 
 func (a *testAPI) do(method, path string, body any) *httptest.ResponseRecorder {
@@ -853,4 +862,19 @@ func TestTapLinks(t *testing.T) {
 		{"tap_id": "nope", "keg_id": ""},
 	}})
 	assertStatus(t, rec, http.StatusNotFound)
+}
+
+func TestKegConnection(t *testing.T) {
+	a := newTestAPI(t)
+	a.storeKeg("keg-1", "vw\x0051\x001.000")
+
+	// Nothing is connected in this test; a live connection is covered by the
+	// keg package's TestConnectionInfo.
+	rec := a.do(http.MethodGet, "/api/kegs/keg-1/connection", nil)
+	assertStatus(t, rec, http.StatusOK)
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"connected":false}` {
+		t.Errorf("offline keg = %s", got)
+	}
+
+	assertStatus(t, a.do(http.MethodGet, "/api/kegs/nope/connection", nil), http.StatusNotFound)
 }

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System - Open Plaato</title>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
+    <style>
+      .group-head {
+        display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+        margin: 2.25rem 0 0.9rem;
+      }
+      .group-head:first-of-type { margin-top: 0; }
+      .group-head h2 {
+        margin: 0;
+        font-family: var(--title-font);
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .env-table .env-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; white-space: nowrap; }
+      /* The shared table style never wraps; a long value, such as an
+         endpoint URL, has to here or the table scrolls sideways. */
+      .env-table td.env-value { white-space: normal; overflow-wrap: anywhere; }
+      .env-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--faint); }
+      .is-default { color: var(--muted); }
+
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 1.5rem;
+        margin-bottom: 1rem;
+      }
+      .controls .field { margin: 0; }
+      .controls .input { width: 16rem; max-width: 100%; }
+
+      /* Beside the Logs heading: what is kept, then whether a poll is running
+         and when the last one finished. */
+      .head-meta { display: flex; align-items: center; gap: 0.5rem 1rem; flex-wrap: wrap; }
+      .poll-status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }
+      .poll-status.is-error { color: var(--danger); }
+      .spinner {
+        width: 0.8rem; height: 0.8rem; flex-shrink: 0;
+        border: 2px solid var(--line-strong); border-top-color: var(--action); border-radius: 50%;
+        visibility: hidden;
+      }
+      .spinner.is-active { visibility: visible; animation: spin 0.7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner.is-active { animation: none; border-color: var(--action); }
+      }
+
+      /* One line per record, like a terminal; a long line is cut off with an
+         ellipsis until its row is clicked open, when it wraps in full. */
+      .log-list { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; line-height: 1.5; }
+      .log-row {
+        display: grid; grid-template-columns: max-content 3.6rem minmax(0, 1fr);
+        align-items: baseline; gap: 0 0.75rem;
+        width: 100%; padding: 0.15rem 0.35rem; margin: 0;
+        border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+        background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+      }
+      .log-row:last-child { border-bottom: 0; }
+      .log-row:hover { background: rgba(255, 255, 255, 0.04); }
+      .log-row:focus-visible { outline: 2px solid var(--soft); outline-offset: -2px; }
+      .log-time { color: var(--muted); white-space: nowrap; }
+      .log-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .log-row.is-open .log-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .log-attrs { color: var(--muted); }
+      .log-attrs b { font-weight: 400; color: var(--faint); }
+      /* On a phone the text takes its own line under the time and level. */
+      @media (max-width: 600px) {
+        /* A flexible second track, so the text spanning both is held to the
+           row's width rather than widening a column to fit itself. */
+        .log-row { grid-template-columns: max-content minmax(0, 1fr); }
+        .log-text { grid-column: 1 / -1; }
+      }
+      .log-more { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+      .log-more .help { margin: 0; }
+      .level {
+        display: inline-block; padding: 0 0.3rem;
+        border-radius: 5px; text-align: center;
+        font-family: var(--sans); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em;
+        background: var(--line); color: var(--soft);
+      }
+      .level.is-debug { color: var(--faint); }
+      .level.is-warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+      .level.is-error { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+    </style>
+  </head>
+  <body>
+    <site-header heading="System"></site-header>
+
+    <section class="section">
+      <div class="container is-centered is-wide">
+        <p class="subtitle" id="version" hidden></p>
+
+        <div class="group-head">
+          <h2>Environment</h2>
+        </div>
+        <div class="box section-box">
+          <div class="data-table-wrap">
+            <table class="data-table env-table">
+              <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+              <tbody id="envBody"></tbody>
+            </table>
+          </div>
+          <p class="empty-state" id="envStatus">Loading…</p>
+          <p class="help">
+            Values in effect, set when the server starts. Muted values are defaults.
+            The BarHelper API key is never shown.
+          </p>
+        </div>
+
+        <div class="group-head">
+          <h2>Logs</h2>
+          <div class="head-meta">
+            <span class="help" id="logNote"></span>
+            <span class="poll-status" id="pollStatus">
+              <span class="spinner" id="pollSpinner" aria-hidden="true"></span>
+              <span id="pollText"></span>
+            </span>
+          </div>
+        </div>
+        <div class="box section-box">
+          <div class="controls">
+            <div class="field">
+              <label class="label" for="serverLevel">Server log level</label>
+              <div class="select">
+                <select id="serverLevel">
+                  <option value="debug">Debug</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warn</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="levelFilter">Show from</label>
+              <div class="select">
+                <select id="levelFilter">
+                  <option value="0">Debug</option>
+                  <option value="1" selected>Info</option>
+                  <option value="2">Warn</option>
+                  <option value="3">Error</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="search">Search</label>
+              <input class="input" type="search" id="search" placeholder="Message or attribute">
+            </div>
+          </div>
+          <p class="help" id="levelNote"></p>
+          <p class="help is-danger" id="levelError" hidden></p>
+          <p class="help is-warning" id="dropNote" hidden>
+            Some records were discarded before this page could fetch them.
+          </p>
+          <div class="log-list" id="logList"></div>
+          <p class="empty-state" id="logStatus">Loading…</p>
+          <div class="log-more" id="logMore" hidden>
+            <button class="button is-small" type="button" id="moreBtn"></button>
+            <p class="help" id="moreNote"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      'use strict';
+
+      const $ = id => document.getElementById(id);
+      const POLL_MS = 5000;
+      const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
+
+      let timeFormat = '12h';
+      let records = [];
+      let lastSeq = 0;
+      let capacity = 1000;
+
+      function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, c =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+
+      // slog names in-between levels "INFO+2" and the like; rank by the base.
+      function rank(level) {
+        const i = LEVELS.indexOf(String(level).split(/[+-]/)[0]);
+        return i < 0 ? 1 : i;
+      }
+
+      async function loadEnv() {
+        try {
+          const res = await fetch('/api/system/env');
+          if (!res.ok) throw new Error(res.status);
+          const { settings } = await res.json();
+          $('envBody').innerHTML = settings.map(s => {
+            let value;
+            if (s.redacted) value = 'set <span class="env-tag">hidden</span>';
+            else if (s.value === '') value = '<span class="is-default">not set</span>';
+            else value = `<span class="${s.default ? 'is-default' : ''}">${esc(s.value)}</span>`;
+            if (s.default && s.value !== '') value += '<span class="env-tag">default</span>';
+            return `<tr><td class="env-name">${esc(s.name)}</td><td class="env-value">${value}</td></tr>`;
+          }).join('');
+          $('envStatus').textContent = '';
+        } catch {
+          $('envStatus').textContent = 'Could not load the environment.';
+        }
+      }
+
+      function when(iso) {
+        return new Date(iso).toLocaleString([], {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
+          hour12: timeFormat !== '24h',
+        });
+      }
+
+      // Rows are rendered a page at a time; every record stays in memory for
+      // the filter and search.
+      const PAGE = 200;
+      let limit = PAGE;
+      // Rows clicked open, by seq, so a poll's re-render keeps them open.
+      const opened = new Set();
+
+      function matching() {
+        const min = Number($('levelFilter').value);
+        const q = $('search').value.trim().toLowerCase();
+        const shown = [];
+        for (let i = records.length - 1; i >= 0; i--) {
+          const r = records[i];
+          if (rank(r.level) < min) continue;
+          if (q) {
+            const text = (r.message + ' ' + r.attrs.map(a => `${a.key}=${a.value}`).join(' ')).toLowerCase();
+            if (!text.includes(q)) continue;
+          }
+          shown.push(r);
+        }
+        return shown;
+      }
+
+      function rowHTML(r) {
+        const cls = LEVELS[rank(r.level)].toLowerCase();
+        const attrs = r.attrs.length
+          ? ` <span class="log-attrs">${r.attrs.map(a => `<b>${esc(a.key)}=</b>${esc(a.value)}`).join(' ')}</span>`
+          : '';
+        const open = opened.has(r.seq);
+        // A div rather than a button, so the text of an open row can be selected.
+        return `<div role="button" tabindex="0" class="log-row${open ? ' is-open' : ''}" data-seq="${r.seq}" aria-expanded="${open}">
+            <span class="log-time">${esc(when(r.time))}</span>
+            <span><span class="level is-${cls}">${esc(r.level)}</span></span>
+            <span class="log-text">${esc(r.message)}${attrs}</span>
+          </div>`;
+      }
+
+      // The first row on screen and where it sits, so a re-render that adds
+      // records above it can scroll to keep it still. Null when the list is
+      // not scrolled into.
+      function scrollAnchor() {
+        if ($('logList').getBoundingClientRect().top >= 0) return null;
+        for (const row of $('logList').children) {
+          const top = row.getBoundingClientRect().top;
+          if (row.getBoundingClientRect().bottom > 0) return { seq: row.dataset.seq, top };
+        }
+        return null;
+      }
+
+      function renderLogs() {
+        const shown = matching();
+        const anchor = scrollAnchor();
+
+        $('logList').innerHTML = shown.slice(0, limit).map(rowHTML).join('');
+
+        if (anchor) {
+          const row = $('logList').querySelector(`[data-seq="${anchor.seq}"]`);
+          if (row) window.scrollBy(0, row.getBoundingClientRect().top - anchor.top);
+        }
+
+        const hidden = shown.length - limit;
+        $('logMore').hidden = hidden <= 0;
+        if (hidden > 0) {
+          $('moreBtn').textContent = `Show ${Math.min(PAGE, hidden)} more`;
+          $('moreNote').textContent = `Showing ${limit} of ${shown.length} matching records.`;
+        }
+        $('logStatus').textContent = shown.length ? ''
+          : records.length ? 'No records match the filter.' : 'Nothing has been logged yet.';
+      }
+
+      function toggleRow(row) {
+        const seq = Number(row.dataset.seq);
+        const open = row.classList.toggle('is-open');
+        row.setAttribute('aria-expanded', String(open));
+        if (open) opened.add(seq); else opened.delete(seq);
+      }
+
+      $('logList').addEventListener('click', e => {
+        const row = e.target.closest('.log-row');
+        if (!row) return;
+        // Finishing a text selection inside a row should not toggle it.
+        const sel = window.getSelection();
+        if (String(sel) && row.contains(sel.anchorNode)) return;
+        toggleRow(row);
+      });
+      $('logList').addEventListener('keydown', e => {
+        const row = e.target.closest('.log-row');
+        if (!row || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        toggleRow(row);
+      });
+
+      $('moreBtn').addEventListener('click', () => {
+        limit += PAGE;
+        renderLogs();
+      });
+
+      // A local server answers in milliseconds, so the spinner is held long
+      // enough to be seen.
+      const SPIN_MIN_MS = 600;
+      let polling = 0;
+
+      // poll fetches new records, showing a spinner while it runs and the
+      // time it finished, or that it failed.
+      async function poll() {
+        polling++;
+        $('pollSpinner').classList.add('is-active');
+        const started = Date.now();
+        const ok = await fetchLogs();
+        await new Promise(r => setTimeout(r, Math.max(0, SPIN_MIN_MS - (Date.now() - started))));
+        if (--polling === 0) $('pollSpinner').classList.remove('is-active');
+
+        $('pollStatus').classList.toggle('is-error', !ok);
+        $('pollText').textContent = ok
+          ? `Updated ${new Date().toLocaleTimeString([], {
+              hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: timeFormat !== '24h',
+            })}`
+          : 'Update failed';
+      }
+
+      // fetchLogs adds any records newer than the last one held, and reports
+      // whether it reached the server.
+      async function fetchLogs() {
+        try {
+          const res = await fetch(`/api/system/logs?after=${lastSeq}`);
+          if (!res.ok) throw new Error(res.status);
+          const body = await res.json();
+          capacity = body.capacity;
+          showLevel(body.level, body.configured_level);
+
+          // The server restarted, so its numbering began again.
+          if (body.latest_seq < lastSeq) {
+            records = [];
+            lastSeq = 0;
+            opened.clear();
+            $('dropNote').hidden = true;
+            return fetchLogs();
+          }
+
+          if (lastSeq > 0 && body.oldest_seq > lastSeq + 1) $('dropNote').hidden = false;
+          // Two polls can overlap, so skip anything already held.
+          const fresh = body.records.filter(r => r.seq > lastSeq);
+          if (fresh.length) {
+            records = records.concat(fresh).slice(-capacity);
+            lastSeq = records[records.length - 1].seq;
+            renderLogs();
+          } else if (!records.length) {
+            renderLogs();
+          }
+          return true;
+        } catch {
+          if (!records.length) $('logStatus').textContent = 'Could not load the logs.';
+          return false;
+        }
+      }
+
+      // The server's level, as the last poll or change reported it.
+      let serverLevel = '';
+
+      function showLevel(level, configured) {
+        serverLevel = level;
+        // Leave the picker alone while someone is choosing.
+        if (document.activeElement !== $('serverLevel')) $('serverLevel').value = level;
+        $('logNote').textContent = `The last ${capacity} records are kept.`;
+        $('levelNote').textContent = level === configured
+          ? `Records below ${level} are not kept. This is LOG_LEVEL; a change here lasts until the server restarts.`
+          : `Records below ${level} are not kept. Changed here from LOG_LEVEL=${configured}, which returns when the server restarts.`;
+      }
+
+      $('serverLevel').addEventListener('change', async e => {
+        const level = e.target.value;
+        $('levelError').hidden = true;
+        try {
+          const res = await fetch('/api/system/log-level', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level }),
+          });
+          if (!res.ok) throw new Error(res.status);
+          e.target.blur();
+          // Show what the new level captures.
+          $('levelFilter').value = String(rank(level.toUpperCase()));
+          await poll();
+          refilter();
+        } catch {
+          e.target.value = serverLevel;
+          $('levelError').textContent = 'Could not change the log level.';
+          $('levelError').hidden = false;
+        }
+      });
+
+      // A new filter starts again from the newest page.
+      function refilter() {
+        limit = PAGE;
+        renderLogs();
+      }
+      $('levelFilter').addEventListener('change', refilter);
+      $('search').addEventListener('input', refilter);
+
+      async function init() {
+        const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
+        timeFormat = tf.time_format || '12h';
+        loadEnv();
+        fetch('/api/alive').then(r => r.json()).then(d => {
+          if (!d.version) return;
+          $('version').textContent = `Open Plaato Keg v${d.version}`;
+          $('version').hidden = false;
+        }).catch(() => {});
+        await poll();
+        setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+      }
+
+      init();
+    </script>
+  </body>
+</html>

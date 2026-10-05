@@ -53,6 +53,15 @@ func (c *Commander) Connected(kegID string) bool {
 	return err == nil
 }
 
+// Connection describes kegID's live connection; false when it has none.
+func (c *Commander) Connection(kegID string) (ConnInfo, bool) {
+	conn, err := c.registry.Lookup(kegID)
+	if err != nil {
+		return ConnInfo{}, false
+	}
+	return conn.Info(), true
+}
+
 // ConnectedIDs returns every connected keg's id.
 func (c *Commander) ConnectedIDs() []string { return c.registry.IDs() }
 

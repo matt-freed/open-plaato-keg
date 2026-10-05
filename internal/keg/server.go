@@ -111,7 +111,7 @@ type connState struct {
 }
 
 func (s *Server) handle(nc net.Conn) {
-	c := &Conn{net: nc}
+	c := newConn(nc, time.Now())
 	state := &connState{conn: c}
 
 	slog.Debug("keg connection opened", "remote", c.RemoteAddr())
@@ -127,6 +127,7 @@ func (s *Server) handle(nc net.Conn) {
 
 		n, readErr := nc.Read(buf)
 		if n > 0 {
+			c.heard(time.Now())
 			frames, frameErr := framer.Feed(buf[:n])
 
 			// One acknowledgement per read, echoing the first frame's message

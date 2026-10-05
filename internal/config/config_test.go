@@ -1,6 +1,8 @@
 package config
 
 import (
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -160,5 +162,65 @@ func TestBarHelperEnabledRequiresAPIKey(t *testing.T) {
 	t.Setenv("BARHELPER_API_KEY", "secret")
 	if _, err := Load(); err != nil {
 		t.Fatalf("Load: %v", err)
+	}
+}
+
+func TestSettingsRedactsAPIKey(t *testing.T) {
+	t.Setenv("BARHELPER_ENABLED", "true")
+	t.Setenv("BARHELPER_API_KEY", "super-secret-key")
+	t.Setenv("BARHELPER_KEG_MONITOR_MAPPING", "bbb:2,aaa:1")
+	t.Setenv("LOG_LEVEL", "debug")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	settings := cfg.Settings()
+
+	byName := map[string]Setting{}
+	for _, s := range settings {
+		if strings.Contains(s.Value, "super-secret-key") {
+			t.Errorf("%s leaks the API key: %q", s.Name, s.Value)
+		}
+		byName[s.Name] = s
+	}
+	if len(byName) != 12 {
+		t.Errorf("got %d settings, want 12", len(byName))
+	}
+
+	key := byName["BARHELPER_API_KEY"]
+	if !key.Redacted || key.Default || key.Value == "" {
+		t.Errorf("API key setting = %+v, want redacted and set", key)
+	}
+	if s := byName["BARHELPER_KEG_MONITOR_MAPPING"]; s.Value != "aaa:1, bbb:2" || s.Default {
+		t.Errorf("mapping = %+v", s)
+	}
+	if s := byName["LOG_LEVEL"]; s.Value != "debug" || s.Default {
+		t.Errorf("LOG_LEVEL = %+v", s)
+	}
+	if s := byName["KEG_LISTENER_PORT"]; s.Value != "4545" || !s.Default {
+		t.Errorf("KEG_LISTENER_PORT = %+v", s)
+	}
+	if s := byName["LOG_RETENTION_DAYS"]; s.Value != "365" {
+		t.Errorf("LOG_RETENTION_DAYS = %+v", s)
+	}
+}
+
+func TestSettingsUnsetAPIKey(t *testing.T) {
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for _, s := range cfg.Settings() {
+		if s.Name == "BARHELPER_API_KEY" && (s.Redacted || s.Value != "" || !s.Default) {
+			t.Errorf("unset API key = %+v", s)
+		}
+	}
+}
+
+func TestLogLevelFallsBack(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "loud")
+	if got := LogLevel(); got != slog.LevelInfo {
+		t.Errorf("LogLevel = %v, want info", got)
 	}
 }
