@@ -66,6 +66,7 @@ INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tast
 INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tasting_notes,keg_id,srm,color_preset,kegged_date) VALUES('a5106a35',6,'Winter Warmer','','Old Ale',8.199999999999999289,40.0,'#7a2e12','','','',22.0,'','2026-09-15');
 INSERT INTO taps(id,tap_number,name,brewery,style,abv,ibu,color,description,tasting_notes,keg_id,srm,color_preset,kegged_date) VALUES('efa282b5',8,'Cold Brew Porter','','Coffee Porter',6.099999999999999645,30.0,'#2a170c','','','',32.0,'','');
 INSERT INTO app_config(key,value) VALUES('display_unit_system','us');
+INSERT INTO app_config(key,value) VALUES('display_unit_measure','volume');
 -- Pours: the same pours the history above was shaped by, as the server would
 -- have recorded them, each with a copy of its tap's beer. The query repeats
 -- the history's pour pattern, so the two agree. Kegerator 3's offline hours

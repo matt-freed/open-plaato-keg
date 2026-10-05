@@ -148,6 +148,10 @@
                   <button class="button is-small" type="button" data-value="amount">Amount</button>
                   <button class="button is-small" type="button" data-value="percent">%</button>
                 </div>
+                <div class="buttons has-addons" id="amountUnitChoice" hidden>
+                  <button class="button is-small" type="button" data-value="gal">gal</button>
+                  <button class="button is-small" type="button" data-value="oz">oz</button>
+                </div>
                 <div class="buttons has-addons" id="axisChoice"
                      title="Fit zooms the axis to this range so small pours show; Full starts it at zero.">
                   <button class="button is-small" type="button" data-value="fit">Fit</button>
@@ -241,6 +245,9 @@
     // Fit zooms the amount axis to the range shown, so a pour from a nearly
     // full keg is a visible step; full starts it at zero.
     let axisScale = 'fit';
+    // A keg shown in gallons can chart its amount in ounces instead, so a
+    // single pour is a readable step. Only the chart and its readout change.
+    let amountUnit = 'gal';
     let entries = [];
     // The scale's recorded pours for the range, newest first, and each one's
     // nearest logged reading, which places its marker on the line.
@@ -277,6 +284,15 @@
         amount: raw === 'litre' ? 'L' : raw,
         temp: keg?.display?.temperature_unit || keg?.temperature_unit || '',
       };
+    }
+
+    // The unit the amount chart is drawn in, and what turns a reading into it.
+    const OZ_PER_GAL = 128;
+    function chartAmount(keg) {
+      const unit = units(keg).amount;
+      return unit === 'gal' && amountUnit === 'oz'
+        ? { mult: OZ_PER_GAL, unit: 'oz', digits: 1 }
+        : { mult: 1, unit, digits: 2 };
     }
 
     // ── State in the URL ────────────────────────────
@@ -571,11 +587,14 @@
       const pour = token('--pour');
       const surface = token('--tile');
       const pct = measure === 'percent';
-      const amountLabel = pct ? 'Left (%)' : u.amount ? `Left (${u.amount})` : 'Left';
+      const amt = chartAmount(keg);
+      $('amountUnitChoice').hidden = pct || u.amount !== 'gal';
+      const amountLabel = pct ? 'Left (%)' : amt.unit ? `Left (${amt.unit})` : 'Left';
       $('amountKey').textContent = pct ? 'Percent left' : 'Amount left';
       $('tempTitle').textContent = 'Temperature';
 
-      const value = e => pct ? e.percent_of_beer_left : e.amount_left;
+      const value = e => pct ? e.percent_of_beer_left
+        : Number.isFinite(e.amount_left) ? e.amount_left * amt.mult : e.amount_left;
       const line = list => list.map(e => ({ x: e.timestamp * 1000, y: value(e) ?? null }));
       // A segment across a gap is drawn invisibly, line and fill alike. A
       // reading that was not reported is skipped rather than breaking the
@@ -666,6 +685,7 @@
 
       const keg = kegs.find(k => k.id === readHash().keg);
       const u = units(keg);
+      const amt = chartAmount(keg);
       const tip = $('chartTooltip');
       tip.replaceChildren();
       const time = document.createElement('div');
@@ -686,7 +706,7 @@
         tip.append(r);
       };
       row(token('--action'), false,
-        `${fmt(e.amount_left, 2)} ${u.amount}`.trim() +
+        `${fmt(e.amount_left * amt.mult, amt.digits)} ${amt.unit}`.trim() +
           (Number.isFinite(e.percent_of_beer_left) ? ` · ${Math.round(e.percent_of_beer_left)}%` : ''),
         'Left');
       row('#8fb3ff', false, `${deg(e.keg_temperature)}${u.temp}`, 'Temperature');
@@ -874,6 +894,13 @@
       select('measureChoice', measure);
       if (entries.length) renderCharts(kegs.find(k => k.id === readHash().keg), shownWindow);
     });
+    $('amountUnitChoice').addEventListener('click', e => {
+      const b = e.target.closest('.button');
+      if (!b || b.dataset.value === amountUnit) return;
+      amountUnit = b.dataset.value;
+      select('amountUnitChoice', amountUnit);
+      if (entries.length) renderCharts(kegs.find(k => k.id === readHash().keg), shownWindow);
+    });
     // ── Clearing ────────────────────────────────────
     let toastTimer;
     function showToast(message, type) {
@@ -933,6 +960,7 @@
     async function init() {
       select('measureChoice', measure);
       select('axisChoice', axisScale);
+      select('amountUnitChoice', amountUnit);
       try {
         const [kegsRes, tf, tapList, mp] = await Promise.all([
           fetch('/api/kegs'),

@@ -329,7 +329,7 @@ The recording logs in as keg `00000000000000000000000000000001`. Pass
 
 `testdata/demo.sql` fills a database with six kegs on eight taps, enough to see
 the tap list and keg pages populated without any hardware, and sets the display
-units to US. It also generates 30 days of history for every keg, ending at the
+units to US volume, so every keg reads in gallons. It also generates 30 days of history for every keg, ending at the
 moment it is loaded, so the History page has pours, keg swaps and temperature
 to chart in every range, and All Pours has a month of pours to list. It holds data only, so load it on top of the schema:
 
