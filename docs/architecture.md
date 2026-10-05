@@ -312,7 +312,13 @@ records its own unit, unlike `keg_log`.
 Pours are never pruned. `ClearLog` and `DeleteKeg` set `hidden_from_keg` rather
 than deleting them: they drop out of that keg's history (`ListKegPours`) but
 stay in the list of all pours (`ListPours`). `DeletePour` removes one pour
-everywhere.
+everywhere, and `DeletePours` several in one transaction.
+
+`UpdatePours` corrects stored pours by hand, writing only the fields each
+`PourEdit` sets. An amount arrives in the display units' pour-sized sub-unit
+and `pourAmountToStored`, the inverse of `pourDisplay`, puts it back into the
+pour's own unit. A hand edit is a correction, so it is not checked against the
+minimum or maximum pour.
 
 ## Live updates — `internal/events` and `internal/ws`
 
@@ -347,10 +353,10 @@ A chi router with `Recoverer` and `RealIP` middleware:
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
 | `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`), pours (`/pours`), delete |
+| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`, and `/log/rows`, `/log/update`, `/log/delete` for the editor), pours (`/pours`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
-| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all), `/api/pours/csv` in device units, `/api/pours/{id}/delete` |
+| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `/api/pours/update`, `/api/pours/delete` for several, `/api/pours/{id}/delete` |
 | `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
@@ -463,16 +469,58 @@ and its pours leave the page, while the keg and the other kegs' history stay.
 The pours remain on All Pours. The page asks for confirmation first, since the
 history is not recoverable.
 
+History's Edit button opens the history editor (`history-edit.html`) on the
+scale and window shown, a preset sent as the fixed times it covers so the pages
+do not drift. `handleKegLogRows` serves it one page of stored rows at a time
+from `store.ReadLogPage`, unaveraged and oldest first, with `?after=` and
+`?before=` cursors for Later and Earlier and `has_earlier`/`has_later` to
+enable them. The rows are converted to the display units by
+`ConvertLogEntries`, and the column units come from the keg's display block.
+The page sends only the cells that changed: `handleUpdateKegLog` decodes each
+entry as raw fields so an absent value (left as stored) is distinct from
+`null` (cleared), converts amounts and temperatures back to the device's units
+with `ConvertLogEditsToDevice`, and applies them in one transaction with
+`store.UpdateLogEntries`, which writes only the columns given, so an untouched
+value never takes a lossy round trip through the display units. An edit to a
+row that has gone, such as one compaction folded into an hourly row since the
+page loaded, rolls the whole batch back and answers 409. Ticked rows are
+deleted through `handleDeleteKegLogEntries` and `store.DeleteLogEntries`.
+Neither touches the pours table: pours are never re-derived from the log.
+
 The All Pours page (`pours.html`), linked from History, lists `/api/pours` for
 every keg, including pours hidden from a cleared or deleted scale's history,
 which are tagged. It reaches back to all time, since pours are never pruned,
 while History stops at the log retention. Each row shows the pour's time, beer,
 style, ABV, scale, how long it took (`ended_at - started_at`) and amount; the
-tap number is left to the CSV to make room. Beer and scale filters run in the browser
-over the loaded range; the URL hash records range and filters. A summary gives
-the count, the total poured (summed per unit, as scales can be in oz or ml)
-and a per-beer breakdown. Download CSV fetches `/api/pours/csv` in device
-units.
+tap number is left to the CSV to make room.
+
+Filtering, counting and paging happen on the server, so a long range never
+loads every pour. A `store.PourFilter` built by `pourFilter` (range, the
+trimmed beer name, with a present but empty `?beer=` meaning no beer on tap,
+and the keg id) is shared by `ListPoursPage`, `SummarizePours` and the CSV.
+The page fetches one page of 100 newest first, with Newer and Older moving
+through them, alongside `/api/pours/summary`: `SummarizePours` groups by beer
+and stored unit in SQL and converts each sum with `pourDisplay`, which is
+linear, so the totals match the sum of the rows shown (summed per display unit,
+as scales can be in oz or ml); `PourFilterOptions` lists the range's beers, and
+its scales by keg id with the label of each one's newest pour, whatever is
+chosen, so a choice never vanishes. The scale filter is by keg id rather than
+label, since labels can be edited per pour. The URL hash records range,
+filters and page. Download CSV fetches `/api/pours/csv` in device units, with
+the same filters.
+
+Edit switches the page's rows to inputs for beer, style, ABV, tap number, scale
+label and amount, with checkboxes for deleting pours, which is the page's
+only way to delete them; time, scale and the pour's unit are read-only. As in the history editor only changed cells
+are sent: `handleUpdatePours` decodes each entry as raw fields so an absent
+value is left alone and a null one cleared, validates it, and applies the
+batch with `store.UpdatePours`, answering 409 and changing nothing if a pour
+has gone. Edits and deletes publish no event, as `handleDeletePour` never did,
+so the Kegs page's `latest_pour` catches up at its next reload.
+
+History's own Pours table pages in the browser, 25 at a time: the page already
+loads every pour of one scale in the range for the chart's markers and its
+figures, so only `renderPours` slices the list.
 
 The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. A second specs line under the status line shows the keg's
@@ -645,6 +693,10 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   narrower than the true extremes. Rows older than `LOG_COMPACT_AFTER_DAYS`
   are hourly averages in the database and in CSV exports; the minute detail is
   gone.
+- **Edited history assumes the current unit.** The history editor converts
+  edits back using the keg's current device unit, as `ConvertLogEntries` does
+  when showing them, so on a scale switched between units part-way through a
+  keg an edit to an older row is stored in the new unit.
 - **No pour backfill.** Pours are recorded from when this server version first
   sees a pouring window; the minute history from before it is not converted.
 - **Shutdown mid-pour.** For the reason below, a pour in progress at shutdown is

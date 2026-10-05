@@ -11,8 +11,8 @@
   const LINKS = [
     ['/taplist.html', 'Tap List'],
     ['/kegs.html', 'Kegs'],
-    // All Pours is reached from History, so it keeps History marked.
-    ['/history.html', 'History', ['/pours.html']],
+    // All Pours and Edit history are reached from History, so they keep it marked.
+    ['/history.html', 'History', ['/pours.html', '/history-edit.html']],
   ];
   const CONFIGURE = [
     ['/taplist-setup.html', 'Tap Setup'],

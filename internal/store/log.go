@@ -3,9 +3,12 @@ package store
 import (
 	"database/sql"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +45,44 @@ func ConvertLogEntries(entries []LogEntry, k *Keg, u DisplayUnits) {
 		if v := entries[i].KegTemperature; v != nil {
 			converted := units.ConvertTemp(*v, c.fromF, c.toF)
 			entries[i].KegTemperature = &converted
+		}
+	}
+}
+
+// LogValue is one reading in a LogEdit. Set marks it as changed; a nil Value
+// clears it, as a reading the device never reported.
+type LogValue[T any] struct {
+	Set   bool
+	Value *T
+}
+
+// LogEdit changes the readings of one stored row, identified by its
+// timestamp. Only the values marked Set are written.
+type LogEdit struct {
+	Timestamp         int64
+	AmountLeft        LogValue[float64]
+	KegTemperature    LogValue[float64]
+	PercentOfBeerLeft LogValue[float64]
+	IsPouring         LogValue[bool]
+}
+
+// ConvertLogEditsToDevice rewrites edits made in the display units, in place,
+// into the keg's device units: the inverse of ConvertLogEntries, under the same
+// caveat that the keg's current device unit is assumed for every row.
+func ConvertLogEditsToDevice(edits []LogEdit, k *Keg, u DisplayUnits) {
+	if k == nil || u.FollowsDevice() {
+		return
+	}
+	c := k.resolveDisplay(u)
+
+	for i := range edits {
+		if v := edits[i].AmountLeft.Value; v != nil {
+			converted := units.ConvertAmount(*v, c.toUnit, c.fromUnit)
+			edits[i].AmountLeft.Value = &converted
+		}
+		if v := edits[i].KegTemperature.Value; v != nil {
+			converted := units.ConvertTemp(*v, c.toF, c.fromF)
+			edits[i].KegTemperature.Value = &converted
 		}
 	}
 }
@@ -177,6 +218,158 @@ func (s *Store) ClearLog(id string) (int64, error) {
 	}
 	if _, err := tx.Exec("UPDATE pours SET hidden_from_keg = 1 WHERE keg_id = ?", id); err != nil {
 		return 0, err
+	}
+	return removed, tx.Commit()
+}
+
+// LogPage is one page of a keg's stored readings, oldest first, and whether
+// the window holds more before or after it.
+type LogPage struct {
+	Entries    []LogEntry `json:"entries"`
+	HasEarlier bool       `json:"has_earlier"`
+	HasLater   bool       `json:"has_later"`
+}
+
+// ReadLogPage returns up to limit of a keg's stored readings between two
+// times, oldest first, unaveraged. With after set the page starts just after
+// that timestamp; with before set it ends just before it; with neither it
+// starts at the beginning of the window.
+func (s *Store) ReadLogPage(id string, from, to time.Time, after, before int64, limit int) (LogPage, error) {
+	lo, hi := from.Unix(), to.Unix()
+	query := `SELECT ts, amount_left, keg_temperature, percent_of_beer_left, is_pouring
+		 FROM keg_log WHERE keg_id = ? AND ts >= ? AND ts <= ?`
+	args := []any{id, lo, hi}
+	descending := before > 0 && after <= 0
+	switch {
+	case after > 0:
+		query += " AND ts > ? ORDER BY ts LIMIT ?"
+		args = append(args, after, limit)
+	case descending:
+		query += " AND ts < ? ORDER BY ts DESC LIMIT ?"
+		args = append(args, before, limit)
+	default:
+		query += " ORDER BY ts LIMIT ?"
+		args = append(args, limit)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return LogPage{}, err
+	}
+	defer rows.Close()
+
+	page := LogPage{Entries: []LogEntry{}}
+	for rows.Next() {
+		var e LogEntry
+		if err := rows.Scan(&e.Timestamp, &e.AmountLeft, &e.KegTemperature,
+			&e.PercentOfBeerLeft, &e.IsPouring); err != nil {
+			return LogPage{}, err
+		}
+		page.Entries = append(page.Entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return LogPage{}, err
+	}
+	if descending {
+		slices.Reverse(page.Entries)
+	}
+
+	// An empty page has nothing to measure from, so the cursor stands in.
+	first, last := after, before
+	if n := len(page.Entries); n > 0 {
+		first, last = page.Entries[0].Timestamp, page.Entries[n-1].Timestamp
+	} else if first <= 0 && last <= 0 {
+		return page, nil
+	} else if first <= 0 {
+		first = last
+	} else if last <= 0 {
+		last = first
+	}
+	if err := s.db.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM keg_log WHERE keg_id = ? AND ts >= ? AND ts < ?),
+		        EXISTS (SELECT 1 FROM keg_log WHERE keg_id = ? AND ts > ? AND ts <= ?)`,
+		id, lo, first, id, last, hi,
+	).Scan(&page.HasEarlier, &page.HasLater); err != nil {
+		return LogPage{}, err
+	}
+	return page, nil
+}
+
+// ErrLogEntryMissing reports an edit to a reading that is no longer stored,
+// such as one compaction has since folded into an hourly row.
+var ErrLogEntryMissing = errors.New("log entry missing")
+
+// UpdateLogEntries applies edits to a keg's stored readings in one
+// transaction. Only the values each edit marks Set are written. If any edited
+// row no longer exists nothing is changed and ErrLogEntryMissing is returned.
+//
+// Pours are recorded separately and never re-derived from the log, so they
+// are unaffected.
+func (s *Store) UpdateLogEntries(id string, edits []LogEdit) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, e := range edits {
+		var sets []string
+		var args []any
+		if e.AmountLeft.Set {
+			sets, args = append(sets, "amount_left = ?"), append(args, e.AmountLeft.Value)
+		}
+		if e.KegTemperature.Set {
+			sets, args = append(sets, "keg_temperature = ?"), append(args, e.KegTemperature.Value)
+		}
+		if e.PercentOfBeerLeft.Set {
+			sets, args = append(sets, "percent_of_beer_left = ?"), append(args, e.PercentOfBeerLeft.Value)
+		}
+		if e.IsPouring.Set {
+			sets, args = append(sets, "is_pouring = ?"), append(args, e.IsPouring.Value)
+		}
+		var res sql.Result
+		if len(sets) == 0 {
+			// Nothing to change, but the row must still exist.
+			res, err = tx.Exec("UPDATE keg_log SET ts = ts WHERE keg_id = ? AND ts = ?", id, e.Timestamp)
+		} else {
+			res, err = tx.Exec("UPDATE keg_log SET "+strings.Join(sets, ", ")+" WHERE keg_id = ? AND ts = ?",
+				append(args, id, e.Timestamp)...)
+		}
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: %d", ErrLogEntryMissing, e.Timestamp)
+		}
+	}
+	return tx.Commit()
+}
+
+// DeleteLogEntries deletes the keg's readings at the given timestamps in one
+// transaction and returns how many rows were removed. Timestamps with no
+// reading are ignored. Unlike ClearLog, the keg's pours stay in its history.
+func (s *Store) DeleteLogEntries(id string, timestamps []int64) (int64, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var removed int64
+	for _, ts := range timestamps {
+		res, err := tx.Exec("DELETE FROM keg_log WHERE keg_id = ? AND ts = ?", id, ts)
+		if err != nil {
+			return 0, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		removed += n
 	}
 	return removed, tx.Commit()
 }

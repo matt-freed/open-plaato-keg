@@ -62,6 +62,9 @@ func (s *Server) Handler() http.Handler {
 				r.Get("/log", s.handleKegLog)
 				r.Get("/log/csv", s.handleKegLogCSV)
 				r.Post("/log/clear", s.handleClearKegLog)
+				r.Get("/log/rows", s.handleKegLogRows)
+				r.Post("/log/update", s.handleUpdateKegLog)
+				r.Post("/log/delete", s.handleDeleteKegLogEntries)
 				r.Get("/pours", s.handleKegPours)
 				r.Post("/delete", s.handleDeleteKeg)
 				s.mountKegCommands(r)
@@ -71,6 +74,9 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/pours", func(r chi.Router) {
 			r.Get("/", s.handleListPours)
 			r.Get("/csv", s.handleListPoursCSV)
+			r.Get("/summary", s.handleSummarizePours)
+			r.Post("/update", s.handleUpdatePours)
+			r.Post("/delete", s.handleDeletePours)
 			r.Post("/{id}/delete", s.handleDeletePour)
 		})
 

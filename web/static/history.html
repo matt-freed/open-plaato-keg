@@ -86,6 +86,7 @@
            its own. It downloads whatever scale and range are chosen. -->
       <div class="page-actions">
         <a class="button is-small" href="/pours.html">All pours &rarr;</a>
+        <a class="button is-small" id="editBtn" href="/history-edit.html">Edit</a>
         <button class="button is-small is-danger" type="button" id="clearBtn">Clear history</button>
         <a class="button is-small" id="downloadBtn" href="#" download>&#8595; Download CSV</a>
       </div>
@@ -178,6 +179,11 @@
               <tbody id="poursBody"></tbody>
             </table>
           </div>
+          <div class="pager is-below" id="poursPager" hidden>
+            <button class="button is-small" type="button" id="poursNewer">&larr; Newer</button>
+            <span class="pager-label" id="poursPagerLabel"></span>
+            <button class="button is-small" type="button" id="poursOlder">Older &rarr;</button>
+          </div>
         </div>
       </div>
     </div>
@@ -244,6 +250,12 @@
     let charts = [];
     let hoverTime = null;
     let loadSeq = 0;
+    // The pours table shows a page at a time. Every pour in the range is
+    // loaded anyway, for the chart's markers and the figures, so it pages in
+    // the browser. A new scale or range starts again at the first page.
+    const POURS_PAGE_SIZE = 25;
+    let poursPage = 1;
+    let poursView = '';
 
     function esc(v) {
       return String(v ?? '').replace(/[&<>"']/g, c =>
@@ -377,7 +389,17 @@
 
     function renderPours() {
       $('poursBox').hidden = pours.length === 0;
-      $('poursBody').innerHTML = pours.map(p => {
+      // A delete can leave the page past the end; show the last one instead.
+      const pages = Math.max(1, Math.ceil(pours.length / POURS_PAGE_SIZE));
+      poursPage = Math.min(poursPage, pages);
+      const first = (poursPage - 1) * POURS_PAGE_SIZE;
+      const page = pours.slice(first, first + POURS_PAGE_SIZE);
+      $('poursPager').hidden = pages < 2;
+      $('poursNewer').disabled = poursPage <= 1;
+      $('poursOlder').disabled = poursPage >= pages;
+      $('poursPagerLabel').textContent =
+        `${first + 1}–${first + page.length} of ${pours.length.toLocaleString()}`;
+      $('poursBody').innerHTML = page.map(p => {
         const ended = new Date(p.ended_at * 1000);
         const when = ended.toLocaleString([], { ...dateOpts(ended), ...clockOpts() });
         const took = Math.max(0, p.ended_at - p.started_at);
@@ -708,6 +730,11 @@
       const win = viewWindow(view);
       const query = windowQuery(view);
       $('downloadBtn').href = `/api/kegs/${encodeURIComponent(id)}/log/csv?${query}`;
+      // The editor pages through a fixed window, so a preset goes as the
+      // times it covers now.
+      $('editBtn').href = '/history-edit.html#' + new URLSearchParams({
+        keg: id, from: Math.floor(win.from / 1000), to: Math.ceil(win.to / 1000),
+      });
       $('statsTitle').textContent = viewLabel(view);
 
       const seq = ++loadSeq;
@@ -749,6 +776,8 @@
       $('pageStatus').textContent = '';
       $('results').hidden = false;
       renderStats(keg);
+      const viewKey = `${id}|${query}`;
+      if (viewKey !== poursView) { poursView = viewKey; poursPage = 1; }
       renderPours();
 
       const empty = entries.length === 0;
@@ -896,6 +925,9 @@
       show();
     });
 
+    $('poursNewer').addEventListener('click', () => { poursPage--; renderPours(); });
+    $('poursOlder').addEventListener('click', () => { poursPage++; renderPours(); });
+
     window.addEventListener('hashchange', show);
 
     async function init() {
@@ -927,6 +959,7 @@
         $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history appears here.';
         $('downloadBtn').hidden = true;
         $('clearBtn').hidden = true;
+        $('editBtn').hidden = true;
         return;
       }
       // A scale that feeds a tap is labelled by its beer, which is what the

@@ -20,6 +20,7 @@
       .controls .buttons.has-addons { flex-wrap: wrap; }
       .page-top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
       .page-top .back-link { margin-bottom: 0.75rem; }
+      .page-top .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0; }
 
       .stats {
         display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -32,6 +33,14 @@
       .by-beer { margin-top: 1.25rem; }
       .is-loading .section-box { opacity: 0.45; transition: opacity 0.15s; }
       .hidden-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--faint); }
+
+      /* Edit mode: its toolbar sits above the table it acts on. */
+      .edit-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+      .edit-bar .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0; }
+      .edit-table .input.is-text { width: 9rem; }
+      .edit-table .input.is-short { width: 4.5rem; }
+      .amount-cell { display: inline-flex; align-items: center; gap: 0.35rem; }
+      .amount-cell .unit { font-size: 0.8rem; color: var(--muted); }
     </style>
 </head>
 <body>
@@ -41,7 +50,10 @@
     <div class="container is-centered is-wide" id="page">
       <div class="page-top">
         <a class="back-link" href="/history.html">&larr; History</a>
-        <a class="button is-small" id="downloadBtn" href="/api/pours/csv?range=30d" download>&#8595; Download CSV</a>
+        <div class="buttons">
+          <button class="button is-small" type="button" id="editBtn">Edit</button>
+          <a class="button is-small" id="downloadBtn" href="/api/pours/csv?range=30d" download>&#8595; Download CSV</a>
+        </div>
       </div>
 
       <div class="controls">
@@ -81,18 +93,30 @@
         </div>
 
         <div class="box section-box">
-          <div class="data-table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th>
-                  <th class="scale-col">Scale</th><th class="num">Took</th><th class="num">Amount</th><th class="actions"></th>
-                </tr>
-              </thead>
+          <div class="edit-bar" id="editBar" hidden>
+            <div class="buttons">
+              <button class="button is-small is-danger" type="button" id="deleteBtn" disabled>Delete selected</button>
+              <button class="button is-small is-primary" type="button" id="saveBtn" disabled>Save changes</button>
+              <button class="button is-small" type="button" id="discardBtn" disabled>Discard</button>
+            </div>
+            <button class="button is-small" type="button" id="doneBtn">Done</button>
+          </div>
+          <div class="data-table-wrap" id="tableWrap">
+            <table class="data-table" id="poursTable">
+              <thead id="poursHead"></thead>
               <tbody id="poursBody"></tbody>
             </table>
           </div>
           <p class="empty-state" id="noPours" hidden></p>
+          <div class="pager is-below" id="pager" hidden>
+            <button class="button is-small" type="button" id="newerBtn">&larr; Newer</button>
+            <span class="pager-label" id="pagerLabel"></span>
+            <button class="button is-small" type="button" id="olderBtn">Older &rarr;</button>
+          </div>
+          <p class="help" id="editNote" hidden>
+            Amounts are in the display units and stored in each scale's own. Edits are corrections:
+            they are not checked against the minimum pour.
+          </p>
         </div>
       </div>
     </div>
@@ -113,11 +137,23 @@
       'all': 'All time',
     };
     const NO_BEER = 'No beer on tap';
-    const ALL = '';
+    const PAGE_SIZE = 100;
+    // The beer filter's option for pours with no beer; named beers are
+    // prefixed so no name can collide with it or with "all".
+    const NONE_OPTION = 'none';
+    const beerOption = name => 'b:' + name;
 
+    // The filtered pours' figures and the filters' choices, from the server,
+    // and the page of pours shown.
+    let summary = null;
     let pours = [];
+    let total = 0;
     let timeFormat = '12h';
     let loadSeq = 0;
+    let editing = false;
+    // Values as loaded, by pour id, so only what changed is saved.
+    let original = new Map();
+    const selected = new Set();
 
     function esc(v) {
       return String(v ?? '').replace(/[&<>"']/g, c =>
@@ -125,27 +161,43 @@
     }
 
     const beerOf = p => p.beer_name?.trim() || NO_BEER;
-    const scaleOf = p => p.scale_label?.trim() || `Scale …${p.keg_id.slice(-4)}`;
+    const scaleName = (label, kegId) => label?.trim() || `Scale …${kegId.slice(-4)}`;
+    const scaleOf = p => scaleName(p.scale_label, p.keg_id);
     const size = p => p.display ? `${Math.round(p.display.amount)} ${p.display.unit}` : '—';
+    const totalsText = list => list?.map(t => `${Math.round(t.amount)} ${t.unit}`).join(' + ') || '—';
 
     // ── State in the URL ────────────────────────────
-    // #range=<range>&beer=<name>&scale=<name>, so reload, Back and a shared
-    // link reopen the same view.
+    // #range=<range>&beer=<name>&keg=<id>&page=<n>, so reload, Back and a
+    // shared link reopen the same view. A present but empty beer is the pours
+    // with no beer on tap.
     function readHash() {
       const p = new URLSearchParams(location.hash.slice(1));
+      const page = Number(p.get('page'));
       return {
         range: RANGES[p.get('range')] ? p.get('range') : '30d',
-        beer: p.get('beer') ?? ALL,
-        scale: p.get('scale') ?? ALL,
+        beer: p.has('beer') ? p.get('beer') : null,
+        keg: p.get('keg') ?? '',
+        page: Number.isInteger(page) && page > 1 ? page : 1,
       };
     }
 
+    // setHash changes what is shown. Anything but a page change starts again
+    // at the first page.
     function setHash(next) {
-      const cur = { ...readHash(), ...next };
+      const cur = { ...readHash(), page: 1, ...next };
       const p = new URLSearchParams({ range: cur.range });
-      if (cur.beer) p.set('beer', cur.beer);
-      if (cur.scale) p.set('scale', cur.scale);
+      if (cur.beer !== null) p.set('beer', cur.beer);
+      if (cur.keg) p.set('keg', cur.keg);
+      if (cur.page > 1) p.set('page', cur.page);
       location.hash = p.toString();
+    }
+
+    // The query for the filters, shared by the page, summary and CSV.
+    function filterQuery(view) {
+      const p = new URLSearchParams({ range: view.range });
+      if (view.beer !== null) p.set('beer', view.beer);
+      if (view.keg) p.set('keg', view.keg);
+      return p;
     }
 
     function select(groupId, value) {
@@ -153,73 +205,70 @@
         b.classList.toggle('is-selected', b.dataset.value === value));
     }
 
-    // The filters offer whatever beers and scales the range holds, plus the
-    // chosen one even if the range no longer does, so a choice never vanishes.
-    function fillFilter(id, names, chosen, allLabel) {
-      const options = [...new Set(names)].sort((a, b) => a.localeCompare(b));
-      if (chosen && !options.includes(chosen)) options.unshift(chosen);
-      $(id).innerHTML = `<option value="">${esc(allLabel)}</option>` +
-        options.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-      $(id).value = chosen;
+    // ── Figures and filters ─────────────────────────
+    // The filters offer whatever beers and scales the range holds, which the
+    // server lists whatever is chosen, plus the chosen one even if the range
+    // no longer has it, so a choice never vanishes.
+    function renderFilters(view) {
+      const beers = [...summary.beers];
+      if (view.beer !== null && !beers.includes(view.beer)) beers.unshift(view.beer);
+      $('beerFilter').innerHTML = '<option value="">All beers</option>' + beers.map(name => name
+        ? `<option value="${esc(beerOption(name))}">${esc(name)}</option>`
+        : `<option value="${NONE_OPTION}">${NO_BEER}</option>`).join('');
+      $('beerFilter').value = view.beer === null ? '' : view.beer ? beerOption(view.beer) : NONE_OPTION;
+
+      const scales = [...summary.scales];
+      if (view.keg && !scales.some(s => s.keg_id === view.keg)) scales.unshift({ keg_id: view.keg, label: '' });
+      $('scaleFilter').innerHTML = '<option value="">All scales</option>' + scales.map(s =>
+        `<option value="${esc(s.keg_id)}">${esc(scaleName(s.label, s.keg_id))}</option>`).join('');
+      $('scaleFilter').value = view.keg;
     }
 
-    // Totals are only summed within one unit: scales set to different unit
-    // systems can report pours in both oz and ml.
-    function totals(list) {
-      const byUnit = {};
-      for (const p of list) {
-        if (!p.display) continue;
-        byUnit[p.display.unit] = (byUnit[p.display.unit] ?? 0) + p.display.amount;
-      }
-      return Object.entries(byUnit).map(([unit, v]) => `${Math.round(v)} ${unit}`).join(' + ') || '—';
-    }
-
-    function render() {
-      const { range, beer, scale } = readHash();
-      fillFilter('beerFilter', pours.map(beerOf), beer, 'All beers');
-      fillFilter('scaleFilter', pours.map(scaleOf), scale, 'All scales');
-      $('statsTitle').textContent = RANGES[range];
-
-      const shown = pours.filter(p => (!beer || beerOf(p) === beer) && (!scale || scaleOf(p) === scale));
-
+    function renderSummary(view) {
+      $('statsTitle').textContent = RANGES[view.range];
       const stat = (value, label) => `
         <div class="stat">
           <span class="stat-value">${esc(value)}</span>
           <span class="stat-label">${esc(label)}</span>
         </div>`;
-      const beers = new Set(shown.map(beerOf));
+      const beers = summary.by_beer.length;
       $('stats').innerHTML = [
-        stat(String(shown.length), shown.length === 1 ? 'Pour' : 'Pours'),
-        stat(totals(shown), 'Poured'),
-        stat(String(beers.size), beers.size === 1 ? 'Beer' : 'Beers'),
+        stat(String(summary.count), summary.count === 1 ? 'Pour' : 'Pours'),
+        stat(totalsText(summary.totals), 'Poured'),
+        stat(String(beers), beers === 1 ? 'Beer' : 'Beers'),
       ].join('');
-
-      const groups = new Map();
-      for (const p of shown) {
-        if (!groups.has(beerOf(p))) groups.set(beerOf(p), []);
-        groups.get(beerOf(p)).push(p);
-      }
-      $('byBeerWrap').hidden = groups.size < 2;
-      $('byBeer').innerHTML = [...groups].sort((a, b) => b[1].length - a[1].length).map(([name, list]) => `
+      $('byBeerWrap').hidden = beers < 2;
+      $('byBeer').innerHTML = summary.by_beer.map(b => `
         <tr>
-          <td class="${name === NO_BEER ? 'is-faint' : ''}">${esc(name)}</td>
-          <td class="num">${list.length}</td>
-          <td class="num">${esc(totals(list))}</td>
+          <td class="${b.name ? '' : 'is-faint'}">${esc(b.name || NO_BEER)}</td>
+          <td class="num">${b.count}</td>
+          <td class="num">${esc(totalsText(b.totals))}</td>
         </tr>`).join('');
+    }
 
-      // How long the pour ran, as the History page shows it.
-      const took = p => {
-        const s = Math.max(0, p.ended_at - p.started_at);
-        return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
-      };
-      const opts = {
+    // ── The table ───────────────────────────────────
+    // How long the pour ran, as the History page shows it.
+    const took = p => {
+      const s = Math.max(0, p.ended_at - p.started_at);
+      return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+    };
+
+    function when(p, range) {
+      return new Date(p.ended_at * 1000).toLocaleString([], {
         year: range === '1y' || range === 'all' ? 'numeric' : undefined,
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
         hour12: timeFormat !== '24h',
-      };
-      $('poursBody').innerHTML = shown.map(p => `
+      });
+    }
+
+    function renderView(range) {
+      $('poursHead').innerHTML = `<tr>
+        <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th>
+        <th class="scale-col">Scale</th><th class="num">Took</th><th class="num">Amount</th>
+      </tr>`;
+      $('poursBody').innerHTML = pours.map(p => `
         <tr>
-          <td>${esc(new Date(p.ended_at * 1000).toLocaleString([], opts))}</td>
+          <td>${esc(when(p, range))}</td>
           <td class="${beerOf(p) === NO_BEER ? 'is-faint' : ''}">${esc(beerOf(p))}</td>
           <td>${esc(p.beer_style)}</td>
           <td class="num">${Number.isFinite(p.abv) ? `${p.abv.toFixed(1)}%` : ''}</td>
@@ -227,29 +276,175 @@
             ? '<span class="hidden-tag" title="This scale’s history was cleared, so the pour only shows here.">history cleared</span>' : ''}</td>
           <td class="num">${esc(took(p))}</td>
           <td class="num">${esc(size(p))}</td>
-          <td class="actions"><button class="button is-small is-danger" type="button" data-delete="${p.id}">Delete</button></td>
         </tr>`).join('');
-
-      const empty = shown.length === 0;
-      $('noPours').hidden = !empty;
-      $('noPours').textContent = pours.length
-        ? 'No pours match these filters.'
-        : `No pours in the ${RANGES[range].toLowerCase()}.`;
     }
 
+    // Edit mode turns the page's rows into inputs. Numbers are shown to a
+    // precision they can be edited at, and a cell left alone is compared with
+    // that shown value, never sent.
+    const shown = (v, digits) => Number.isFinite(v) ? Number(v.toFixed(digits)) : null;
+
+    function renderEdit(range) {
+      original = new Map();
+      selected.clear();
+      $('poursHead').innerHTML = `<tr>
+        <th class="check"><input type="checkbox" id="selectAll" aria-label="Select every pour on this page"></th>
+        <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th><th class="num">Tap</th>
+        <th>Scale</th><th class="num">Took</th><th class="num">Amount</th>
+      </tr>`;
+      $('poursBody').innerHTML = pours.map(p => {
+        const was = {
+          beer_name: p.beer_name?.trim() ?? '',
+          beer_style: p.beer_style?.trim() ?? '',
+          abv: shown(p.abv, 2),
+          tap_number: Number.isInteger(p.tap_number) ? p.tap_number : null,
+          scale_label: p.scale_label?.trim() ?? '',
+          amount: shown(p.display?.amount, 1),
+        };
+        original.set(p.id, was);
+        const text = (field, label, cls = 'is-text') => `<input class="input ${cls}" type="text"
+          data-field="${field}" aria-label="${label}" value="${esc(was[field])}" maxlength="200">`;
+        const num = (field, label, cls = 'is-short') => `<input class="input is-number ${cls}" type="text"
+          inputmode="decimal" data-field="${field}" aria-label="${label}" value="${was[field] ?? ''}">`;
+        return `
+          <tr data-id="${p.id}">
+            <td class="check"><input type="checkbox" aria-label="Select this pour"></td>
+            <td>${esc(when(p, range))}</td>
+            <td>${text('beer_name', 'Beer')}</td>
+            <td>${text('beer_style', 'Style')}</td>
+            <td class="num">${num('abv', 'ABV')}</td>
+            <td class="num">${num('tap_number', 'Tap number')}</td>
+            <td>${text('scale_label', 'Scale label')}</td>
+            <td class="num">${esc(took(p))}</td>
+            <td class="num"><span class="amount-cell">${num('amount', 'Amount', '')}<span class="unit">${esc(p.display?.unit ?? '')}</span></span></td>
+          </tr>`;
+      }).join('');
+      $('selectAll').addEventListener('change', e => {
+        for (const box of $('poursBody').querySelectorAll('input[type="checkbox"]')) {
+          box.checked = e.target.checked;
+          toggleSelected(box);
+        }
+        updateEditBar();
+      });
+      updateEditBar();
+    }
+
+    // A cell's value as the API takes it, or undefined when it is invalid.
+    function cellValue(el) {
+      const text = el.value.trim();
+      switch (el.dataset.field) {
+        case 'beer_name': case 'beer_style': case 'scale_label':
+          return text;
+        case 'amount': {
+          const n = Number(text);
+          return text !== '' && Number.isFinite(n) && n > 0 ? n : undefined;
+        }
+        case 'abv': {
+          if (text === '') return null;
+          const n = Number(text);
+          return Number.isFinite(n) && n >= 0 && n <= 100 ? n : undefined;
+        }
+        case 'tap_number': {
+          if (text === '') return null;
+          const n = Number(text);
+          return Number.isInteger(n) && n >= 0 ? n : undefined;
+        }
+      }
+    }
+
+    // The edits on the page: per pour, only the fields that differ from what
+    // was loaded. Also reports whether any cell is invalid.
+    function collectEdits() {
+      const edits = [];
+      let invalid = false;
+      for (const tr of $('poursBody').querySelectorAll('tr[data-id]')) {
+        const id = Number(tr.dataset.id);
+        const was = original.get(id);
+        const edit = { id };
+        let changed = false;
+        for (const el of tr.querySelectorAll('[data-field]')) {
+          const v = cellValue(el);
+          const field = el.dataset.field;
+          const differs = v !== was[field];
+          el.classList.toggle('is-invalid', v === undefined);
+          el.classList.toggle('is-changed', v !== undefined && differs);
+          if (v === undefined) invalid = true;
+          else if (differs) { edit[field] = v; changed = true; }
+        }
+        if (changed) edits.push(edit);
+      }
+      return { edits, invalid };
+    }
+
+    function updateEditBar() {
+      if (!editing) return;
+      const { edits, invalid } = collectEdits();
+      $('saveBtn').disabled = !edits.length || invalid;
+      $('saveBtn').textContent = edits.length ? `Save changes (${edits.length})` : 'Save changes';
+      $('discardBtn').disabled = !edits.length && !invalid;
+      $('deleteBtn').disabled = !selected.size;
+      $('deleteBtn').textContent = selected.size ? `Delete selected (${selected.size})` : 'Delete selected';
+      const boxes = $('poursBody').querySelectorAll('input[type="checkbox"]').length;
+      $('selectAll').checked = boxes > 0 && selected.size === boxes;
+      $('selectAll').indeterminate = selected.size > 0 && selected.size < boxes;
+    }
+
+    function toggleSelected(box) {
+      const tr = box.closest('tr');
+      const id = Number(tr.dataset.id);
+      if (box.checked) selected.add(id); else selected.delete(id);
+      tr.classList.toggle('is-selected', box.checked);
+    }
+
+    const hasUnsaved = () => editing && !$('discardBtn').disabled;
+    // Anything that reloads the table drops unsaved edits, so it asks first.
+    const leaveOk = () => !hasUnsaved() || confirm('Discard your unsaved changes?');
+
+    function renderTable() {
+      const { range, page } = readHash();
+      $('editBtn').hidden = editing;
+      $('editBar').hidden = !editing;
+      $('editNote').hidden = !editing;
+      $('poursTable').classList.toggle('edit-table', editing);
+      if (editing) renderEdit(range); else renderView(range);
+
+      const empty = pours.length === 0;
+      $('tableWrap').hidden = empty;
+      $('noPours').hidden = !empty;
+      $('noPours').textContent = summary.beers.length
+        ? 'No pours match these filters.'
+        : `No pours in the ${RANGES[range].toLowerCase()}.`;
+
+      const first = (page - 1) * PAGE_SIZE;
+      $('pager').hidden = total <= PAGE_SIZE;
+      $('newerBtn').disabled = page <= 1;
+      $('olderBtn').disabled = first + pours.length >= total;
+      $('pagerLabel').textContent = empty ? '' :
+        `${(first + 1).toLocaleString()}–${(first + pours.length).toLocaleString()} of ${total.toLocaleString()}`;
+    }
+
+    // ── Loading ─────────────────────────────────────
     async function show() {
-      const { range } = readHash();
-      select('rangeChoice', range);
-      $('downloadBtn').href = `/api/pours/csv?range=${range}`;
+      const view = readHash();
+      select('rangeChoice', view.range);
+      const query = filterQuery(view);
+      $('downloadBtn').href = `/api/pours/csv?${query}`;
+      const pageQuery = new URLSearchParams(query);
+      pageQuery.set('limit', PAGE_SIZE);
+      pageQuery.set('offset', (view.page - 1) * PAGE_SIZE);
 
       const seq = ++loadSeq;
       $('page').classList.add('is-loading');
+      let sum, list, count;
       try {
-        const res = await fetch(`/api/pours?range=${range}`);
+        const [sumRes, res] = await Promise.all([
+          fetch(`/api/pours/summary?${query}`),
+          fetch(`/api/pours?${pageQuery}`),
+        ]);
+        if (!sumRes.ok) throw new Error(sumRes.status);
         if (!res.ok) throw new Error(res.status);
-        const list = await res.json();
-        if (seq !== loadSeq) return; // a newer choice has already been made
-        pours = list;
+        [sum, list] = await Promise.all([sumRes.json(), res.json()]);
+        count = Number(res.headers.get('X-Total-Count')) || 0;
       } catch (_) {
         if (seq !== loadSeq) return;
         $('page').classList.remove('is-loading');
@@ -257,10 +452,23 @@
         $('results').hidden = true;
         return;
       }
+      if (seq !== loadSeq) return; // a newer choice has already been made
+      // A delete can leave the page past the end; step back to the last one.
+      if (!list.length && view.page > 1) {
+        const last = Math.max(1, Math.ceil(count / PAGE_SIZE));
+        history.replaceState(null, '', '#' + new URLSearchParams({
+          ...Object.fromEntries(new URLSearchParams(location.hash.slice(1))), page: last }));
+        return show();
+      }
+      summary = sum;
+      pours = list;
+      total = count;
       $('page').classList.remove('is-loading');
       $('pageStatus').textContent = '';
       $('results').hidden = false;
-      render();
+      renderFilters(view);
+      renderSummary(view);
+      renderTable();
     }
 
     let toastTimer;
@@ -272,40 +480,90 @@
       toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
     }
 
+    async function postJSON(path, body) {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || res.status);
+      return data;
+    }
+
+    // ── Controls ────────────────────────────────────
     $('rangeChoice').addEventListener('click', e => {
       const b = e.target.closest('.button');
-      if (b) setHash({ range: b.dataset.value });
+      if (b && leaveOk()) setHash({ range: b.dataset.value });
     });
-    $('beerFilter').addEventListener('change', e => setHash({ beer: e.target.value }));
-    $('scaleFilter').addEventListener('change', e => setHash({ scale: e.target.value }));
+    $('beerFilter').addEventListener('change', e => {
+      const v = e.target.value;
+      if (!leaveOk()) { renderFilters(readHash()); return; }
+      setHash({ beer: v === '' ? null : v === NONE_OPTION ? '' : v.slice(2) });
+    });
+    $('scaleFilter').addEventListener('change', e => {
+      if (!leaveOk()) { renderFilters(readHash()); return; }
+      setHash({ keg: e.target.value });
+    });
+    $('newerBtn').addEventListener('click', () => {
+      if (leaveOk()) setHash({ page: readHash().page - 1 });
+    });
+    $('olderBtn').addEventListener('click', () => {
+      if (leaveOk()) setHash({ page: readHash().page + 1 });
+    });
 
-    $('poursBody').addEventListener('click', async e => {
-      const b = e.target.closest('[data-delete]');
-      if (!b) return;
-      const p = pours.find(x => String(x.id) === b.dataset.delete);
-      if (!p || !confirm(`Delete this ${size(p)} pour of ${beerOf(p)}? It cannot be undone.`)) return;
+    $('editBtn').addEventListener('click', () => { editing = true; renderTable(); });
+    $('doneBtn').addEventListener('click', () => {
+      if (!leaveOk()) return;
+      editing = false;
+      renderTable();
+    });
+    $('discardBtn').addEventListener('click', () => renderTable());
+
+    $('poursBody').addEventListener('input', updateEditBar);
+    $('poursBody').addEventListener('change', e => {
+      if (e.target.type === 'checkbox') toggleSelected(e.target);
+      updateEditBar();
+    });
+
+    $('saveBtn').addEventListener('click', async () => {
+      const { edits, invalid } = collectEdits();
+      if (!edits.length || invalid) return;
+      $('saveBtn').disabled = true;
       try {
-        const res = await fetch(`/api/pours/${encodeURIComponent(p.id)}/delete`, { method: 'POST' });
-        if (!res.ok) throw new Error(res.status);
-        showToast('Pour deleted', 'success');
+        await postJSON('/api/pours/update', { pours: edits });
+        showToast(edits.length === 1 ? 'Pour saved' : `${edits.length} pours saved`, 'success');
       } catch (err) {
-        showToast('Could not delete the pour: ' + err.message, 'danger');
+        showToast('Could not save: ' + err.message, 'danger');
+        updateEditBar();
+        return;
       }
       show();
     });
 
-    // A filter change is drawn from the pours already loaded; only a new
-    // range goes back to the server.
-    let shownRange = null;
-    window.addEventListener('hashchange', () => {
-      const { range } = readHash();
-      if (range !== shownRange) { shownRange = range; show(); } else render();
+    $('deleteBtn').addEventListener('click', async () => {
+      const ids = [...selected];
+      if (!ids.length) return;
+      const what = ids.length === 1 ? 'this pour' : `these ${ids.length} pours`;
+      if (!confirm(`Delete ${what}? They are removed everywhere, including History. It cannot be undone.`)) return;
+      try {
+        const { deleted } = await postJSON('/api/pours/delete', { ids });
+        showToast(deleted === 1 ? 'Pour deleted' : `${deleted} pours deleted`, 'success');
+      } catch (err) {
+        showToast('Could not delete: ' + err.message, 'danger');
+        return;
+      }
+      show();
     });
+
+    window.addEventListener('beforeunload', e => {
+      if (hasUnsaved()) e.preventDefault();
+    });
+    window.addEventListener('hashchange', show);
 
     async function init() {
       const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
       timeFormat = tf.time_format || '12h';
-      shownRange = readHash().range;
       show();
     }
 
