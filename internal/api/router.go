@@ -76,6 +76,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", s.handleGetKeg)
+				r.Get("/connection", s.handleKegConnection)
 				r.Get("/log", s.handleKegLog)
 				r.Get("/log/csv", s.handleKegLogCSV)
 				r.Post("/log/clear", s.handleClearKegLog)

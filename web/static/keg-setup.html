@@ -335,6 +335,10 @@
       let allKegs = [];
       let connectedIds = new Set();
       let allTaps = [];
+      // The open scale's live connection, from /api/kegs/{id}/connection;
+      // null until it has loaded.
+      let connInfo = null;
+      let timeFormat = "12h";
 
       function esc(v) {
         return String(v ?? "").replace(/[&<>"']/g, c =>
@@ -363,6 +367,7 @@
           if (tapsRes.ok) allTaps = await tapsRes.json();
           renderKegList();
           updateEditHead();
+          loadConnection();
         } catch (_) {
           connectionStatus.textContent = "Could not load the scales";
           connectionStatus.className = "help is-danger";
@@ -459,6 +464,7 @@
 
         if (id !== selectedKegId) {
           selectedKegId = id;
+          connInfo = null;
           clearForm();
           if (id) loadKegData(id);
         }
@@ -513,6 +519,7 @@
             populateFormFields(data);
             updateSettingsDisplay(data);
             highlightCurrentSettings(data);
+            loadConnection();
           })
           .catch((err) => {
             console.error("Error loading keg data:", err);
@@ -551,6 +558,79 @@
         if (data.known_weight) {
           updateFieldIfNotFocused("knownWeight", data.known_weight);
         }
+      }
+
+      // Where the open scale is connected from and when it was last heard.
+      // Connection state has no event of its own, so this is refreshed with
+      // the scale list every 10 seconds.
+      async function loadConnection() {
+        const id = selectedKegId;
+        if (!id) return;
+        try {
+          const res = await fetch(`/api/kegs/${encodeURIComponent(id)}/connection`);
+          if (!res.ok) return;
+          const info = await res.json();
+          if (id !== selectedKegId) return;
+          connInfo = info;
+          if (currentKegData.id === id) updateSettingsDisplay(currentKegData);
+        } catch (_) {
+          // Keep what is shown; the next refresh tries again.
+        }
+      }
+
+      // ago describes a Unix time relative to now, as the Kegs page does.
+      function ago(unixTime) {
+        const s = Math.max(0, Math.round(Date.now() / 1000 - unixTime));
+        if (s < 10) return "just now";
+        if (s < 60) return `${s}s ago`;
+        if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+        if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+        return `${Math.floor(s / 86400)}d ago`;
+      }
+
+      function when(unixTime) {
+        return new Date(unixTime * 1000).toLocaleString([], {
+          month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+          hour12: timeFormat !== "24h",
+        });
+      }
+
+      // How long since a Unix time, for the connection's age: "3d 4h", "2h 5m".
+      function since(unixTime) {
+        const m = Math.max(0, Math.floor((Date.now() / 1000 - unixTime) / 60));
+        if (m < 60) return `${m}m`;
+        if (m < 1440) return `${Math.floor(m / 60)}h ${m % 60}m`;
+        return `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`;
+      }
+
+      function connectionRows(data) {
+        const lastData = data.last_seen > 0
+          ? `<span title="${esc(when(data.last_seen))}">${ago(data.last_seen)}</span>` : "Never";
+        let rows;
+        if (!connInfo) {
+          rows = `<tr><td><strong>IP Address</strong></td><td>…</td></tr>`;
+        } else if (!connInfo.connected) {
+          rows = `<tr><td><strong>IP Address</strong></td><td>Offline</td></tr>`;
+        } else {
+          rows = `
+              <tr>
+                <td><strong>IP Address</strong></td>
+                <td>${esc(connInfo.remote_ip)}</td>
+              </tr>
+              <tr>
+                <td><strong>Connected Since</strong></td>
+                <td>${esc(when(connInfo.connected_at))} (${since(connInfo.connected_at)})</td>
+              </tr>
+              <tr>
+                <td><strong>Last Heard</strong></td>
+                <td title="Any message, heartbeats included">${ago(connInfo.last_heard)}</td>
+              </tr>`;
+        }
+        return rows + `
+              <tr>
+                <td><strong>Last Data</strong></td>
+                <td title="When the scale last sent a reading">${lastData}</td>
+              </tr>`;
       }
 
       function updateSettingsDisplay(data) {
@@ -603,6 +683,7 @@
           <h3 class="title is-6">System</h3>
           <table class="table is-fullwidth is-hoverable">
             <tbody>
+              ${connectionRows(data)}
               <tr>
                 <td><strong>WiFi Signal</strong></td>
                 <td>${data.wifi_signal_strength || "N/A"}</td>
@@ -733,6 +814,11 @@
       socket.addEventListener("close", () => {
         console.log("WebSocket closed");
       });
+
+      fetch("/api/config/time-format")
+        .then(r => r.json())
+        .then(tf => { timeFormat = tf.time_format || "12h"; })
+        .catch(() => {});
 
       showReturnLinks();
       window.addEventListener("hashchange", showView);

@@ -182,6 +182,11 @@ anything outside a device's own goroutine reaches that device.
   pour ending. That also ends and records the pour in progress.
 - `Conn.Send` serialises writes, because acknowledgements from the read loop
   and commands from HTTP handlers share one socket.
+- Each `Conn` records when it was accepted and, on every read that returns
+  bytes, when the device was last heard from, so heartbeats count. `Conn.Info`
+  returns those with the remote IP (without the port), and
+  `Commander.Connection` looks it up by keg id for the Keg Setup page. This is
+  separate from the keg's stored `last_seen`, which only a packet of data moves.
 
 **`Commander`** builds Blynk pin writes — tare, empty-keg weight, max volume,
 calibration, units, keg mode, sensitivity — and sends them via
@@ -362,7 +367,7 @@ A chi router with `Recoverer` and `RealIP` middleware:
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
 | `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, history (`/log`, `/log/csv`, `/log/clear`, and `/log/rows`, `/log/update`, `/log/delete` for the editor), pours (`/pours`), delete |
+| `/api/kegs/{id}` | Get, live connection (`/connection`: remote IP, connected and last-heard times), history (`/log`, `/log/csv`, `/log/clear`, and `/log/rows`, `/log/update`, `/log/delete` for the editor), pours (`/pours`), delete |
 | `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `/api/pours/update`, `/api/pours/delete` for several, `/api/pours/{id}/delete` |
@@ -434,6 +439,9 @@ own with a back link to the list. The URL hash records the open item
 (`#tap=<id>`, `#new`, `#keg=<id>`), and each page's `showView` follows it, so
 Back and reload work. Keg Setup lists every known scale with whether it is
 connected, polling `/api/kegs/connected` since connections publish no event.
+The open scale's System table adds its IP address, when it connected and when
+it was last heard from, from `/api/kegs/{id}/connection`, refreshed with the
+same 10 second poll, beside when it last sent data (`last_seen`).
 
 Tap Setup's list is a board (`renderBoard`): each scale, in `/api/kegs` order,
 beside a slot holding the tap it feeds, and a "Not on a scale" tray below for

@@ -628,3 +628,40 @@ func replayCapture(t *testing.T, h *harness) {
 		return err == nil && k.FirmwareVersion != nil
 	})
 }
+
+func TestConnectionInfo(t *testing.T) {
+	h := newHarness(t)
+	cmd := NewCommander(h.server.Registry())
+
+	if _, ok := cmd.Connection(testToken); ok {
+		t.Fatal("a keg that never connected reports a connection")
+	}
+
+	before := time.Now()
+	c := h.dial()
+	sendAndRead(t, c, loginSegment())
+	waitFor(t, "registration", func() bool { return cmd.Connected(testToken) })
+
+	info, ok := cmd.Connection(testToken)
+	if !ok {
+		t.Fatal("no connection info for a connected keg")
+	}
+	if info.RemoteIP != "127.0.0.1" {
+		t.Errorf("RemoteIP = %q, want 127.0.0.1 without the port", info.RemoteIP)
+	}
+	if info.ConnectedAt.Before(before.Add(-time.Second)) || info.ConnectedAt.After(time.Now()) {
+		t.Errorf("ConnectedAt = %v, want about %v", info.ConnectedAt, before)
+	}
+	first := info.LastHeard
+
+	// A heartbeat carries no data, but still counts as hearing from the device.
+	time.Sleep(10 * time.Millisecond)
+	sendAndRead(t, c, blynk.NewCommand(blynk.CmdPing, 2, nil))
+	waitFor(t, "the ping to be heard", func() bool {
+		info, _ := cmd.Connection(testToken)
+		return info.LastHeard.After(first)
+	})
+	if later, _ := cmd.Connection(testToken); !later.ConnectedAt.Equal(info.ConnectedAt) {
+		t.Errorf("ConnectedAt moved from %v to %v", info.ConnectedAt, later.ConnectedAt)
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"net"
 	"sort"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // ErrNotConnected is returned when a command targets a keg that has no live
@@ -20,6 +22,46 @@ type Conn struct {
 	// writeMu serialises writes, since commands from HTTP handlers race with
 	// the acknowledgements written by the read loop.
 	writeMu sync.Mutex
+
+	// connectedAt is when the socket was accepted.
+	connectedAt time.Time
+	// lastHeard is when the device last sent anything, heartbeats included,
+	// in Unix nanoseconds. The read loop writes it while HTTP handlers read it.
+	lastHeard atomic.Int64
+}
+
+func newConn(nc net.Conn, now time.Time) *Conn {
+	c := &Conn{net: nc, connectedAt: now}
+	c.lastHeard.Store(now.UnixNano())
+	return c
+}
+
+// heard records that the device sent something.
+func (c *Conn) heard(now time.Time) { c.lastHeard.Store(now.UnixNano()) }
+
+// ConnInfo describes a live connection, for the Keg Setup page.
+type ConnInfo struct {
+	// RemoteIP is the device's address, without the port, which changes on
+	// every connection.
+	RemoteIP string
+	// ConnectedAt is when the socket was accepted.
+	ConnectedAt time.Time
+	// LastHeard is when the device last sent anything. Unlike the keg's
+	// last_seen, heartbeats count.
+	LastHeard time.Time
+}
+
+// Info describes the connection.
+func (c *Conn) Info() ConnInfo {
+	addr := c.RemoteAddr()
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		addr = host
+	}
+	return ConnInfo{
+		RemoteIP:    addr,
+		ConnectedAt: c.connectedAt,
+		LastHeard:   time.Unix(0, c.lastHeard.Load()),
+	}
 }
 
 // Send writes a frame to the device.

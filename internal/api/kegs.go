@@ -56,6 +56,36 @@ func (s *Server) handleGetKeg(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, k)
 }
 
+// connectionResponse describes a keg's live connection. Times are Unix
+// seconds; everything but connected is omitted while the keg is offline.
+type connectionResponse struct {
+	Connected   bool   `json:"connected"`
+	RemoteIP    string `json:"remote_ip,omitempty"`
+	ConnectedAt int64  `json:"connected_at,omitempty"`
+	LastHeard   int64  `json:"last_heard,omitempty"`
+}
+
+// handleKegConnection reports where a keg is connected from, since when, and
+// when it last sent anything, heartbeats included.
+func (s *Server) handleKegConnection(w http.ResponseWriter, r *http.Request) {
+	k, err := s.store.GetKeg(chi.URLParam(r, "id"))
+	if err != nil {
+		writeStoreError(w, err, "keg")
+		return
+	}
+	info, ok := s.commander.Connection(k.ID)
+	if !ok {
+		writeJSON(w, http.StatusOK, connectionResponse{})
+		return
+	}
+	writeJSON(w, http.StatusOK, connectionResponse{
+		Connected:   true,
+		RemoteIP:    info.RemoteIP,
+		ConnectedAt: info.ConnectedAt.Unix(),
+		LastHeard:   info.LastHeard.Unix(),
+	})
+}
+
 // setLatestPours adds each keg's newest pour. A failure must not fail the
 // request: the keg is still worth showing, just without its last pour.
 func (s *Server) setLatestPours(kegs []*store.Keg, units store.DisplayUnits) {

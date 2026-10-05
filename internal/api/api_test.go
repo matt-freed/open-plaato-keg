@@ -863,3 +863,18 @@ func TestTapLinks(t *testing.T) {
 	}})
 	assertStatus(t, rec, http.StatusNotFound)
 }
+
+func TestKegConnection(t *testing.T) {
+	a := newTestAPI(t)
+	a.storeKeg("keg-1", "vw\x0051\x001.000")
+
+	// Nothing is connected in this test; a live connection is covered by the
+	// keg package's TestConnectionInfo.
+	rec := a.do(http.MethodGet, "/api/kegs/keg-1/connection", nil)
+	assertStatus(t, rec, http.StatusOK)
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"connected":false}` {
+		t.Errorf("offline keg = %s", got)
+	}
+
+	assertStatus(t, a.do(http.MethodGet, "/api/kegs/nope/connection", nil), http.StatusNotFound)
+}
