@@ -24,7 +24,9 @@
       }
 
       .env-table .env-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; white-space: nowrap; }
-      .env-table .env-value { word-break: break-all; }
+      /* The shared table style never wraps; a long value, such as an
+         endpoint URL, has to here or the table scrolls sideways. */
+      .env-table td.env-value { white-space: normal; overflow-wrap: anywhere; }
       .env-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--faint); }
       .is-default { color: var(--muted); }
 
@@ -51,15 +53,37 @@
         .spinner.is-active { animation: none; border-color: var(--action); }
       }
 
-      .log-table td { vertical-align: top; }
-      .log-table .log-time { white-space: nowrap; color: var(--muted); }
-      .log-table .log-msg { min-width: 12rem; }
-      .log-attrs { display: block; margin-top: 0.15rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; color: var(--muted); word-break: break-all; }
-      .log-attrs b { font-weight: 500; color: var(--faint); }
+      /* One line per record, like a terminal; a long line is cut off with an
+         ellipsis until its row is clicked open, when it wraps in full. */
+      .log-list { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; line-height: 1.5; }
+      .log-row {
+        display: grid; grid-template-columns: max-content 3.6rem minmax(0, 1fr);
+        align-items: baseline; gap: 0 0.75rem;
+        width: 100%; padding: 0.15rem 0.35rem; margin: 0;
+        border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+        background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+      }
+      .log-row:last-child { border-bottom: 0; }
+      .log-row:hover { background: rgba(255, 255, 255, 0.04); }
+      .log-row:focus-visible { outline: 2px solid var(--soft); outline-offset: -2px; }
+      .log-time { color: var(--muted); white-space: nowrap; }
+      .log-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .log-row.is-open .log-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .log-attrs { color: var(--muted); }
+      .log-attrs b { font-weight: 400; color: var(--faint); }
+      /* On a phone the text takes its own line under the time and level. */
+      @media (max-width: 600px) {
+        /* A flexible second track, so the text spanning both is held to the
+           row's width rather than widening a column to fit itself. */
+        .log-row { grid-template-columns: max-content minmax(0, 1fr); }
+        .log-text { grid-column: 1 / -1; }
+      }
+      .log-more { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+      .log-more .help { margin: 0; }
       .level {
-        display: inline-block; min-width: 3.4rem; padding: 0.1rem 0.4rem;
-        border-radius: 6px; text-align: center;
-        font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+        display: inline-block; padding: 0 0.3rem;
+        border-radius: 5px; text-align: center;
+        font-family: var(--sans); font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em;
         background: var(--line); color: var(--soft);
       }
       .level.is-debug { color: var(--faint); }
@@ -135,13 +159,12 @@
           <p class="help is-warning" id="dropNote" hidden>
             Some records were discarded before this page could fetch them.
           </p>
-          <div class="data-table-wrap">
-            <table class="data-table log-table">
-              <thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>
-              <tbody id="logBody"></tbody>
-            </table>
-          </div>
+          <div class="log-list" id="logList"></div>
           <p class="empty-state" id="logStatus">Loading…</p>
+          <div class="log-more" id="logMore" hidden>
+            <button class="button is-small" type="button" id="moreBtn"></button>
+            <p class="help" id="moreNote"></p>
+          </div>
         </div>
       </div>
     </section>
@@ -195,7 +218,14 @@
         });
       }
 
-      function renderLogs() {
+      // Rows are rendered a page at a time; every record stays in memory for
+      // the filter and search.
+      const PAGE = 200;
+      let limit = PAGE;
+      // Rows clicked open, by seq, so a poll's re-render keeps them open.
+      const opened = new Set();
+
+      function matching() {
         const min = Number($('levelFilter').value);
         const q = $('search').value.trim().toLowerCase();
         const shown = [];
@@ -208,22 +238,82 @@
           }
           shown.push(r);
         }
+        return shown;
+      }
 
-        $('logBody').innerHTML = shown.map(r => {
-          const cls = LEVELS[rank(r.level)].toLowerCase();
-          const attrs = r.attrs.length
-            ? `<span class="log-attrs">${r.attrs.map(a => `<b>${esc(a.key)}=</b>${esc(a.value)}`).join(' ')}</span>`
-            : '';
-          return `<tr>
-            <td class="log-time">${esc(when(r.time))}</td>
-            <td><span class="level is-${cls}">${esc(r.level)}</span></td>
-            <td class="log-msg">${esc(r.message)}${attrs}</td>
-          </tr>`;
-        }).join('');
+      function rowHTML(r) {
+        const cls = LEVELS[rank(r.level)].toLowerCase();
+        const attrs = r.attrs.length
+          ? ` <span class="log-attrs">${r.attrs.map(a => `<b>${esc(a.key)}=</b>${esc(a.value)}`).join(' ')}</span>`
+          : '';
+        const open = opened.has(r.seq);
+        // A div rather than a button, so the text of an open row can be selected.
+        return `<div role="button" tabindex="0" class="log-row${open ? ' is-open' : ''}" data-seq="${r.seq}" aria-expanded="${open}">
+            <span class="log-time">${esc(when(r.time))}</span>
+            <span><span class="level is-${cls}">${esc(r.level)}</span></span>
+            <span class="log-text">${esc(r.message)}${attrs}</span>
+          </div>`;
+      }
 
+      // The first row on screen and where it sits, so a re-render that adds
+      // records above it can scroll to keep it still. Null when the list is
+      // not scrolled into.
+      function scrollAnchor() {
+        if ($('logList').getBoundingClientRect().top >= 0) return null;
+        for (const row of $('logList').children) {
+          const top = row.getBoundingClientRect().top;
+          if (row.getBoundingClientRect().bottom > 0) return { seq: row.dataset.seq, top };
+        }
+        return null;
+      }
+
+      function renderLogs() {
+        const shown = matching();
+        const anchor = scrollAnchor();
+
+        $('logList').innerHTML = shown.slice(0, limit).map(rowHTML).join('');
+
+        if (anchor) {
+          const row = $('logList').querySelector(`[data-seq="${anchor.seq}"]`);
+          if (row) window.scrollBy(0, row.getBoundingClientRect().top - anchor.top);
+        }
+
+        const hidden = shown.length - limit;
+        $('logMore').hidden = hidden <= 0;
+        if (hidden > 0) {
+          $('moreBtn').textContent = `Show ${Math.min(PAGE, hidden)} more`;
+          $('moreNote').textContent = `Showing ${limit} of ${shown.length} matching records.`;
+        }
         $('logStatus').textContent = shown.length ? ''
           : records.length ? 'No records match the filter.' : 'Nothing has been logged yet.';
       }
+
+      function toggleRow(row) {
+        const seq = Number(row.dataset.seq);
+        const open = row.classList.toggle('is-open');
+        row.setAttribute('aria-expanded', String(open));
+        if (open) opened.add(seq); else opened.delete(seq);
+      }
+
+      $('logList').addEventListener('click', e => {
+        const row = e.target.closest('.log-row');
+        if (!row) return;
+        // Finishing a text selection inside a row should not toggle it.
+        const sel = window.getSelection();
+        if (String(sel) && row.contains(sel.anchorNode)) return;
+        toggleRow(row);
+      });
+      $('logList').addEventListener('keydown', e => {
+        const row = e.target.closest('.log-row');
+        if (!row || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        toggleRow(row);
+      });
+
+      $('moreBtn').addEventListener('click', () => {
+        limit += PAGE;
+        renderLogs();
+      });
 
       // A local server answers in milliseconds, so the spinner is held long
       // enough to be seen.
@@ -262,6 +352,7 @@
           if (body.latest_seq < lastSeq) {
             records = [];
             lastSeq = 0;
+            opened.clear();
             $('dropNote').hidden = true;
             return fetchLogs();
           }
@@ -310,7 +401,7 @@
           // Show what the new level captures.
           $('levelFilter').value = String(rank(level.toUpperCase()));
           await poll();
-          renderLogs();
+          refilter();
         } catch {
           e.target.value = serverLevel;
           $('levelError').textContent = 'Could not change the log level.';
@@ -318,8 +409,13 @@
         }
       });
 
-      $('levelFilter').addEventListener('change', renderLogs);
-      $('search').addEventListener('input', renderLogs);
+      // A new filter starts again from the newest page.
+      function refilter() {
+        limit = PAGE;
+        renderLogs();
+      }
+      $('levelFilter').addEventListener('change', refilter);
+      $('search').addEventListener('input', refilter);
 
       async function init() {
         const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
