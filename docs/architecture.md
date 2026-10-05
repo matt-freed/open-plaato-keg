@@ -385,13 +385,13 @@ browsers update.
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
 Keg Setup, history, All Pours, their setup pages, and System (`system.html`),
-which lists the environment, sets the server's log level, and polls
+which shows the server version from `/api/alive`, lists the environment, sets the server's log level, and polls
 `/api/system/logs` every 5 seconds, filtering by level and text in the browser. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
 title from its `heading` attribute, the Tap List, Kegs and History links, the
-Configure menu with the server version, and marks the current page. All Pours
+Configure menu, and marks the current page. All Pours
 has no link of its own; it is reached from History, which stays marked there. Pages load
 it in `<head>` without `defer`, so the element is defined before the parser
 reaches it. The tap list sets the beer count beside its title through the

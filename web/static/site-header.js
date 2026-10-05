@@ -43,7 +43,7 @@
         <nav class="site-nav">
           <div class="site-menu">
             <button type="button" aria-haspopup="true" aria-expanded="false">Configure ▾</button>
-            <div class="site-menu-list"><p class="site-version"></p></div>
+            <div class="site-menu-list"></div>
           </div>
         </nav>`;
       this.bar.querySelector('h1').textContent = this.getAttribute('heading') || document.title;
@@ -66,13 +66,6 @@
       });
 
       this.replaceChildren(this.bar);
-
-      fetch('/api/alive')
-        .then(r => r.json())
-        .then(d => {
-          if (d.version) this.bar.querySelector('.site-version').textContent = 'v' + d.version;
-        })
-        .catch(() => {});
     }
 
     set count(text) {
