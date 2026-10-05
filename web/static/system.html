@@ -35,6 +35,22 @@
       .controls .field { margin: 0; }
       .controls .input { width: 16rem; max-width: 100%; }
 
+      /* Beside the Logs heading: what is kept, then whether a poll is running
+         and when the last one finished. */
+      .head-meta { display: flex; align-items: center; gap: 0.5rem 1rem; flex-wrap: wrap; }
+      .poll-status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }
+      .poll-status.is-error { color: var(--danger); }
+      .spinner {
+        width: 0.8rem; height: 0.8rem; flex-shrink: 0;
+        border: 2px solid var(--line-strong); border-top-color: var(--action); border-radius: 50%;
+        visibility: hidden;
+      }
+      .spinner.is-active { visibility: visible; animation: spin 0.7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner.is-active { animation: none; border-color: var(--action); }
+      }
+
       .log-table td { vertical-align: top; }
       .log-table .log-time { white-space: nowrap; color: var(--muted); }
       .log-table .log-msg { min-width: 12rem; }
@@ -77,7 +93,13 @@
 
         <div class="group-head">
           <h2>Logs</h2>
-          <span class="help" id="logNote"></span>
+          <div class="head-meta">
+            <span class="help" id="logNote"></span>
+            <span class="poll-status" id="pollStatus">
+              <span class="spinner" id="pollSpinner" aria-hidden="true"></span>
+              <span id="pollText"></span>
+            </span>
+          </div>
         </div>
         <div class="box section-box">
           <div class="controls">
@@ -203,7 +225,32 @@
           : records.length ? 'No records match the filter.' : 'Nothing has been logged yet.';
       }
 
+      // A local server answers in milliseconds, so the spinner is held long
+      // enough to be seen.
+      const SPIN_MIN_MS = 600;
+      let polling = 0;
+
+      // poll fetches new records, showing a spinner while it runs and the
+      // time it finished, or that it failed.
       async function poll() {
+        polling++;
+        $('pollSpinner').classList.add('is-active');
+        const started = Date.now();
+        const ok = await fetchLogs();
+        await new Promise(r => setTimeout(r, Math.max(0, SPIN_MIN_MS - (Date.now() - started))));
+        if (--polling === 0) $('pollSpinner').classList.remove('is-active');
+
+        $('pollStatus').classList.toggle('is-error', !ok);
+        $('pollText').textContent = ok
+          ? `Updated ${new Date().toLocaleTimeString([], {
+              hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: timeFormat !== '24h',
+            })}`
+          : 'Update failed';
+      }
+
+      // fetchLogs adds any records newer than the last one held, and reports
+      // whether it reached the server.
+      async function fetchLogs() {
         try {
           const res = await fetch(`/api/system/logs?after=${lastSeq}`);
           if (!res.ok) throw new Error(res.status);
@@ -216,7 +263,7 @@
             records = [];
             lastSeq = 0;
             $('dropNote').hidden = true;
-            return poll();
+            return fetchLogs();
           }
 
           if (lastSeq > 0 && body.oldest_seq > lastSeq + 1) $('dropNote').hidden = false;
@@ -229,8 +276,10 @@
           } else if (!records.length) {
             renderLogs();
           }
+          return true;
         } catch {
-          $('logStatus').textContent = 'Could not load the logs.';
+          if (!records.length) $('logStatus').textContent = 'Could not load the logs.';
+          return false;
         }
       }
 
