@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,7 +13,7 @@ import (
 // handleSystemEnv lists the configuration variables and the values in
 // effect. Secrets are already withheld by config.Settings.
 func (s *Server) handleSystemEnv(w http.ResponseWriter, r *http.Request) {
-	settings := s.env
+	settings := s.system.Env
 	if settings == nil {
 		settings = []config.Setting{}
 	}
@@ -28,7 +29,10 @@ type logsResponse struct {
 	OldestSeq uint64          `json:"oldest_seq"`
 	LatestSeq uint64          `json:"latest_seq"`
 	Capacity  int             `json:"capacity"`
-	Level     string          `json:"level"`
+	// Level is the live level; ConfiguredLevel is LOG_LEVEL, which the live
+	// level returns to on restart.
+	Level           string `json:"level"`
+	ConfiguredLevel string `json:"configured_level"`
 }
 
 // handleSystemLogs returns the buffered log records newer than ?after=<seq>.
@@ -44,13 +48,55 @@ func (s *Server) handleSystemLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := logsResponse{
-		Records:  []logbuf.Record{},
-		Capacity: logbuf.Capacity,
-		Level:    strings.ToLower(config.LogLevel().String()),
+		Records:         []logbuf.Record{},
+		Capacity:        logbuf.Capacity,
+		Level:           levelName(s.system.Level.Level()),
+		ConfiguredLevel: levelName(config.LogLevel()),
 	}
-	if s.logs != nil {
-		page := s.logs.Since(after)
+	if s.system.Logs != nil {
+		page := s.system.Logs.Since(after)
 		resp.Records, resp.OldestSeq, resp.LatestSeq = page.Records, page.Oldest, page.Latest
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// logLevels are the levels the System page may choose.
+var logLevels = map[string]slog.Level{
+	"debug": slog.LevelDebug,
+	"info":  slog.LevelInfo,
+	"warn":  slog.LevelWarn,
+	"error": slog.LevelError,
+}
+
+// handleSetLogLevel changes the live logging level until the next restart,
+// when it returns to LOG_LEVEL.
+func (s *Server) handleSetLogLevel(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Level string `json:"level"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	level, ok := logLevels[strings.ToLower(strings.TrimSpace(req.Level))]
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid_value", "level must be debug, info, warn or error")
+		return
+	}
+
+	// Recorded at info while the more verbose of the two levels is in force,
+	// so the change shows up in the log whichever way it goes.
+	old := s.system.Level.Level()
+	if level > old {
+		slog.Info("log level changed", "from", levelName(old), "to", levelName(level))
+		s.system.Level.Set(level)
+	} else {
+		s.system.Level.Set(level)
+		slog.Info("log level changed", "from", levelName(old), "to", levelName(level))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "level": levelName(level)})
+}
+
+func levelName(l slog.Level) string {
+	return strings.ToLower(l.String())
 }

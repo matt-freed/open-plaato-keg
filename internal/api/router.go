@@ -32,17 +32,29 @@ type Server struct {
 	bus       *events.Bus
 	version   string
 	static    fs.FS
-	logs      *logbuf.Buffer
-	env       []config.Setting
+	system    System
+}
+
+// System is what the System page reads and controls.
+type System struct {
+	// Logs holds the recent log records.
+	Logs *logbuf.Buffer
+	// Level is the live logging level, which the page can change until the
+	// next restart.
+	Level *slog.LevelVar
+	// Env is the configuration in effect, with secrets withheld.
+	Env []config.Setting
 }
 
 // NewServer returns a configured API server.
 func NewServer(st *store.Store, cmd *keg.Commander, hub *ws.Hub, bus *events.Bus,
-	version string, static fs.FS, logs *logbuf.Buffer, env []config.Setting) *Server {
+	version string, static fs.FS, sys System) *Server {
+	if sys.Level == nil {
+		sys.Level = new(slog.LevelVar)
+	}
 	return &Server{
 		store: st, commander: cmd, hub: hub, bus: bus,
-		version: version, static: static,
-		logs: logs, env: env,
+		version: version, static: static, system: sys,
 	}
 }
 
@@ -114,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/system", func(r chi.Router) {
 			r.Get("/env", s.handleSystemEnv)
 			r.Get("/logs", s.handleSystemLogs)
+			r.Post("/log-level", s.handleSetLogLevel)
 		})
 
 	})

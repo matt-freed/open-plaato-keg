@@ -43,7 +43,7 @@ func main() {
 }
 
 func run() error {
-	logs := setupLogging()
+	logs, level := setupLogging()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -98,7 +98,9 @@ func run() error {
 		return fmt.Errorf("listen for kegs on port %d: %w", cfg.KegListenerPort, err)
 	}
 
-	apiServer := api.NewServer(st, commander, hub, bus, version, web.Static(), logs, cfg.Settings())
+	apiServer := api.NewServer(st, commander, hub, bus, version, web.Static(), api.System{
+		Logs: logs, Level: level, Env: cfg.Settings(),
+	})
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPListenerPort),
 		Handler:           apiServer.Handler(),
@@ -176,10 +178,13 @@ func prune(ctx context.Context, st *store.Store, retention, compactAfter time.Du
 }
 
 // setupLogging sends logs to stdout and keeps the most recent in memory for
-// the System page.
-func setupLogging() *logbuf.Buffer {
+// the System page. The level starts at LOG_LEVEL and is a LevelVar so the
+// System page can change it while the server runs.
+func setupLogging() (*logbuf.Buffer, *slog.LevelVar) {
 	buf := logbuf.New()
-	text := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: config.LogLevel()})
+	level := new(slog.LevelVar)
+	level.Set(config.LogLevel())
+	text := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(logbuf.NewHandler(text, buf)))
-	return buf
+	return buf, level
 }

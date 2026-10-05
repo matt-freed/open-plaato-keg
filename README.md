@@ -122,7 +122,7 @@ server at startup rather than being silently ignored.
 | `INCLUDE_UNKNOWN_DATA` | `false` | Keep virtual pins this server does not recognise, under the keg's `extra` field |
 | `LOG_RETENTION_DAYS` | `365` | Days of keg history (`keg_log`) to keep; `0` keeps it forever. Pours are never pruned. |
 | `LOG_COMPACT_AFTER_DAYS` | `30` | Days of full 1-minute history to keep before older readings are combined into hourly averages; `0` never combines. |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. The System page can change it until the next restart |
 | `BARHELPER_ENABLED` | `false` | Forward volume readings to BarHelper |
 | `BARHELPER_ENDPOINT` | BarHelper's custom keg monitor URL | Override for testing |
 | `BARHELPER_API_KEY` | — | Required when BarHelper is enabled |
@@ -162,7 +162,7 @@ redirects to whichever page is set as home — the tap list unless you change it
 | `/history-edit.html` | **Edit History** — opened from History's Edit button on the scale and range shown there. Lists the stored readings, unaveraged, 100 at a time; Earlier and Later page through the range. Amount left, temperature, percent left and pouring can be edited (an empty cell clears a value) and saved together; time and scale cannot. Amounts and temperatures are in the display units and are converted back to the scale's own units when saved. Rows ticked with the checkboxes can be deleted. Recorded pours are not changed by either. |
 | `/pours.html` | **All Pours** — linked from History. Every pour from every scale, newest first, 100 at a time with Newer and Older, with its time, beer, style, ABV, scale, how long it took and amount, over 24 hours to all time. Filter by beer or scale; a summary of everything matching gives the count, the total and a per-beer breakdown. The matching pours download as CSV. Edit turns the page's rows into inputs: beer, style, ABV, tap number, scale label and amount (in the display units, stored in the scale's own) can be corrected and saved together, and ticked pours deleted at once; that is the only place pours are deleted on this page. |
 | `/taplist-setup.html` | **Tap List Setup** — a list of your taps; choose one, or add a new one, to open the tap editor on its own view (the URL keeps the open tap, so Back and reload work). The editor covers the tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), and the keg the tap draws from. |
-| `/system.html` | **System** — the configuration variables in effect, with defaults marked and the BarHelper API key hidden, and the server's recent logs: the last 1,000 records at the `LOG_LEVEL` level, newest first, filtered by minimum level and text, refreshed every 5 seconds. Kept in memory only, so a restart clears them. |
+| `/system.html` | **System** — the configuration variables in effect, with defaults marked and the BarHelper API key hidden, and the server's recent logs: the last 1,000 records, newest first, filtered by minimum level and text, refreshed every 5 seconds. Kept in memory only, so a restart clears them. The server log level can be changed here, for example to debug while chasing a problem; it returns to `LOG_LEVEL` on restart. |
 | `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, 12- or 24-hour times, display units, and whether keg graphics show the amount or the percentage left, and the minimum pour. Each change saves as it is made, and the page previews colours and fonts on itself as you choose them; screens already open pick a change up when they reload. |
 
 ## API
@@ -283,7 +283,8 @@ directly.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/system/env` | `{"settings": [{"name", "value", "default", "redacted"}]}` — every configuration variable and the value in effect. The BarHelper API key is never included |
-| `GET` | `/api/system/logs?after=<seq>` | Recent log records newer than `after`, oldest first: `{"records": [{"seq", "time", "level", "message", "attrs"}], "oldest_seq", "latest_seq", "capacity", "level"}` |
+| `GET` | `/api/system/logs?after=<seq>` | Recent log records newer than `after`, oldest first: `{"records": [{"seq", "time", "level", "message", "attrs"}], "oldest_seq", "latest_seq", "capacity", "level", "configured_level"}`. `level` is the live level, `configured_level` is `LOG_LEVEL` |
+| `POST` | `/api/system/log-level` | `{"level": "debug"\|"info"\|"warn"\|"error"}` — change the server's log level until it restarts |
 
 ### WebSocket
 

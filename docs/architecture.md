@@ -57,13 +57,14 @@ docs/              this documentation
 
 `cmd/open-plaato-keg/main.go` does all of the wiring in `run()`:
 
-1. **Logging** — a text `slog` handler writing to stdout, at the level from
-   `LOG_LEVEL` (`config.LogLevel`, which falls back to info on an unknown
-   value). It is wrapped in a `logbuf.Handler`, a tee that also copies each
+1. **Logging** — a text `slog` handler writing to stdout. Its level is a
+   `slog.LevelVar` seeded from `LOG_LEVEL` (`config.LogLevel`, which falls
+   back to info on an unknown value), so the System page can change it while
+   the server runs; a restart returns it to `LOG_LEVEL`. It is wrapped in a `logbuf.Handler`, a tee that also copies each
    record into a `logbuf.Buffer`: a ring of the last `logbuf.Capacity` (1,000)
    records, with attributes flattened to text and groups to dotted keys. The
-   tee captures exactly what stdout gets, so debug lines are only kept when
-   `LOG_LEVEL=debug`. Each record gets a sequence number, which is how the
+   tee captures exactly what stdout gets, so debug lines are only kept while
+   the level is debug. Each record gets a sequence number, which is how the
    System page asks only for what is new.
 2. **Configuration** — `config.Load()`. Invalid values are fatal rather than
    silently defaulted, as is enabling BarHelper without an API key.
@@ -367,7 +368,8 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `/api/pours/update`, `/api/pours/delete` for several, `/api/pours/{id}/delete` |
 | `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
 | `GET /api/system/env` | The configuration variables and their values in effect, from `config.Settings`, which withholds the BarHelper API key. Captured once at startup |
-| `GET /api/system/logs` | The buffered log records after `?after=<seq>`, with `oldest_seq` (below `after`+1 means some were discarded unseen) and `latest_seq` (below `after` means the server restarted) |
+| `GET /api/system/logs` | The buffered log records after `?after=<seq>`, with `oldest_seq` (below `after`+1 means some were discarded unseen) and `latest_seq` (below `after` means the server restarted), and the live `level` beside the `configured_level` from `LOG_LEVEL` |
+| `POST /api/system/log-level` | Sets the live level (`debug`, `info`, `warn` or `error`) through the `LevelVar` in `api.System`, until restart. The change is logged at info while the more verbose of the two levels is in force |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -378,8 +380,8 @@ browsers update.
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
 Keg Setup, history, All Pours, their setup pages, and System (`system.html`),
-which lists the environment and polls `/api/system/logs` every 5 seconds,
-filtering by level and text in the browser. A tap holds all of its drink's
+which lists the environment, sets the server's log level, and polls
+`/api/system/logs` every 5 seconds, filtering by level and text in the browser. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
@@ -671,7 +673,7 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
 | `BARHELPER_KEG_MONITOR_MAPPING` | — | `kegToken:monitorId,…` |
 | `LOG_RETENTION_DAYS` | `365` | Days of keg history to keep; `0` keeps it forever |
 | `LOG_COMPACT_AFTER_DAYS` | `30` | Days of full history before hourly averaging; `0` never |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`; also what the System page captures |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`; the System page can change it until restart |
 
 ## Testing and tooling
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -28,6 +29,7 @@ type testAPI struct {
 	store   *store.Store
 	bus     *events.Bus
 	logs    *logbuf.Buffer
+	level   *slog.LevelVar
 }
 
 func newTestAPI(t *testing.T) *testAPI {
@@ -42,11 +44,13 @@ func newTestAPI(t *testing.T) *testAPI {
 	bus := events.NewBus()
 	commander := keg.NewCommander(keg.NewRegistry())
 	hub := ws.NewHub(st, nil)
-	logs := logbuf.New()
+	logs, level := logbuf.New(), new(slog.LevelVar)
 	cfg := config.Config{BarHelper: config.BarHelperConfig{APIKey: "test-api-key"}}
-	srv := NewServer(st, commander, hub, bus, "test", web.Static(), logs, cfg.Settings())
+	srv := NewServer(st, commander, hub, bus, "test", web.Static(), System{
+		Logs: logs, Level: level, Env: cfg.Settings(),
+	})
 
-	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus, logs: logs}
+	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus, logs: logs, level: level}
 }
 
 func (a *testAPI) do(method, path string, body any) *httptest.ResponseRecorder {

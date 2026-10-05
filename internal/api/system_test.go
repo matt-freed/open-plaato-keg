@@ -59,3 +59,29 @@ func TestSystemLogsPagesBySeq(t *testing.T) {
 		t.Errorf("bad after: status = %d, want 400", rec.Code)
 	}
 }
+
+func TestSetLogLevel(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "") // so the configured level is the default
+	a := newTestAPI(t)
+
+	rec := a.do(http.MethodPost, "/api/system/log-level", map[string]string{"level": "DEBUG"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if a.level.Level() != slog.LevelDebug {
+		t.Errorf("level = %v, want debug", a.level.Level())
+	}
+
+	var body logsResponse
+	a.decode(a.do(http.MethodGet, "/api/system/logs", nil), &body)
+	if body.Level != "debug" || body.ConfiguredLevel != "info" {
+		t.Errorf("level = %q, configured = %q", body.Level, body.ConfiguredLevel)
+	}
+
+	if rec := a.do(http.MethodPost, "/api/system/log-level", map[string]string{"level": "loud"}); rec.Code != http.StatusBadRequest {
+		t.Errorf("unknown level: status = %d, want 400", rec.Code)
+	}
+	if a.level.Level() != slog.LevelDebug {
+		t.Errorf("a rejected request changed the level to %v", a.level.Level())
+	}
+}

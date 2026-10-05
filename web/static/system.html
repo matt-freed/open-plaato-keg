@@ -80,7 +80,18 @@
         <div class="box section-box">
           <div class="controls">
             <div class="field">
-              <label class="label" for="levelFilter">Minimum level</label>
+              <label class="label" for="serverLevel">Server log level</label>
+              <div class="select">
+                <select id="serverLevel">
+                  <option value="debug">Debug</option>
+                  <option value="info">Info</option>
+                  <option value="warn">Warn</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="levelFilter">Show from</label>
               <div class="select">
                 <select id="levelFilter">
                   <option value="0">Debug</option>
@@ -95,6 +106,8 @@
               <input class="input" type="search" id="search" placeholder="Message or attribute">
             </div>
           </div>
+          <p class="help" id="levelNote"></p>
+          <p class="help is-danger" id="levelError" hidden></p>
           <p class="help is-warning" id="dropNote" hidden>
             Some records were discarded before this page could fetch them.
           </p>
@@ -194,9 +207,7 @@
           if (!res.ok) throw new Error(res.status);
           const body = await res.json();
           capacity = body.capacity;
-          $('logNote').textContent = body.level === 'debug'
-            ? `Capturing at debug. The last ${capacity} records are kept.`
-            : `Capturing at ${body.level}; set LOG_LEVEL=debug for more. The last ${capacity} records are kept.`;
+          showLevel(body.level, body.configured_level);
 
           // The server restarted, so its numbering began again.
           if (body.latest_seq < lastSeq) {
@@ -207,8 +218,10 @@
           }
 
           if (lastSeq > 0 && body.oldest_seq > lastSeq + 1) $('dropNote').hidden = false;
-          if (body.records.length) {
-            records = records.concat(body.records).slice(-capacity);
+          // Two polls can overlap, so skip anything already held.
+          const fresh = body.records.filter(r => r.seq > lastSeq);
+          if (fresh.length) {
+            records = records.concat(fresh).slice(-capacity);
             lastSeq = records[records.length - 1].seq;
             renderLogs();
           } else if (!records.length) {
@@ -218,6 +231,41 @@
           $('logStatus').textContent = 'Could not load the logs.';
         }
       }
+
+      // The server's level, as the last poll or change reported it.
+      let serverLevel = '';
+
+      function showLevel(level, configured) {
+        serverLevel = level;
+        // Leave the picker alone while someone is choosing.
+        if (document.activeElement !== $('serverLevel')) $('serverLevel').value = level;
+        $('logNote').textContent = `The last ${capacity} records are kept.`;
+        $('levelNote').textContent = level === configured
+          ? `Records below ${level} are not kept. This is LOG_LEVEL; a change here lasts until the server restarts.`
+          : `Records below ${level} are not kept. Changed here from LOG_LEVEL=${configured}, which returns when the server restarts.`;
+      }
+
+      $('serverLevel').addEventListener('change', async e => {
+        const level = e.target.value;
+        $('levelError').hidden = true;
+        try {
+          const res = await fetch('/api/system/log-level', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ level }),
+          });
+          if (!res.ok) throw new Error(res.status);
+          e.target.blur();
+          // Show what the new level captures.
+          $('levelFilter').value = String(rank(level.toUpperCase()));
+          await poll();
+          renderLogs();
+        } catch {
+          e.target.value = serverLevel;
+          $('levelError').textContent = 'Could not change the log level.';
+          $('levelError').hidden = false;
+        }
+      });
 
       $('levelFilter').addEventListener('change', renderLogs);
       $('search').addEventListener('input', renderLogs);
