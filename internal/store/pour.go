@@ -4,9 +4,12 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/units"
@@ -125,11 +128,11 @@ const pourColumns = `id, keg_id, started_at, ended_at, amount, unit,
 	beer_name, beer_style, abv, tap_number, scale_label, hidden_from_keg`
 
 // queryPours returns the pours matching where, newest first, at most limit of
-// them when limit is positive.
-func (s *Store) queryPours(where string, limit int, args ...any) ([]*Pour, error) {
+// them when limit is positive, skipping the first offset.
+func (s *Store) queryPours(where string, limit, offset int, args ...any) ([]*Pour, error) {
 	query := "SELECT " + pourColumns + " FROM pours WHERE " + where + " ORDER BY ended_at DESC, id DESC"
 	if limit > 0 {
-		query += " LIMIT " + strconv.Itoa(limit)
+		query += " LIMIT " + strconv.Itoa(limit) + " OFFSET " + strconv.Itoa(max(offset, 0))
 	}
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -157,7 +160,7 @@ func (s *Store) queryPours(where string, limit int, args ...any) ([]*Pour, error
 // ListKegPours returns the pours shown in one keg's history between two
 // times, newest first. Pours hidden by clearing that history are left out.
 func (s *Store) ListKegPours(id string, from, to time.Time) ([]*Pour, error) {
-	return s.queryPours("keg_id = ? AND hidden_from_keg = 0 AND ended_at >= ? AND ended_at <= ?", 0,
+	return s.queryPours("keg_id = ? AND hidden_from_keg = 0 AND ended_at >= ? AND ended_at <= ?", 0, 0,
 		id, from.Unix(), to.Unix())
 }
 
@@ -168,7 +171,7 @@ func (s *Store) ListPours(from, to time.Time) ([]*Pour, error) {
 	if !from.IsZero() {
 		lo = from.Unix()
 	}
-	return s.queryPours("ended_at >= ? AND ended_at <= ?", 0, lo, to.Unix())
+	return s.queryPours("ended_at >= ? AND ended_at <= ?", 0, 0, lo, to.Unix())
 }
 
 // SetLatestPours fills in each keg's LatestPour: the newest pour in its
@@ -177,7 +180,7 @@ func (s *Store) ListPours(from, to time.Time) ([]*Pour, error) {
 // last pour until it pours again.
 func (s *Store) SetLatestPours(kegs []*Keg, u DisplayUnits) error {
 	for _, k := range kegs {
-		pours, err := s.queryPours("keg_id = ? AND hidden_from_keg = 0", 1, k.ID)
+		pours, err := s.queryPours("keg_id = ? AND hidden_from_keg = 0", 1, 0, k.ID)
 		if err != nil {
 			return err
 		}
@@ -213,13 +216,26 @@ func (s *Store) DeletePour(id int64) error {
 // 12 oz rather than 0.094 gal.
 func ConvertPours(pours []*Pour, u DisplayUnits) {
 	for _, p := range pours {
-		to := displayAmountUnit(p.Unit, u)
-		mult, label := units.PourSubUnit(to)
-		p.Display = &PourDisplay{
-			Amount: units.ConvertAmount(p.Amount, p.Unit, to) * mult,
-			Unit:   label,
-		}
+		amount, label := pourDisplay(p.Amount, p.Unit, u)
+		p.Display = &PourDisplay{Amount: amount, Unit: label}
 	}
+}
+
+// pourDisplay converts a pour-sized amount stored in unit into the display
+// units, scaled to a pour-sized sub-unit. It is linear, so a sum of pours in
+// one unit converts the same as the sum of their conversions.
+func pourDisplay(amount float64, unit string, u DisplayUnits) (float64, string) {
+	to := displayAmountUnit(unit, u)
+	mult, label := units.PourSubUnit(to)
+	return units.ConvertAmount(amount, unit, to) * mult, label
+}
+
+// pourAmountToStored is the inverse of pourDisplay: an amount entered in the
+// display sub-unit, converted back into the pour's stored unit.
+func pourAmountToStored(amount float64, unit string, u DisplayUnits) float64 {
+	to := displayAmountUnit(unit, u)
+	mult, _ := units.PourSubUnit(to)
+	return units.ConvertAmount(amount/mult, to, unit)
 }
 
 // WritePoursCSV writes pours as CSV in their stored units. Each row names its
@@ -254,4 +270,262 @@ func WritePoursCSV(w io.Writer, pours []*Pour) error {
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// PourFilter selects pours for All Pours. A zero From means all time. Beer,
+// when set, matches the trimmed beer name, so "" selects pours with no beer.
+// KegID, when set, selects one scale's pours.
+type PourFilter struct {
+	From, To time.Time
+	Beer     *string
+	KegID    string
+}
+
+// where builds the SQL condition and arguments for the filter.
+func (f PourFilter) where() (string, []any) {
+	lo := int64(0)
+	if !f.From.IsZero() {
+		lo = f.From.Unix()
+	}
+	cond := "ended_at >= ? AND ended_at <= ?"
+	args := []any{lo, f.To.Unix()}
+	if f.Beer != nil {
+		cond += " AND TRIM(beer_name) = ?"
+		args = append(args, strings.TrimSpace(*f.Beer))
+	}
+	if f.KegID != "" {
+		cond += " AND keg_id = ?"
+		args = append(args, f.KegID)
+	}
+	return cond, args
+}
+
+// ListPoursPage returns up to limit of the filtered pours, newest first,
+// after skipping offset of them. A limit of zero or less returns them all.
+func (s *Store) ListPoursPage(f PourFilter, limit, offset int) ([]*Pour, error) {
+	cond, args := f.where()
+	return s.queryPours(cond, limit, offset, args...)
+}
+
+// PourTotal is an amount poured in one display unit. Scales set to different
+// unit systems can pour in both oz and ml, which are never summed together.
+type PourTotal struct {
+	Amount float64 `json:"amount"`
+	Unit   string  `json:"unit"`
+}
+
+// BeerPours is one beer's share of a PourSummary. Name is the trimmed beer
+// name, "" for pours with no beer on tap.
+type BeerPours struct {
+	Name   string      `json:"name"`
+	Count  int         `json:"count"`
+	Totals []PourTotal `json:"totals"`
+}
+
+// PourSummary counts and totals the filtered pours, overall and per beer, in
+// the display units. Beers are ordered by count, most first.
+type PourSummary struct {
+	Count  int         `json:"count"`
+	Totals []PourTotal `json:"totals"`
+	ByBeer []BeerPours `json:"by_beer"`
+}
+
+// SummarizePours counts and totals the filtered pours in the display units.
+func (s *Store) SummarizePours(f PourFilter, u DisplayUnits) (PourSummary, error) {
+	cond, args := f.where()
+	rows, err := s.db.Query(
+		"SELECT TRIM(beer_name), unit, COUNT(*), SUM(amount) FROM pours WHERE "+cond+
+			" GROUP BY 1, 2 ORDER BY 1, 2", args...)
+	if err != nil {
+		return PourSummary{}, err
+	}
+	defer rows.Close()
+
+	sum := PourSummary{Totals: []PourTotal{}, ByBeer: []BeerPours{}}
+	beers := map[string]int{}
+	for rows.Next() {
+		var name, unit string
+		var count int
+		var amount float64
+		if err := rows.Scan(&name, &unit, &count, &amount); err != nil {
+			return PourSummary{}, err
+		}
+		shown, label := pourDisplay(amount, unit, u)
+		i, ok := beers[name]
+		if !ok {
+			i = len(sum.ByBeer)
+			beers[name] = i
+			sum.ByBeer = append(sum.ByBeer, BeerPours{Name: name, Totals: []PourTotal{}})
+		}
+		sum.ByBeer[i].Count += count
+		sum.ByBeer[i].Totals = addPourTotal(sum.ByBeer[i].Totals, shown, label)
+		sum.Count += count
+		sum.Totals = addPourTotal(sum.Totals, shown, label)
+	}
+	if err := rows.Err(); err != nil {
+		return PourSummary{}, err
+	}
+	slices.SortStableFunc(sum.ByBeer, func(a, b BeerPours) int { return b.Count - a.Count })
+	return sum, nil
+}
+
+func addPourTotal(totals []PourTotal, amount float64, unit string) []PourTotal {
+	for i := range totals {
+		if totals[i].Unit == unit {
+			totals[i].Amount += amount
+			return totals
+		}
+	}
+	return append(totals, PourTotal{Amount: amount, Unit: unit})
+}
+
+// PourScale is a scale All Pours can filter by: its keg id and the label on
+// its newest pour.
+type PourScale struct {
+	KegID string `json:"keg_id"`
+	Label string `json:"label"`
+}
+
+// PourFilterOptions lists the beers and scales with pours between two times,
+// whatever beer or scale is chosen, so a choice never vanishes from its own
+// list. Beers are trimmed names, "" for no beer on tap.
+func (s *Store) PourFilterOptions(from, to time.Time) (beers []string, scales []PourScale, err error) {
+	cond, args := PourFilter{From: from, To: to}.where()
+	beers, scales = []string{}, []PourScale{}
+
+	rows, err := s.db.Query("SELECT DISTINCT TRIM(beer_name) FROM pours WHERE "+cond+" ORDER BY 1", args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		beers = append(beers, name)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	// SQLite takes the bare column from the row holding MAX(), so each keg
+	// carries the label of its newest pour.
+	rows, err = s.db.Query(
+		"SELECT keg_id, TRIM(scale_label), MAX(ended_at) FROM pours WHERE "+cond+" GROUP BY keg_id ORDER BY 2, 1",
+		args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sc PourScale
+		var newest int64
+		if err := rows.Scan(&sc.KegID, &sc.Label, &newest); err != nil {
+			return nil, nil, err
+		}
+		scales = append(scales, sc)
+	}
+	return beers, scales, rows.Err()
+}
+
+// PourEdit changes one stored pour, identified by its id. Only the values
+// marked Set are written. Amount is in the display units' pour-sized
+// sub-unit and is converted back into the pour's own unit. A text value
+// cleared with a nil Value is stored as empty.
+type PourEdit struct {
+	ID         int64
+	Amount     LogValue[float64]
+	BeerName   LogValue[string]
+	BeerStyle  LogValue[string]
+	ABV        LogValue[float64]
+	TapNumber  LogValue[int]
+	ScaleLabel LogValue[string]
+}
+
+// UpdatePours applies edits to stored pours in one transaction. If any edited
+// pour no longer exists nothing is changed and ErrNotFound is returned.
+//
+// A hand edit is a correction, so the minimum and maximum pour sizes that
+// trackPour applies when recording are not checked again.
+func (s *Store) UpdatePours(edits []PourEdit, u DisplayUnits) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	text := func(v LogValue[string]) string {
+		if v.Value == nil {
+			return ""
+		}
+		return strings.TrimSpace(*v.Value)
+	}
+	for _, e := range edits {
+		var unit string
+		if err := tx.QueryRow("SELECT unit FROM pours WHERE id = ?", e.ID).Scan(&unit); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("%w: pour %d", ErrNotFound, e.ID)
+			}
+			return err
+		}
+
+		var sets []string
+		var args []any
+		if e.Amount.Set {
+			if e.Amount.Value == nil {
+				return errors.New("a pour's amount cannot be cleared")
+			}
+			sets = append(sets, "amount = ?")
+			args = append(args, pourAmountToStored(*e.Amount.Value, unit, u))
+		}
+		if e.BeerName.Set {
+			sets, args = append(sets, "beer_name = ?"), append(args, text(e.BeerName))
+		}
+		if e.BeerStyle.Set {
+			sets, args = append(sets, "beer_style = ?"), append(args, text(e.BeerStyle))
+		}
+		if e.ABV.Set {
+			sets, args = append(sets, "abv = ?"), append(args, e.ABV.Value)
+		}
+		if e.TapNumber.Set {
+			sets, args = append(sets, "tap_number = ?"), append(args, e.TapNumber.Value)
+		}
+		if e.ScaleLabel.Set {
+			sets, args = append(sets, "scale_label = ?"), append(args, text(e.ScaleLabel))
+		}
+		if len(sets) == 0 {
+			continue
+		}
+		if _, err := tx.Exec("UPDATE pours SET "+strings.Join(sets, ", ")+" WHERE id = ?",
+			append(args, e.ID)...); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// DeletePours removes the pours with the given ids in one transaction and
+// returns how many were removed. Ids with no pour are ignored.
+func (s *Store) DeletePours(ids []int64) (int64, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var removed int64
+	for _, id := range ids {
+		res, err := tx.Exec("DELETE FROM pours WHERE id = ?", id)
+		if err != nil {
+			return 0, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		removed += n
+	}
+	return removed, tx.Commit()
 }

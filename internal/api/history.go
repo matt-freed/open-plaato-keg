@@ -291,14 +291,13 @@ func parseLogEdit(fields map[string]json.RawMessage) (store.LogEdit, error) {
 		switch name {
 		case "timestamp":
 		case "amount_left":
-			err = parseLogFloat(raw, &e.AmountLeft)
+			err = unmarshalSet(raw, &e.AmountLeft)
 		case "keg_temperature":
-			err = parseLogFloat(raw, &e.KegTemperature)
+			err = unmarshalSet(raw, &e.KegTemperature)
 		case "percent_of_beer_left":
-			err = parseLogFloat(raw, &e.PercentOfBeerLeft)
+			err = unmarshalSet(raw, &e.PercentOfBeerLeft)
 		case "is_pouring":
-			e.IsPouring.Set = true
-			err = json.Unmarshal(raw, &e.IsPouring.Value)
+			err = unmarshalSet(raw, &e.IsPouring)
 		default:
 			return e, fmt.Errorf("%s cannot be edited", name)
 		}
@@ -307,12 +306,6 @@ func parseLogEdit(fields map[string]json.RawMessage) (store.LogEdit, error) {
 		}
 	}
 	return e, nil
-}
-
-func parseLogFloat(raw json.RawMessage, dst *store.LogValue[float64]) error {
-	dst.Set = true
-	// JSON has no NaN or infinity, so any number that parses is finite.
-	return json.Unmarshal(raw, &dst.Value)
 }
 
 // handleDeleteKegLogEntries deletes the history editor's selected readings.

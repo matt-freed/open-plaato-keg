@@ -74,6 +74,9 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/pours", func(r chi.Router) {
 			r.Get("/", s.handleListPours)
 			r.Get("/csv", s.handleListPoursCSV)
+			r.Get("/summary", s.handleSummarizePours)
+			r.Post("/update", s.handleUpdatePours)
+			r.Post("/delete", s.handleDeletePours)
 			r.Post("/{id}/delete", s.handleDeletePour)
 		})
 

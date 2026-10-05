@@ -77,7 +77,9 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   reads a keg: the two `internal/api` keg handlers and the two `internal/ws`
   send paths, plus the history JSON and the two pours JSON endpoints. The
   history editor's rows endpoint is shown in display units too, and its edits
-  are converted back to device units before they are stored.
+  are converted back to device units before they are stored. The pours
+  summary endpoint is in display units, and pour edits are converted back to
+  each pour's own stored unit.
   Everything else stays in the units the device reported — the stored columns,
   BarHelper, the log and pours CSV exports and every value on the Keg Setup
   page. The converted values
@@ -88,7 +90,9 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   opened to the amount left when it closed, and recorded once by `trackPour`
   only if it clears the minimum pour then. Never re-derive pours from
   `keg_log`, and never re-filter stored pours by the current minimum. Each pour
-  keeps its own copy of the beer details and is never pruned.
+  keeps its own copy of the beer details and is never pruned. A stored pour may
+  be corrected by hand on All Pours; such an edit is not checked against the
+  minimum or maximum pour.
 - `testdata/capture` is a recording of a real keg session. It is the reference
   for protocol work; regenerate expectations from the current pin map rather
   than trusting older snapshots.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -433,5 +434,179 @@ func TestLatestPourIsNeverStored(t *testing.T) {
 	k, _ := s.GetKeg("keg-1")
 	if k.LatestPour != nil {
 		t.Errorf("LatestPour = %+v after a round trip, want nil", k.LatestPour)
+	}
+}
+
+// seedPour inserts a pour directly and returns its id.
+func seedPour(t *testing.T, s *Store, keg string, ended int64, amount float64, unit, beer, label string) int64 {
+	t.Helper()
+	res, err := s.db.Exec(`INSERT INTO pours (keg_id, started_at, ended_at, amount, unit, beer_name, scale_label)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, keg, ended-10, ended, amount, unit, beer, label)
+	if err != nil {
+		t.Fatalf("insert pour: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return id
+}
+
+func seedPourMix(t *testing.T, s *Store) {
+	t.Helper()
+	seedPour(t, s, "keg-1", 1_000, 0.5, "litre", "Amber", "Left")
+	seedPour(t, s, "keg-1", 2_000, 0.25, "litre", " Amber ", "Left")
+	seedPour(t, s, "keg-2", 3_000, 0.1, "gal", "Stout", "Old name")
+	seedPour(t, s, "keg-2", 4_000, 0.1, "gal", "", "Right")
+}
+
+func TestListPoursPageFiltersAndPages(t *testing.T) {
+	s := newTestStore(t)
+	seedPourMix(t, s)
+	to := time.Unix(5_000, 0)
+	ends := func(ps []*Pour) []int64 {
+		out := []int64{}
+		for _, p := range ps {
+			out = append(out, p.EndedAt)
+		}
+		return out
+	}
+	amber, none := "Amber", ""
+
+	for name, tc := range map[string]struct {
+		f             PourFilter
+		limit, offset int
+		want          []int64
+	}{
+		"all":          {PourFilter{To: to}, 0, 0, []int64{4_000, 3_000, 2_000, 1_000}},
+		"page 2":       {PourFilter{To: to}, 2, 2, []int64{2_000, 1_000}},
+		"past the end": {PourFilter{To: to}, 2, 4, []int64{}},
+		"beer trimmed": {PourFilter{To: to, Beer: &amber}, 0, 0, []int64{2_000, 1_000}},
+		"no beer":      {PourFilter{To: to, Beer: &none}, 0, 0, []int64{4_000}},
+		"keg":          {PourFilter{To: to, KegID: "keg-2"}, 0, 0, []int64{4_000, 3_000}},
+		"window":       {PourFilter{From: time.Unix(1_500, 0), To: time.Unix(3_500, 0)}, 0, 0, []int64{3_000, 2_000}},
+	} {
+		got, err := s.ListPoursPage(tc.f, tc.limit, tc.offset)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if g := ends(got); !slices.Equal(g, tc.want) {
+			t.Errorf("%s: ended_at = %v, want %v", name, g, tc.want)
+		}
+	}
+}
+
+func TestSummarizePours(t *testing.T) {
+	s := newTestStore(t)
+	seedPourMix(t, s)
+
+	sum, err := s.SummarizePours(PourFilter{To: time.Unix(5_000, 0)}, follow())
+	if err != nil {
+		t.Fatalf("SummarizePours: %v", err)
+	}
+	if sum.Count != 4 {
+		t.Errorf("count = %d, want 4", sum.Count)
+	}
+	// Following the device, litre pours total in ml and gallon pours in oz.
+	want := map[string]float64{"ml": 750, "oz": 25.6}
+	if len(sum.Totals) != 2 {
+		t.Fatalf("totals = %+v, want ml and oz", sum.Totals)
+	}
+	for _, tot := range sum.Totals {
+		if !nearly(tot.Amount, want[tot.Unit]) {
+			t.Errorf("total %s = %v, want %v", tot.Unit, tot.Amount, want[tot.Unit])
+		}
+	}
+	if len(sum.ByBeer) != 3 || sum.ByBeer[0].Name != "Amber" || sum.ByBeer[0].Count != 2 {
+		t.Errorf("by beer = %+v, want Amber first with 2", sum.ByBeer)
+	}
+
+	// In US units everything is oz, so there is one total.
+	sum, _ = s.SummarizePours(PourFilter{To: time.Unix(5_000, 0)},
+		DisplayUnits{System: DisplaySystemUS, Measure: DisplayMeasureVolume})
+	if len(sum.Totals) != 1 || sum.Totals[0].Unit != "oz" || !nearly(sum.Totals[0].Amount, 0.75/3.78541*128+25.6) {
+		t.Errorf("US totals = %+v", sum.Totals)
+	}
+}
+
+func TestPourFilterOptions(t *testing.T) {
+	s := newTestStore(t)
+	seedPourMix(t, s)
+
+	beers, scales, err := s.PourFilterOptions(time.Time{}, time.Unix(5_000, 0))
+	if err != nil {
+		t.Fatalf("PourFilterOptions: %v", err)
+	}
+	if !slices.Equal(beers, []string{"", "Amber", "Stout"}) {
+		t.Errorf("beers = %q", beers)
+	}
+	// Each scale carries the label of its newest pour.
+	want := []PourScale{{KegID: "keg-1", Label: "Left"}, {KegID: "keg-2", Label: "Right"}}
+	if !slices.Equal(scales, want) {
+		t.Errorf("scales = %+v, want %+v", scales, want)
+	}
+}
+
+func TestUpdatePours(t *testing.T) {
+	s := newTestStore(t)
+	id := seedPour(t, s, "keg-1", 1_000, 0.5, "litre", "Amber", "Left")
+	other := seedPour(t, s, "keg-1", 2_000, 0.25, "litre", "Amber", "Left")
+	str := func(v string) *string { return &v }
+	us := DisplayUnits{System: DisplaySystemUS, Measure: DisplayMeasureVolume}
+
+	err := s.UpdatePours([]PourEdit{{
+		ID:        id,
+		Amount:    LogValue[float64]{Set: true, Value: f64(16)}, // oz
+		BeerName:  LogValue[string]{Set: true, Value: str("  Red Ale ")},
+		BeerStyle: LogValue[string]{Set: true}, // cleared
+		ABV:       LogValue[float64]{Set: true, Value: f64(5.5)},
+		TapNumber: LogValue[int]{Set: true},
+	}}, us)
+	if err != nil {
+		t.Fatalf("UpdatePours: %v", err)
+	}
+	pours := allPours(t, s)
+	byID := map[int64]*Pour{}
+	for _, p := range pours {
+		byID[p.ID] = p
+	}
+	p := byID[id]
+	if !nearly(p.Amount, 16.0/128*3.78541) || p.Unit != "litre" {
+		t.Errorf("amount = %v %s, want 16 oz stored in litres", p.Amount, p.Unit)
+	}
+	if p.BeerName != "Red Ale" || p.BeerStyle != "" || p.ABV == nil || *p.ABV != 5.5 || p.TapNumber != nil {
+		t.Errorf("details = %+v", p)
+	}
+	if p.ScaleLabel != "Left" {
+		t.Errorf("scale label = %q, want it untouched", p.ScaleLabel)
+	}
+	if byID[other].Amount != 0.25 {
+		t.Errorf("an unedited pour changed: %+v", byID[other])
+	}
+
+	// One missing pour undoes the batch.
+	err = s.UpdatePours([]PourEdit{
+		{ID: other, BeerName: LogValue[string]{Set: true, Value: str("Changed")}},
+		{ID: 999, BeerName: LogValue[string]{Set: true, Value: str("Changed")}},
+	}, follow())
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+	for _, p := range allPours(t, s) {
+		if p.BeerName == "Changed" {
+			t.Error("a failed batch was partly applied")
+		}
+	}
+}
+
+func TestDeletePours(t *testing.T) {
+	s := newTestStore(t)
+	a := seedPour(t, s, "keg-1", 1_000, 0.5, "litre", "", "")
+	b := seedPour(t, s, "keg-1", 2_000, 0.5, "litre", "", "")
+	seedPour(t, s, "keg-1", 3_000, 0.5, "litre", "", "")
+
+	removed, err := s.DeletePours([]int64{a, b, 999})
+	if err != nil {
+		t.Fatalf("DeletePours: %v", err)
+	}
+	if removed != 2 || len(allPours(t, s)) != 1 {
+		t.Errorf("removed %d, %d left; want 2 removed, 1 left", removed, len(allPours(t, s)))
 	}
 }

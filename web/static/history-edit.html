@@ -18,18 +18,7 @@
       /* Selection and saving on one row, the pager on the other side. */
       .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
       .toolbar .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0; }
-      .pager { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-      .pager-label { font-size: 0.82rem; color: var(--muted); }
-
-      .edit-table td { padding-top: 0.3rem; padding-bottom: 0.3rem; }
-      .edit-table .check { width: 1%; }
-      .edit-table input[type="checkbox"] { width: 1.05rem; height: 1.05rem; accent-color: var(--action); cursor: pointer; }
-      .edit-table .input { width: 7.5rem; padding: 0.3rem 0.5rem; font-size: 0.88rem; text-align: right; font-variant-numeric: tabular-nums; }
-      .edit-table .select select { padding: 0.3rem 2rem 0.3rem 0.5rem; font-size: 0.88rem; }
-      /* A changed cell stands out until it is saved or discarded. */
-      .edit-table .is-changed { border-color: var(--action); box-shadow: 0 0 0 1px var(--action); }
-      .edit-table .is-invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
-      .edit-table tr.is-selected td { background: color-mix(in srgb, var(--action) 8%, transparent); }
+      .edit-table .input.is-number { width: 7.5rem; }
       .is-loading .edit-table { opacity: 0.45; transition: opacity 0.15s; }
     </style>
 </head>
@@ -242,7 +231,7 @@
         };
         original.set(e.timestamp, was);
         const num = (field, label) => `
-          <td class="num"><input class="input" type="text" inputmode="decimal" data-field="${field}"
+          <td class="num"><input class="input is-number" type="text" inputmode="decimal" data-field="${field}"
             aria-label="${label}" value="${was[field] ?? ''}"></td>`;
         const pouring = was.is_pouring;
         return `
