@@ -20,6 +20,7 @@ import (
 	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
+	"github.com/matt-freed/open-plaato-keg/internal/logbuf"
 	"github.com/matt-freed/open-plaato-keg/internal/store"
 	"github.com/matt-freed/open-plaato-keg/internal/ws"
 	"github.com/matt-freed/open-plaato-keg/web"
@@ -42,7 +43,7 @@ func main() {
 }
 
 func run() error {
-	setupLogging()
+	logs := setupLogging()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -97,7 +98,7 @@ func run() error {
 		return fmt.Errorf("listen for kegs on port %d: %w", cfg.KegListenerPort, err)
 	}
 
-	apiServer := api.NewServer(st, commander, hub, bus, version, web.Static())
+	apiServer := api.NewServer(st, commander, hub, bus, version, web.Static(), logs, cfg.Settings())
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.HTTPListenerPort),
 		Handler:           apiServer.Handler(),
@@ -174,12 +175,11 @@ func prune(ctx context.Context, st *store.Store, retention, compactAfter time.Du
 	}
 }
 
-func setupLogging() {
-	level := slog.LevelInfo
-	if os.Getenv("LOG_LEVEL") != "" {
-		if err := level.UnmarshalText([]byte(os.Getenv("LOG_LEVEL"))); err != nil {
-			level = slog.LevelInfo
-		}
-	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
+// setupLogging sends logs to stdout and keeps the most recent in memory for
+// the System page.
+func setupLogging() *logbuf.Buffer {
+	buf := logbuf.New()
+	text := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: config.LogLevel()})
+	slog.SetDefault(slog.New(logbuf.NewHandler(text, buf)))
+	return buf
 }

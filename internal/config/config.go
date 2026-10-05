@@ -3,7 +3,9 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -163,4 +165,67 @@ func envKeyValueCSV(name string) (map[string]string, error) {
 		out[key] = value
 	}
 	return out, nil
+}
+
+// LogLevel reads LOG_LEVEL. Unlike the rest of the configuration, an invalid
+// value falls back to info: logging is set up before anything can report the
+// error.
+func LogLevel() slog.Level {
+	level := slog.LevelInfo
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		if err := level.UnmarshalText([]byte(v)); err != nil {
+			return slog.LevelInfo
+		}
+	}
+	return level
+}
+
+// Setting is one environment variable as the System page shows it.
+type Setting struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	// Default is true when the variable is unset and the value is the default.
+	Default bool `json:"default"`
+	// Redacted is true when the value is set but withheld.
+	Redacted bool `json:"redacted"`
+}
+
+// redacted stands in for a secret that is set.
+const redacted = "••••••"
+
+// Settings lists every environment variable with the value in effect, in the
+// order the README documents them. Secrets are never included.
+func (c Config) Settings() []Setting {
+	days := func(d time.Duration) string { return strconv.Itoa(int(d / (24 * time.Hour))) }
+
+	monitors := make([]string, 0, len(c.BarHelper.Monitors))
+	for token, id := range c.BarHelper.Monitors {
+		monitors = append(monitors, token+":"+id)
+	}
+	sort.Strings(monitors)
+
+	apiKey := ""
+	if c.BarHelper.APIKey != "" {
+		apiKey = redacted
+	}
+
+	out := []Setting{
+		{Name: "KEG_LISTENER_PORT", Value: strconv.Itoa(c.KegListenerPort)},
+		{Name: "HTTP_LISTENER_PORT", Value: strconv.Itoa(c.HTTPListenerPort)},
+		{Name: "DATABASE_FILE_PATH", Value: c.DatabaseFilePath},
+		{Name: "INCLUDE_UNKNOWN_DATA", Value: strconv.FormatBool(c.IncludeUnknownData)},
+		{Name: "LOG_RETENTION_DAYS", Value: days(c.LogRetention)},
+		{Name: "LOG_COMPACT_AFTER_DAYS", Value: days(c.LogCompactAfter)},
+		{Name: "LOG_LEVEL", Value: strings.ToLower(LogLevel().String())},
+		{Name: "BARHELPER_ENABLED", Value: strconv.FormatBool(c.BarHelper.Enabled)},
+		{Name: "BARHELPER_ENDPOINT", Value: c.BarHelper.Endpoint},
+		{Name: "BARHELPER_API_KEY", Value: apiKey, Redacted: apiKey != ""},
+		{Name: "BARHELPER_UNIT", Value: c.BarHelper.Unit},
+		{Name: "BARHELPER_KEG_MONITOR_MAPPING", Value: strings.Join(monitors, ", ")},
+	}
+	for i := range out {
+		v, ok := os.LookupEnv(out[i].Name)
+		out[i].Default = !ok || v == ""
+	}
+	return out
 }

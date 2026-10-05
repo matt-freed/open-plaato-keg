@@ -16,8 +16,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
+	"github.com/matt-freed/open-plaato-keg/internal/logbuf"
 	"github.com/matt-freed/open-plaato-keg/internal/store"
 	"github.com/matt-freed/open-plaato-keg/internal/ws"
 )
@@ -30,14 +32,17 @@ type Server struct {
 	bus       *events.Bus
 	version   string
 	static    fs.FS
+	logs      *logbuf.Buffer
+	env       []config.Setting
 }
 
 // NewServer returns a configured API server.
 func NewServer(st *store.Store, cmd *keg.Commander, hub *ws.Hub, bus *events.Bus,
-	version string, static fs.FS) *Server {
+	version string, static fs.FS, logs *logbuf.Buffer, env []config.Setting) *Server {
 	return &Server{
 		store: st, commander: cmd, hub: hub, bus: bus,
 		version: version, static: static,
+		logs: logs, env: env,
 	}
 }
 
@@ -104,6 +109,11 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/min-pour", s.handleSetMinPour)
 			r.Get("/theme", s.handleGetTheme)
 			r.Post("/theme", s.handleSetTheme)
+		})
+
+		r.Route("/system", func(r chi.Router) {
+			r.Get("/env", s.handleSystemEnv)
+			r.Get("/logs", s.handleSystemLogs)
 		})
 
 	})

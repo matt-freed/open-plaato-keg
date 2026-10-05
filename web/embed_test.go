@@ -10,7 +10,7 @@ import (
 // pages are the UI entry points that must exist for the navigation to work.
 var pages = []string{
 	"kegs.html", "taplist.html", "taplist-setup.html", "history.html", "history-edit.html", "pours.html",
-	"dashboard-setup.html", "keg-setup.html",
+	"dashboard-setup.html", "keg-setup.html", "system.html",
 	"style.css", "site-header.css", "site-header.js",
 	"tokens.css", "tiles.css", "keg-graphic.js",
 }

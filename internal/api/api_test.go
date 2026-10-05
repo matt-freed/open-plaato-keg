@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/matt-freed/open-plaato-keg/internal/blynk"
+	"github.com/matt-freed/open-plaato-keg/internal/config"
 	"github.com/matt-freed/open-plaato-keg/internal/events"
 	"github.com/matt-freed/open-plaato-keg/internal/keg"
+	"github.com/matt-freed/open-plaato-keg/internal/logbuf"
 	"github.com/matt-freed/open-plaato-keg/internal/plaato"
 	"github.com/matt-freed/open-plaato-keg/internal/store"
 	"github.com/matt-freed/open-plaato-keg/internal/ws"
@@ -25,6 +27,7 @@ type testAPI struct {
 	handler http.Handler
 	store   *store.Store
 	bus     *events.Bus
+	logs    *logbuf.Buffer
 }
 
 func newTestAPI(t *testing.T) *testAPI {
@@ -39,9 +42,11 @@ func newTestAPI(t *testing.T) *testAPI {
 	bus := events.NewBus()
 	commander := keg.NewCommander(keg.NewRegistry())
 	hub := ws.NewHub(st, nil)
-	srv := NewServer(st, commander, hub, bus, "test", web.Static())
+	logs := logbuf.New()
+	cfg := config.Config{BarHelper: config.BarHelperConfig{APIKey: "test-api-key"}}
+	srv := NewServer(st, commander, hub, bus, "test", web.Static(), logs, cfg.Settings())
 
-	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus}
+	return &testAPI{t: t, handler: srv.Handler(), store: st, bus: bus, logs: logs}
 }
 
 func (a *testAPI) do(method, path string, body any) *httptest.ResponseRecorder {

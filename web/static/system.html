@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>System - Open Plaato</title>
+    <link rel="stylesheet" href="/tokens.css">
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/site-header.css">
+    <script src="/site-header.js"></script>
+    <style>
+      .group-head {
+        display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;
+        margin: 2.25rem 0 0.9rem;
+      }
+      .group-head:first-of-type { margin-top: 0; }
+      .group-head h2 {
+        margin: 0;
+        font-family: var(--title-font);
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+
+      .env-table .env-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; white-space: nowrap; }
+      .env-table .env-value { word-break: break-all; }
+      .env-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--faint); }
+      .is-default { color: var(--muted); }
+
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem 1.5rem;
+        margin-bottom: 1rem;
+      }
+      .controls .field { margin: 0; }
+      .controls .input { width: 16rem; max-width: 100%; }
+
+      .log-table td { vertical-align: top; }
+      .log-table .log-time { white-space: nowrap; color: var(--muted); }
+      .log-table .log-msg { min-width: 12rem; }
+      .log-attrs { display: block; margin-top: 0.15rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; color: var(--muted); word-break: break-all; }
+      .log-attrs b { font-weight: 500; color: var(--faint); }
+      .level {
+        display: inline-block; min-width: 3.4rem; padding: 0.1rem 0.4rem;
+        border-radius: 6px; text-align: center;
+        font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+        background: var(--line); color: var(--soft);
+      }
+      .level.is-debug { color: var(--faint); }
+      .level.is-warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+      .level.is-error { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+    </style>
+  </head>
+  <body>
+    <site-header heading="System"></site-header>
+
+    <section class="section">
+      <div class="container is-centered is-wide">
+        <div class="group-head">
+          <h2>Environment</h2>
+        </div>
+        <div class="box section-box">
+          <div class="data-table-wrap">
+            <table class="data-table env-table">
+              <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+              <tbody id="envBody"></tbody>
+            </table>
+          </div>
+          <p class="empty-state" id="envStatus">Loading…</p>
+          <p class="help">
+            Values in effect, set when the server starts. Muted values are defaults.
+            The BarHelper API key is never shown.
+          </p>
+        </div>
+
+        <div class="group-head">
+          <h2>Logs</h2>
+          <span class="help" id="logNote"></span>
+        </div>
+        <div class="box section-box">
+          <div class="controls">
+            <div class="field">
+              <label class="label" for="levelFilter">Minimum level</label>
+              <div class="select">
+                <select id="levelFilter">
+                  <option value="0">Debug</option>
+                  <option value="1" selected>Info</option>
+                  <option value="2">Warn</option>
+                  <option value="3">Error</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="search">Search</label>
+              <input class="input" type="search" id="search" placeholder="Message or attribute">
+            </div>
+          </div>
+          <p class="help is-warning" id="dropNote" hidden>
+            Some records were discarded before this page could fetch them.
+          </p>
+          <div class="data-table-wrap">
+            <table class="data-table log-table">
+              <thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>
+              <tbody id="logBody"></tbody>
+            </table>
+          </div>
+          <p class="empty-state" id="logStatus">Loading…</p>
+        </div>
+      </div>
+    </section>
+
+    <script>
+      'use strict';
+
+      const $ = id => document.getElementById(id);
+      const POLL_MS = 5000;
+      const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
+
+      let timeFormat = '12h';
+      let records = [];
+      let lastSeq = 0;
+      let capacity = 1000;
+
+      function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, c =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+      }
+
+      // slog names in-between levels "INFO+2" and the like; rank by the base.
+      function rank(level) {
+        const i = LEVELS.indexOf(String(level).split(/[+-]/)[0]);
+        return i < 0 ? 1 : i;
+      }
+
+      async function loadEnv() {
+        try {
+          const res = await fetch('/api/system/env');
+          if (!res.ok) throw new Error(res.status);
+          const { settings } = await res.json();
+          $('envBody').innerHTML = settings.map(s => {
+            let value;
+            if (s.redacted) value = 'set <span class="env-tag">hidden</span>';
+            else if (s.value === '') value = '<span class="is-default">not set</span>';
+            else value = `<span class="${s.default ? 'is-default' : ''}">${esc(s.value)}</span>`;
+            if (s.default && s.value !== '') value += '<span class="env-tag">default</span>';
+            return `<tr><td class="env-name">${esc(s.name)}</td><td class="env-value">${value}</td></tr>`;
+          }).join('');
+          $('envStatus').textContent = '';
+        } catch {
+          $('envStatus').textContent = 'Could not load the environment.';
+        }
+      }
+
+      function when(iso) {
+        return new Date(iso).toLocaleString([], {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit',
+          hour12: timeFormat !== '24h',
+        });
+      }
+
+      function renderLogs() {
+        const min = Number($('levelFilter').value);
+        const q = $('search').value.trim().toLowerCase();
+        const shown = [];
+        for (let i = records.length - 1; i >= 0; i--) {
+          const r = records[i];
+          if (rank(r.level) < min) continue;
+          if (q) {
+            const text = (r.message + ' ' + r.attrs.map(a => `${a.key}=${a.value}`).join(' ')).toLowerCase();
+            if (!text.includes(q)) continue;
+          }
+          shown.push(r);
+        }
+
+        $('logBody').innerHTML = shown.map(r => {
+          const cls = LEVELS[rank(r.level)].toLowerCase();
+          const attrs = r.attrs.length
+            ? `<span class="log-attrs">${r.attrs.map(a => `<b>${esc(a.key)}=</b>${esc(a.value)}`).join(' ')}</span>`
+            : '';
+          return `<tr>
+            <td class="log-time">${esc(when(r.time))}</td>
+            <td><span class="level is-${cls}">${esc(r.level)}</span></td>
+            <td class="log-msg">${esc(r.message)}${attrs}</td>
+          </tr>`;
+        }).join('');
+
+        $('logStatus').textContent = shown.length ? ''
+          : records.length ? 'No records match the filter.' : 'Nothing has been logged yet.';
+      }
+
+      async function poll() {
+        try {
+          const res = await fetch(`/api/system/logs?after=${lastSeq}`);
+          if (!res.ok) throw new Error(res.status);
+          const body = await res.json();
+          capacity = body.capacity;
+          $('logNote').textContent = body.level === 'debug'
+            ? `Capturing at debug. The last ${capacity} records are kept.`
+            : `Capturing at ${body.level}; set LOG_LEVEL=debug for more. The last ${capacity} records are kept.`;
+
+          // The server restarted, so its numbering began again.
+          if (body.latest_seq < lastSeq) {
+            records = [];
+            lastSeq = 0;
+            $('dropNote').hidden = true;
+            return poll();
+          }
+
+          if (lastSeq > 0 && body.oldest_seq > lastSeq + 1) $('dropNote').hidden = false;
+          if (body.records.length) {
+            records = records.concat(body.records).slice(-capacity);
+            lastSeq = records[records.length - 1].seq;
+            renderLogs();
+          } else if (!records.length) {
+            renderLogs();
+          }
+        } catch {
+          $('logStatus').textContent = 'Could not load the logs.';
+        }
+      }
+
+      $('levelFilter').addEventListener('change', renderLogs);
+      $('search').addEventListener('input', renderLogs);
+
+      async function init() {
+        const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
+        timeFormat = tf.time_format || '12h';
+        loadEnv();
+        await poll();
+        setInterval(() => { if (!document.hidden) poll(); }, POLL_MS);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+      }
+
+      init();
+    </script>
+  </body>
+</html>

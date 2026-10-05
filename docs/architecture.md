@@ -45,6 +45,7 @@ internal/
   barhelper/   rate-limited forwarding of volumes to BarHelper
   units/       unit labels and conversions
   config/      configuration from environment variables
+  logbuf/      the recent log records the System page shows
 web/
   embed.go     embeds static/ into the binary
   static/      HTML, JavaScript and CSS — no build step
@@ -56,7 +57,14 @@ docs/              this documentation
 
 `cmd/open-plaato-keg/main.go` does all of the wiring in `run()`:
 
-1. **Logging** — a text `slog` handler; level from `LOG_LEVEL`.
+1. **Logging** — a text `slog` handler writing to stdout, at the level from
+   `LOG_LEVEL` (`config.LogLevel`, which falls back to info on an unknown
+   value). It is wrapped in a `logbuf.Handler`, a tee that also copies each
+   record into a `logbuf.Buffer`: a ring of the last `logbuf.Capacity` (1,000)
+   records, with attributes flattened to text and groups to dotted keys. The
+   tee captures exactly what stdout gets, so debug lines are only kept when
+   `LOG_LEVEL=debug`. Each record gets a sequence number, which is how the
+   System page asks only for what is new.
 2. **Configuration** — `config.Load()`. Invalid values are fatal rather than
    silently defaulted, as is enabling BarHelper without an API key.
 3. **Database** — `store.Open()` creates the data directory, opens SQLite in WAL
@@ -358,6 +366,8 @@ A chi router with `Recoverer` and `RealIP` middleware:
 | `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `/api/pours/update`, `/api/pours/delete` for several, `/api/pours/{id}/delete` |
 | `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
+| `GET /api/system/env` | The configuration variables and their values in effect, from `config.Settings`, which withholds the BarHelper API key. Captured once at startup |
+| `GET /api/system/logs` | The buffered log records after `?after=<seq>`, with `oldest_seq` (below `after`+1 means some were discarded unseen) and `latest_seq` (below `after` means the server restarted) |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -367,7 +377,9 @@ browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
 `web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
-Keg Setup, history, All Pours and their setup pages. A tap holds all of its drink's
+Keg Setup, history, All Pours, their setup pages, and System (`system.html`),
+which lists the environment and polls `/api/system/logs` every 5 seconds,
+filtering by level and text in the browser. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
@@ -657,7 +669,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
 | `BARHELPER_ENDPOINT` | BarHelper's API | Override the endpoint |
 | `BARHELPER_UNIT` | `l` | Unit label sent with each volume |
 | `BARHELPER_KEG_MONITOR_MAPPING` | — | `kegToken:monitorId,…` |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `LOG_RETENTION_DAYS` | `365` | Days of keg history to keep; `0` keeps it forever |
+| `LOG_COMPACT_AFTER_DAYS` | `30` | Days of full history before hourly averaging; `0` never |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error`; also what the System page captures |
 
 ## Testing and tooling
 
@@ -726,5 +740,8 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   the new time appears at the scale's next update or the page's minute reload.
   A keg removed from `BARHELPER_KEG_MONITOR_MAPPING` keeps showing its last
   send time.
+- **System page logs are short-lived.** Only the last 1,000 records are kept,
+  in memory, so they are lost on restart, and a burst of debug output can push
+  older warnings out.
 - **Kegs without a tap.** The tap list shows taps, so a keg that no tap links to
   appears only on the Kegs page.

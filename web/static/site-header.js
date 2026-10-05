@@ -18,6 +18,7 @@
     ['/taplist-setup.html', 'Tap Setup'],
     ['/keg-setup.html', 'Keg Setup'],
     ['/dashboard-setup.html', 'Dashboard Setup'],
+    ['/system.html', 'System'],
   ];
 
   function link([href, label, also = []]) {
