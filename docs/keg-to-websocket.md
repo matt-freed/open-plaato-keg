@@ -149,7 +149,10 @@ timeout:
 
 ### 12. Render — `web/static/kegs.html`
 
-The `message` listener parses the frame, sees `type === "keg"`, stores
+The page receives frames through `liveUpdates` in `web/static/live.js`, which
+parses each one and reconnects five seconds after the socket closes; the fresh
+snapshot a new connection is sent (below) brings a reconnected page up to date.
+The callback sees `type === "keg"`, stores
 `msg.data` in its map of kegs and calls `render()`. That updates the scale's
 tile in place with `updateTile`, so the keg graphic's level animates to the new
 reading, and keeps the tiles in their display order. A reading that empties or
@@ -247,9 +250,6 @@ client.
 
 ## Known gaps
 
-- `keg-setup.html` does not reconnect when the socket closes, so it shows stale
-  data after a server restart until the page is reloaded. `taplist.html` and
-  `kegs.html` retry every five seconds.
 - The comment on `clientBuffer` says a client that falls behind is
   disconnected; the code drops messages for it instead and leaves it connected.
 - A tab's initial snapshot uses the same 16-slot buffer, so with more than 16

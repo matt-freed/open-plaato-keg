@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/live.js"></script>
     <style>
       /* The open scale's name, with whether it is connected. */
       .edit-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
@@ -781,16 +782,8 @@
         document.getElementById(sensId)?.classList.add("is-primary", "is-selected");
       }
 
-      // WebSocket connection for real-time updates
-      const socket = new WebSocket('/ws');
-
-      socket.addEventListener("open", () => {
-        console.log("WebSocket connected for setup page");
-      });
-
-      socket.addEventListener("message", (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type !== "keg") return;
+      liveUpdates(msg => {
+        if (msg.type !== "keg" || !msg.data?.id) return;
         const data = msg.data;
         const i = allKegs.findIndex(k => k.id === data.id);
         if (i >= 0) {
@@ -805,14 +798,6 @@
           updateSettingsDisplay(currentKegData);
           highlightCurrentSettings(currentKegData);
         }
-      });
-
-      socket.addEventListener("error", (error) => {
-        console.error("WebSocket error:", error);
-      });
-
-      socket.addEventListener("close", () => {
-        console.log("WebSocket closed");
       });
 
       fetch("/api/config/time-format")

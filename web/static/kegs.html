@@ -27,6 +27,7 @@
   <script src="/keg-graphic.js"></script>
   <script src="/tile-menu.js"></script>
   <script src="/tile-gestures.js"></script>
+  <script src="/live.js"></script>
   <script>
     'use strict';
 
@@ -347,28 +348,19 @@
       }
     }
 
-    function connect() {
-      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-      ws.addEventListener('message', ev => {
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch (_) { return; }
-        if (msg.type === 'keg_removed') {
-          delete kegs[msg.id];
-          render();
-        } else if (msg.type === 'keg' && msg.data?.id) {
-          kegs[msg.data.id] = msg.data;
-          render();
-        }
-      });
-      ws.addEventListener('close', () => setTimeout(connect, 5000));
-      ws.addEventListener('error', () => ws.close());
-    }
-
     loadAll();
     setInterval(() => { if (!gestures.active) loadAll(); }, 60000);
     // Keeps the "ago" times current between updates.
     setInterval(render, 15000);
-    connect();
+    liveUpdates(msg => {
+      if (msg.type === 'keg_removed') {
+        delete kegs[msg.id];
+        render();
+      } else if (msg.type === 'keg' && msg.data?.id) {
+        kegs[msg.data.id] = msg.data;
+        render();
+      }
+    });
   </script>
 </body>
 </html>

@@ -12,7 +12,7 @@ var pages = []string{
 	"kegs.html", "taplist.html", "taplist-setup.html", "history.html", "history-edit.html", "pours.html",
 	"dashboard-setup.html", "keg-setup.html", "system.html",
 	"style.css", "site-header.css", "site-header.js",
-	"tokens.css", "tiles.css", "keg-graphic.js",
+	"tokens.css", "tiles.css", "keg-graphic.js", "live.js",
 }
 
 func TestPagesArePresent(t *testing.T) {
@@ -286,13 +286,32 @@ func TestWebSocketPagesHandleTaggedMessages(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		body := string(data)
-		// Pages may pass "/ws" directly or build an absolute ws:// URL from it.
-		if !strings.Contains(body, "new WebSocket(") || !strings.Contains(body, "/ws") {
-			t.Errorf("%s does not open the websocket", name)
+		// Pages share live.js rather than opening their own socket, so they
+		// all reconnect the same way.
+		if !strings.Contains(body, `<script src="/live.js">`) || !strings.Contains(body, "liveUpdates(") {
+			t.Errorf("%s does not open the websocket through live.js", name)
 			continue
+		}
+		if strings.Contains(body, "new WebSocket(") {
+			t.Errorf("%s opens its own websocket instead of using live.js", name)
 		}
 		if !strings.Contains(body, `'keg'`) && !strings.Contains(body, `"keg"`) {
 			t.Errorf("%s does not dispatch on the keg message type", name)
+		}
+	}
+}
+
+// Older browsers reject a relative WebSocket URL, and a page left open across
+// a server restart must pick the feed back up.
+func TestLiveUpdatesReconnectsToAbsoluteURL(t *testing.T) {
+	data, err := fs.ReadFile(Static(), "live.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	for _, want := range []string{"new WebSocket(url)", "'wss' : 'ws'}://${location.host}/ws`", "setTimeout(connect"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("live.js is missing %q", want)
 		}
 	}
 }

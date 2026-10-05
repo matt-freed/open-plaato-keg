@@ -412,6 +412,11 @@ The pages are styled as one application, in the tap list's look:
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
   list and the Kegs page share.
+- `live.js` is the WebSocket feed, through `liveUpdates(onMessage)`, used by
+  the tap list, the Kegs page and Keg Setup. It builds the full `ws://` or
+  `wss://` address, since older browsers reject a relative one, passes each
+  parsed frame to the page, and reconnects five seconds after the socket
+  closes.
 - `tile-gestures.js` is the pointer handling for tap list and Kegs page tiles,
   through `attachTileGestures`: dragging to reorder, and opening the tile menu.
   It uses pointer events rather than HTML5 drag and drop, which does not work
@@ -748,8 +753,6 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   for that segment.
 - **`hardware_sync` is not answered.** The device's startup request for its
   configuration pins is acknowledged but not replied to.
-- **UI reconnection.** The Keg Setup page does not reconnect its WebSocket;
-  the tap list and the Kegs page do.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
 - **BarHelper time on the Kegs page.** Recording a send publishes no event, so
