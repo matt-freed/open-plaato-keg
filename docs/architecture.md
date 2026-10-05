@@ -300,7 +300,7 @@ keg's pouring flag and amount from before the change:
   and dropped.
 
 Scale jitter outside a pouring window can never become a pour. The minimum
-pour (`MinPour`, default 2 oz, entered in oz or ml on Dashboard Setup) is read
+pour (`MinPour`, default 4 oz, entered in oz or ml on Dashboard Setup) is read
 by `minPourTx` when a pour ends and converted into the keg's unit by
 `MinPour.In`. It is applied once, so changing it only affects future pours.
 

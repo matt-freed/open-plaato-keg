@@ -558,7 +558,7 @@ func TestReplayRealCaptureSession(t *testing.T) {
 	}
 
 	// Its pouring windows each move the scale by 40 g or less, all under the
-	// 2 oz default, so none of them is a pour.
+	// 4 oz default, so none of them is a pour.
 	pours, err := h.store.ListPours(time.Time{}, time.Now().Add(time.Minute))
 	if err != nil {
 		t.Fatalf("ListPours: %v", err)

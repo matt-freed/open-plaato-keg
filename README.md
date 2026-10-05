@@ -264,7 +264,7 @@ A tap body takes these fields, all optional:
 | `GET` `POST` | `/api/config/time-format` | `{"time_format": "12h"\|"24h"}` | How times are shown, such as on the history page |
 | `GET` `POST` | `/api/config/display-units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage and BarHelper stay in the scale's own units |
 | `GET` `POST` | `/api/config/amount-display` | `{"amount_display": "amount"\|"percent"}` | Which figure every keg graphic shows large on the tap list and the Kegs page. CO₂ cylinders always show the amount |
-| `GET` `POST` | `/api/config/min-pour` | `{"value": 2, "unit": "oz"\|"ml"}` | The smallest pouring window recorded as a pour; default 2 oz. Changing it only affects future pours |
+| `GET` `POST` | `/api/config/min-pour` | `{"value": 4, "unit": "oz"\|"ml"}` | The smallest pouring window recorded as a pour; default 4 oz. Changing it only affects future pours |
 | `GET` `POST` | `/api/config/theme` | A theme object | Colours and fonts |
 | `GET` | `/theme.css` | — | The stored theme as CSS custom properties, which `style.css` and the tap list consume |
 | `GET` | `/api/alive` | — | Status and server version |

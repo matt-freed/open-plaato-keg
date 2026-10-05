@@ -119,7 +119,7 @@ func TestJitterWithoutThePouringFlagIsNotAPour(t *testing.T) {
 func TestPourBelowTheMinimumIsDropped(t *testing.T) {
 	s := newTestStore(t)
 	const id = "keg-1"
-	kegIn(t, s, id, 2, 2, 5.0) // US gallons; the 2 oz default is 0.0156 gal
+	kegIn(t, s, id, 2, 2, 5.0) // US gallons; the 4 oz default is 0.03125 gal
 
 	pourDown(t, s, id, 4.99) // about 1.3 oz
 	if n := len(allPours(t, s)); n != 0 {

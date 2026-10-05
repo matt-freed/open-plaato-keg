@@ -56,8 +56,8 @@ type MinPour struct {
 	Unit  string  `json:"unit"`
 }
 
-// DefaultMinPour is about a taster, and below any real glass.
-var DefaultMinPour = MinPour{Value: 2, Unit: MinPourUnitOz}
+// DefaultMinPour is a small taster, and below any real glass.
+var DefaultMinPour = MinPour{Value: 4, Unit: MinPourUnitOz}
 
 // In returns the minimum in a remaining-beer unit such as "lbs" or "litre".
 // Weight units pick up the same litre-per-kilogram assumption as every other
