@@ -67,69 +67,63 @@ func (s *Server) Handler() http.Handler {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/alive", s.handleAlive)
 
+		// Reads are GET. A change to a resource is PUT when the body replaces
+		// it, PATCH when it carries only what changes, and DELETE to remove
+		// it; the bulk forms name their targets in the body. POST creates a
+		// tap or sends a keg a command.
 		r.Route("/kegs", func(r chi.Router) {
 			// Declared before /{id} so they are not swallowed by it.
 			r.Get("/devices", s.handleListKegIDs)
 			r.Get("/connected", s.handleListConnected)
 			r.Get("/", s.handleListKegs)
-			r.Post("/order", s.handleKegOrder)
+			r.Put("/order", s.handleKegOrder)
 
 			r.Route("/{id}", func(r chi.Router) {
 				r.Get("/", s.handleGetKeg)
+				r.Patch("/", s.handleUpdateKeg)
+				r.Delete("/", s.handleDeleteKeg)
 				r.Get("/connection", s.handleKegConnection)
 				r.Get("/log", s.handleKegLog)
+				r.Delete("/log", s.handleClearKegLog)
 				r.Get("/log/csv", s.handleKegLogCSV)
-				r.Post("/log/clear", s.handleClearKegLog)
 				r.Get("/log/rows", s.handleKegLogRows)
-				r.Post("/log/update", s.handleUpdateKegLog)
-				r.Post("/log/delete", s.handleDeleteKegLogEntries)
+				r.Patch("/log/rows", s.handleUpdateKegLog)
+				r.Delete("/log/rows", s.handleDeleteKegLogEntries)
 				r.Get("/pours", s.handleKegPours)
-				r.Post("/delete", s.handleDeleteKeg)
 				s.mountKegCommands(r)
 			})
 		})
 
 		r.Route("/pours", func(r chi.Router) {
 			r.Get("/", s.handleListPours)
+			r.Patch("/", s.handleUpdatePours)
+			r.Delete("/", s.handleDeletePours)
 			r.Get("/csv", s.handleListPoursCSV)
 			r.Get("/summary", s.handleSummarizePours)
-			r.Post("/update", s.handleUpdatePours)
-			r.Post("/delete", s.handleDeletePours)
-			r.Post("/{id}/delete", s.handleDeletePour)
+			r.Delete("/{id}", s.handleDeletePour)
 		})
 
 		r.Route("/taps", func(r chi.Router) {
 			r.Get("/", s.handleListTaps)
-			// Declared before /{id} so it is not swallowed by it.
-			r.Post("/order", s.handleTapOrder)
-			r.Post("/links", s.handleTapLinks)
+			r.Post("/", s.handleCreateTap)
+			// Declared before /{id} so they are not swallowed by it.
+			r.Put("/order", s.handleTapOrder)
+			r.Patch("/links", s.handleTapLinks)
 			r.Get("/{id}", s.handleGetTap)
-			r.Post("/{id}", s.handleSaveTap)
-			r.Post("/{id}/delete", s.handleDeleteTap)
+			r.Put("/{id}", s.handleReplaceTap)
+			r.Delete("/{id}", s.handleDeleteTap)
 		})
 
 		r.Route("/config", func(r chi.Router) {
 			r.Get("/", s.handleGetConfig)
-			r.Get("/home-page", s.handleGetHomePage)
-			r.Post("/home-page", s.handleSetHomePage)
-			r.Get("/time-format", s.handleGetTimeFormat)
-			r.Post("/time-format", s.handleSetTimeFormat)
-			r.Get("/display-units", s.handleGetDisplayUnits)
-			r.Post("/display-units", s.handleSetDisplayUnits)
-			r.Get("/amount-display", s.handleGetAmountDisplay)
-			r.Post("/amount-display", s.handleSetAmountDisplay)
-			r.Get("/min-pour", s.handleGetMinPour)
-			r.Post("/min-pour", s.handleSetMinPour)
-			r.Get("/theme", s.handleGetTheme)
-			r.Post("/theme", s.handleSetTheme)
+			r.Patch("/", s.handleUpdateConfig)
 		})
 
 		r.Route("/system", func(r chi.Router) {
 			r.Get("/env", s.handleSystemEnv)
 			r.Get("/logs", s.handleSystemLogs)
-			r.Post("/log-level", s.handleSetLogLevel)
+			r.Put("/log-level", s.handleSetLogLevel)
 		})
-
 	})
 
 	r.Get("/theme.css", s.handleThemeCSS)

@@ -211,7 +211,7 @@ path and the API never contend for SQLite's lock.
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
 | `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
-| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
 
 There are no foreign keys.
 
@@ -242,7 +242,10 @@ the row (or start a new one), apply each non-transient property through
 `trackPour`, derive `beer_left_unit`, then `INSERT OR REPLACE`. `UpdateKeg` is
 the same without access to the transaction. Because a packet carries only the
 pins that changed, fields it does not mention keep their stored values. The
-first confirmed packet from a new keg id creates its row.
+first confirmed packet from a new keg id creates its row. `UpdateKeg` also
+creates a row it does not find, so the API's callers (`Server.updateKeg` and
+`handleKegOrder`) check the keg exists first and answer 404, rather than let a
+request for an unknown id create a phantom keg.
 
 Two values get special treatment:
 
@@ -361,20 +364,25 @@ Every WebSocket frame carries a `type`: `keg` (with `data`) or `keg_removed`
 
 ## HTTP API and UI — `internal/api`, `web`
 
-A chi router with `Recoverer` and `RealIP` middleware:
+A chi router with `Recoverer` and `RealIP` middleware. The routes follow one
+scheme, set out in a comment in `Handler`: reads are `GET`; a change is `PUT`
+when the body replaces the resource, `PATCH` when it carries only what changes,
+and `DELETE` to remove it, with the bulk forms naming their targets in the
+body; `POST` creates a tap or sends a keg a command. A known path asked for
+with another method is a 405.
 
 | Route | Purpose |
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
-| `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, live connection (`/connection`: remote IP, connected and last-heard times), history (`/log`, `/log/csv`, `/log/clear`, and `/log/rows`, `/log/update`, `/log/delete` for the editor), pours (`/pours`), delete |
-| `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
-| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `/api/pours/update`, `/api/pours/delete` for several, `/api/pours/{id}/delete` |
-| `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
+| `/api/kegs` | List, connected ids, known ids, ordering (`PUT /order`) |
+| `/api/kegs/{id}` | `GET`, `DELETE`, and `PATCH` for the label and CO₂ capacity, which `handleUpdateKeg` stores here since the device has no pin for them; live connection (`/connection`: remote IP, connected and last-heard times); history (`GET /log`, `/log/csv`, `DELETE /log` to clear it, and `GET`, `PATCH`, `DELETE /log/rows` for the editor); pours (`/pours`) |
+| `/api/kegs/{id}/…` | Device commands, all `POST`: tare, empty keg, calibration, units, mode, sensitivity, … |
+| `/api/taps` | CRUD for the tap list: `POST` creates with a generated id (`handleCreateTap`), `PUT /{id}` replaces an existing tap (`handleReplaceTap`); saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `PUT /api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `PATCH /api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
+| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `PATCH /api/pours` for All Pours' edits, `DELETE /api/pours` for several, `DELETE /api/pours/{id}` |
+| `/api/config` | Every setting: home page, time format, display units, amount display, minimum pour, theme. `GET` reads them together; `PATCH` changes any of them through `store.UpdateAppConfig`, in one transaction, and answers with the result |
 | `GET /api/system/env` | The configuration variables and their values in effect, from `config.Settings`, which withholds the BarHelper API key. Captured once at startup |
 | `GET /api/system/logs` | The buffered log records after `?after=<seq>`, with `oldest_seq` (below `after`+1 means some were discarded unseen) and `latest_seq` (below `after` means the server restarted), and the live `level` beside the `configured_level` from `LOG_LEVEL` |
-| `POST /api/system/log-level` | Sets the live level (`debug`, `info`, `warn` or `error`) through the `LevelVar` in `api.System`, until restart. The change is logged at info while the more verbose of the two levels is in force |
+| `PUT /api/system/log-level` | Sets the live level (`debug`, `info`, `warn` or `error`) through the `LevelVar` in `api.System`, until restart. The change is logged at info while the more verbose of the two levels is in force |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -461,7 +469,7 @@ cards between slots with pointer events, as `tile-gestures.js` does: a mouse
 drags as soon as it moves, a finger holds first, and the page scrolls when the
 pointer nears the top or bottom edge. A card dropped on an occupied slot swaps
 with the tap there, which moves to the dropped card's old slot or the tray;
-`dropTap` sends both changes in one `/api/taps/links` call, redraws at once,
+`dropTap` sends both changes in one `PATCH /api/taps/links` call, redraws at once,
 and redraws again from the taps the server returns. Cards stay links, so a
 click without a drag opens the editor, whose keg dropdown remains the
 keyboard route.
@@ -496,7 +504,7 @@ Pours table below the charts all come from the stored pours in
 logged reading. "Left now" is the keg's current reading, fetched with each
 range, rather than the last point, which on a long range is an average. Each
 row of the table can be deleted.
-Clear history posts to `/api/kegs/{id}/log/clear`, which `handleClearKegLog`
+Clear history sends `DELETE /api/kegs/{id}/log`, which `handleClearKegLog`
 serves with `store.ClearLog`: every reading for that keg goes, in every range,
 and its pours leave the page, while the keg and the other kegs' history stay.
 The pours remain on All Pours. The page asks for confirmation first, since the
@@ -625,12 +633,12 @@ BarHelper, the CSV exports and the Keg Setup page all use device units.
 
 ### Amount display
 
-One app-wide setting, `amount_display` (`store.SetAmountDisplay`), chooses
+One app-wide setting, `amount_display`, chooses
 whether every keg graphic shows the amount left or the percentage left as its
 large figure, on both the tap list and the Kegs page; the Kegs page shows the
 other figure among the tile's readings. CO₂ cylinders always show the amount.
 It is a presentation choice only and is not sent to the device. Both pages
-read it from `/api/config/amount-display` when they load and on their minute
+read it from `/api/config` when they load and on their minute
 reload, so a change reaches an open screen within a minute.
 
 ## BarHelper — `internal/barhelper`

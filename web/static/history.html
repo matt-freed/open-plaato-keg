@@ -928,7 +928,7 @@
           'not just the one shown, and removes its pours from this page. ' +
           'The pours stay on All Pours. It cannot be undone.')) return;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(keg.id)}/log/clear`, { method: 'POST' });
+        const res = await fetch(`/api/kegs/${encodeURIComponent(keg.id)}/log`, { method: 'DELETE' });
         if (!res.ok) throw new Error(res.status);
         showToast('History cleared', 'success');
       } catch (e) {
@@ -943,7 +943,7 @@
       const p = pours.find(x => String(x.id) === b.dataset.delete);
       if (!p || !confirm(`Delete this ${pourSize(p)} pour? It is removed everywhere, including All Pours.`)) return;
       try {
-        const res = await fetch(`/api/pours/${encodeURIComponent(p.id)}/delete`, { method: 'POST' });
+        const res = await fetch(`/api/pours/${encodeURIComponent(p.id)}`, { method: 'DELETE' });
         if (!res.ok) throw new Error(res.status);
         showToast('Pour deleted', 'success');
       } catch (err) {
@@ -962,19 +962,18 @@
       select('axisChoice', axisScale);
       select('amountUnitChoice', amountUnit);
       try {
-        const [kegsRes, tf, tapList, mp] = await Promise.all([
+        const [kegsRes, cfg, tapList] = await Promise.all([
           fetch('/api/kegs'),
-          fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
+          // The minimum pour is only for the note under the figures.
+          fetch('/api/config').then(r => r.ok ? r.json() : {}).catch(() => ({})),
           // Only for labelling the scales, so a failure just leaves them
           // named by scale.
           fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
-          // Only for the note under the figures.
-          fetch('/api/config/min-pour').then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
-        minPour = mp;
+        minPour = cfg.min_pour ?? null;
         if (!kegsRes.ok) throw new Error(kegsRes.status);
         kegs = await kegsRes.json();
-        timeFormat = tf.time_format || '12h';
+        timeFormat = cfg.time_format || '12h';
         // The first tap, by tap number, that draws from each scale.
         for (const tap of tapList) {
           if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;

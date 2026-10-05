@@ -304,7 +304,7 @@
       taps = order.map(id => byId.get(id)).filter(Boolean);
       try {
         const res = await fetch('/api/taps/order', {
-          method: 'POST',
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ordered_ids: order }),
         });
@@ -319,7 +319,7 @@
     // A failed read keeps the current choice rather than flipping every tile.
     async function loadAmountDisplay() {
       try {
-        const res = await fetch('/api/config/amount-display');
+        const res = await fetch('/api/config');
         if (res.ok) amountDisplay = (await res.json()).amount_display || 'amount';
       } catch (_) {}
     }

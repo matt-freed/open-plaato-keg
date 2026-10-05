@@ -480,9 +480,9 @@
       toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
     }
 
-    async function postJSON(path, body) {
+    async function sendJSON(method, path, body) {
       const res = await fetch(path, {
-        method: 'POST',
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
@@ -531,7 +531,7 @@
       if (!edits.length || invalid) return;
       $('saveBtn').disabled = true;
       try {
-        await postJSON('/api/pours/update', { pours: edits });
+        await sendJSON('PATCH', '/api/pours', { pours: edits });
         showToast(edits.length === 1 ? 'Pour saved' : `${edits.length} pours saved`, 'success');
       } catch (err) {
         showToast('Could not save: ' + err.message, 'danger');
@@ -547,7 +547,7 @@
       const what = ids.length === 1 ? 'this pour' : `these ${ids.length} pours`;
       if (!confirm(`Delete ${what}? They are removed everywhere, including History. It cannot be undone.`)) return;
       try {
-        const { deleted } = await postJSON('/api/pours/delete', { ids });
+        const { deleted } = await sendJSON('DELETE', '/api/pours', { ids });
         showToast(deleted === 1 ? 'Pour deleted' : `${deleted} pours deleted`, 'success');
       } catch (err) {
         showToast('Could not delete: ' + err.message, 'danger');
@@ -562,7 +562,7 @@
     window.addEventListener('hashchange', show);
 
     async function init() {
-      const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
+      const tf = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
       timeFormat = tf.time_format || '12h';
       show();
     }

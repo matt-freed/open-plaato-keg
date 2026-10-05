@@ -74,6 +74,24 @@ func (a *testAPI) do(method, path string, body any) *httptest.ResponseRecorder {
 	return rec
 }
 
+// patchConfig changes one setting through PATCH /api/config.
+func (a *testAPI) patchConfig(name string, value any) *httptest.ResponseRecorder {
+	a.t.Helper()
+	return a.do(http.MethodPatch, "/api/config", map[string]any{name: value})
+}
+
+// getConfig reads every setting through GET /api/config.
+func (a *testAPI) getConfig() store.AppConfig {
+	a.t.Helper()
+	rec := a.do(http.MethodGet, "/api/config", nil)
+	if rec.Code != http.StatusOK {
+		a.t.Fatalf("GET /api/config: status = %d: %s", rec.Code, rec.Body.String())
+	}
+	var cfg store.AppConfig
+	a.decode(rec, &cfg)
+	return cfg
+}
+
 func (a *testAPI) decode(rec *httptest.ResponseRecorder, dst any) {
 	a.t.Helper()
 	if err := json.Unmarshal(rec.Body.Bytes(), dst); err != nil {
@@ -208,13 +226,23 @@ func TestSetLabel(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/label", map[string]string{"value": "  Pale Ale  "})
+	rec := a.do(http.MethodPatch, "/api/kegs/keg-1", map[string]string{"label": "  Pale Ale  "})
 	assertStatus(t, rec, http.StatusOK)
 
+	var got store.Keg
+	a.decode(rec, &got)
+	if got.Label != "Pale Ale" || got.ID != "keg-1" {
+		t.Errorf("response = %+v, want the keg with its trimmed label", got)
+	}
 	k, _ := a.store.GetKeg("keg-1")
 	if k.Label != "Pale Ale" {
 		t.Errorf("Label = %q, want it trimmed", k.Label)
 	}
+
+	// A key that is not a server-side setting is refused rather than ignored.
+	assertStatus(t, a.do(http.MethodPatch, "/api/kegs/keg-1", map[string]any{"sensitivity": 3}), http.StatusBadRequest)
+	assertStatus(t, a.do(http.MethodPatch, "/api/kegs/keg-1", map[string]any{}), http.StatusBadRequest)
+	assertStatus(t, a.do(http.MethodPatch, "/api/kegs/nope", map[string]any{"label": "x"}), http.StatusNotFound)
 }
 
 // A missing value is a 400, not a crash.
@@ -222,7 +250,7 @@ func TestCommandWithoutValueIsRejected(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
-	for _, path := range []string{"co2-capacity", "max-keg-volume", "temperature-offset"} {
+	for _, path := range []string{"max-keg-volume", "temperature-offset"} {
 		rec := a.do(http.MethodPost, "/api/kegs/keg-1/"+path, map[string]any{})
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s without a value: status = %d, want 400", path, rec.Code)
@@ -230,13 +258,13 @@ func TestCommandWithoutValueIsRejected(t *testing.T) {
 	}
 }
 
-// The UI posts numbers from text inputs, so both forms must work.
-func TestCommandAcceptsNumberOrString(t *testing.T) {
+// The UI sends numbers from text inputs, so both forms must work.
+func TestCO2CapacityAcceptsNumberOrString(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
 	for _, value := range []any{1.052, "1.052"} {
-		rec := a.do(http.MethodPost, "/api/kegs/keg-1/co2-capacity", map[string]any{"value": value})
+		rec := a.do(http.MethodPatch, "/api/kegs/keg-1", map[string]any{"co2_capacity": value})
 		assertStatus(t, rec, http.StatusOK)
 
 		k, _ := a.store.GetKeg("keg-1")
@@ -287,7 +315,7 @@ func TestKegOrder(t *testing.T) {
 		a.storeKeg(id, "vw\x0051\x001.000")
 	}
 
-	rec := a.do(http.MethodPost, "/api/kegs/order",
+	rec := a.do(http.MethodPut, "/api/kegs/order",
 		map[string]any{"ordered_ids": []string{"c", "a", "b"}})
 	assertStatus(t, rec, http.StatusOK)
 
@@ -299,8 +327,16 @@ func TestKegOrder(t *testing.T) {
 		}
 	}
 
-	rec = a.do(http.MethodPost, "/api/kegs/order", map[string]any{"ordered_ids": []string{}})
+	rec = a.do(http.MethodPut, "/api/kegs/order", map[string]any{"ordered_ids": []string{}})
 	assertStatus(t, rec, http.StatusBadRequest)
+
+	// An unknown id is a 404 that changes nothing and creates no keg.
+	rec = a.do(http.MethodPut, "/api/kegs/order", map[string]any{"ordered_ids": []string{"b", "ghost"}})
+	assertStatus(t, rec, http.StatusNotFound)
+	kegs, _ = a.store.ListKegs()
+	if len(kegs) != 3 || kegs[0].ID != "c" {
+		t.Errorf("after an unknown id the kegs are %d, first %q; want the 3 unchanged", len(kegs), kegs[0].ID)
+	}
 }
 
 func TestDeleteKegPublishesRemoval(t *testing.T) {
@@ -310,7 +346,7 @@ func TestDeleteKegPublishesRemoval(t *testing.T) {
 	sub, cancel := a.bus.Subscribe()
 	defer cancel()
 
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/delete", nil)
+	rec := a.do(http.MethodDelete, "/api/kegs/keg-1", nil)
 	assertStatus(t, rec, http.StatusOK)
 
 	select {
@@ -326,7 +362,7 @@ func TestDeleteKegPublishesRemoval(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 
 	// Deleting it again is a 404, not a second success.
-	rec = a.do(http.MethodPost, "/api/kegs/keg-1/delete", nil)
+	rec = a.do(http.MethodDelete, "/api/kegs/keg-1", nil)
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
@@ -377,7 +413,7 @@ func TestClearKegHistory(t *testing.T) {
 		}
 	}
 
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/clear", nil)
+	rec := a.do(http.MethodDelete, "/api/kegs/keg-1/log", nil)
 	assertStatus(t, rec, http.StatusOK)
 	var resp struct {
 		Deleted int `json:"deleted"`
@@ -395,7 +431,7 @@ func TestClearKegHistory(t *testing.T) {
 	}
 	assertStatus(t, a.do(http.MethodGet, "/api/kegs/keg-1", nil), http.StatusOK)
 
-	rec = a.do(http.MethodPost, "/api/kegs/nope/log/clear", nil)
+	rec = a.do(http.MethodDelete, "/api/kegs/nope/log", nil)
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
@@ -531,10 +567,10 @@ func TestUnknownHistoryRangeFallsBack(t *testing.T) {
 func TestTapCRUDOverHTTP(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/taps/new", map[string]any{
+	rec := a.do(http.MethodPost, "/api/taps", map[string]any{
 		"tap_number": 1, "name": "Pale Ale", "brewery": "Home", "abv": "5.2",
 	})
-	assertStatus(t, rec, http.StatusOK)
+	assertStatus(t, rec, http.StatusCreated)
 
 	var created map[string]any
 	a.decode(rec, &created)
@@ -554,6 +590,16 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 		t.Errorf("Color = %q, want the default", tap.Color)
 	}
 
+	// PUT replaces every field, so one left out is cleared.
+	rec = a.do(http.MethodPut, "/api/taps/"+id, map[string]any{"tap_number": 2, "name": "Pils"})
+	assertStatus(t, rec, http.StatusOK)
+	a.decode(a.do(http.MethodGet, "/api/taps/"+id, nil), &tap)
+	if tap.Name != "Pils" || tap.Brewery != "" || tap.ABV != nil {
+		t.Errorf("after PUT tap = %+v, want only the new fields", tap)
+	}
+	// Ids are generated by POST, so PUT does not create a tap.
+	assertStatus(t, a.do(http.MethodPut, "/api/taps/nope", map[string]any{"name": "Ghost"}), http.StatusNotFound)
+
 	rec = a.do(http.MethodGet, "/api/taps", nil)
 	assertStatus(t, rec, http.StatusOK)
 	var taps []store.Tap
@@ -562,7 +608,7 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 		t.Errorf("got %d taps, want 1", len(taps))
 	}
 
-	rec = a.do(http.MethodPost, "/api/taps/"+id+"/delete", nil)
+	rec = a.do(http.MethodDelete, "/api/taps/"+id, nil)
 	assertStatus(t, rec, http.StatusOK)
 	rec = a.do(http.MethodGet, "/api/taps/"+id, nil)
 	assertStatus(t, rec, http.StatusNotFound)
@@ -571,8 +617,8 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 func TestTapSRM(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Stout", "srm": "38"})
-	assertStatus(t, rec, http.StatusOK)
+	rec := a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Stout", "srm": "38"})
+	assertStatus(t, rec, http.StatusCreated)
 	var created struct {
 		Tap store.Tap `json:"tap"`
 	}
@@ -581,16 +627,16 @@ func TestTapSRM(t *testing.T) {
 		t.Errorf("SRM = %v, want 38", created.Tap.SRM)
 	}
 
-	rec = a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Oops", "srm": -1})
+	rec = a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Oops", "srm": -1})
 	assertStatus(t, rec, http.StatusBadRequest)
 }
 
 // A drink's colour is an SRM or a named preset, never both.
 func TestColorPresetValidation(t *testing.T) {
 	a := newTestAPI(t)
-	const path = "/api/taps/new"
+	const path = "/api/taps"
 	rec := a.do(http.MethodPost, path, map[string]any{"name": "Water", "color_preset": "clear"})
-	assertStatus(t, rec, http.StatusOK)
+	assertStatus(t, rec, http.StatusCreated)
 	var created struct {
 		Tap store.Tap `json:"tap"`
 	}
@@ -608,8 +654,8 @@ func TestColorPresetValidation(t *testing.T) {
 func TestTapKeggedDate(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Stout", "kegged_date": "03.09.2026"})
-	assertStatus(t, rec, http.StatusOK)
+	rec := a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Stout", "kegged_date": "03.09.2026"})
+	assertStatus(t, rec, http.StatusCreated)
 	var created struct {
 		Tap store.Tap `json:"tap"`
 	}
@@ -618,7 +664,7 @@ func TestTapKeggedDate(t *testing.T) {
 		t.Errorf("kegged_date = %q, want it stored as 2026-09-03", created.Tap.KeggedDate)
 	}
 
-	rec = a.do(http.MethodPost, "/api/taps/new", map[string]any{"name": "Oops", "kegged_date": "next Friday"})
+	rec = a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Oops", "kegged_date": "next Friday"})
 	assertStatus(t, rec, http.StatusBadRequest)
 }
 
@@ -630,7 +676,7 @@ func TestTapOrder(t *testing.T) {
 		}
 	}
 
-	rec := a.do(http.MethodPost, "/api/taps/order",
+	rec := a.do(http.MethodPut, "/api/taps/order",
 		map[string]any{"ordered_ids": []string{"b", "c", "a"}})
 	assertStatus(t, rec, http.StatusOK)
 
@@ -642,9 +688,9 @@ func TestTapOrder(t *testing.T) {
 		}
 	}
 
-	rec = a.do(http.MethodPost, "/api/taps/order", map[string]any{"ordered_ids": []string{}})
+	rec = a.do(http.MethodPut, "/api/taps/order", map[string]any{"ordered_ids": []string{}})
 	assertStatus(t, rec, http.StatusBadRequest)
-	rec = a.do(http.MethodPost, "/api/taps/order", map[string]any{"ordered_ids": []string{"nope"}})
+	rec = a.do(http.MethodPut, "/api/taps/order", map[string]any{"ordered_ids": []string{"nope"}})
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
@@ -659,15 +705,55 @@ func TestAppConfigEndpoints(t *testing.T) {
 		t.Errorf("HomePage = %q, want the taplist default", cfg.HomePage)
 	}
 
-	rec = a.do(http.MethodPost, "/api/config/home-page", map[string]string{"home_page": "kegs"})
+	rec = a.patchConfig("home_page", "kegs")
 	assertStatus(t, rec, http.StatusOK)
-	rec = a.do(http.MethodPost, "/api/config/time-format", map[string]string{"time_format": "24h"})
+	rec = a.patchConfig("time_format", "24h")
 	assertStatus(t, rec, http.StatusOK)
 
 	rec = a.do(http.MethodGet, "/api/config", nil)
 	a.decode(rec, &cfg)
 	if cfg.HomePage != store.HomePageKegs || cfg.TimeFormat != store.TimeFormat24h {
 		t.Errorf("config = %+v", cfg)
+	}
+}
+
+// One PATCH can change several settings; the rest keep their stored values,
+// and the response is the whole configuration as it now stands.
+func TestPatchConfig(t *testing.T) {
+	a := newTestAPI(t)
+	assertStatus(t, a.patchConfig("theme", map[string]string{"accent_color": "#ff0000"}), http.StatusOK)
+
+	rec := a.do(http.MethodPatch, "/api/config", map[string]any{
+		"home_page":      "kegs",
+		"amount_display": "percent",
+		"min_pour":       map[string]any{"value": 60, "unit": "ml"},
+	})
+	assertStatus(t, rec, http.StatusOK)
+	var got store.AppConfig
+	a.decode(rec, &got)
+	if got.HomePage != store.HomePageKegs || got.AmountDisplay != store.AmountDisplayPercent ||
+		got.MinPour != (store.MinPour{Value: 60, Unit: store.MinPourUnitMl}) {
+		t.Errorf("response = %+v, want the three changes", got)
+	}
+	if got.Theme.AccentColor != "#ff0000" || got.TimeFormat != store.TimeFormat12h {
+		t.Errorf("response = %+v, want the untouched settings kept", got)
+	}
+	if stored := a.getConfig(); stored != got {
+		t.Errorf("stored = %+v, want what the PATCH returned", stored)
+	}
+
+	for name, body := range map[string]any{
+		"empty":       map[string]any{},
+		"unknown key": map[string]any{"home_page": "kegs", "colour": "red"},
+		"wrong type":  map[string]any{"min_pour": "lots"},
+	} {
+		if rec := a.do(http.MethodPatch, "/api/config", body); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", name, rec.Code)
+		}
+	}
+	// A rejected PATCH changes nothing, including the valid keys beside it.
+	if stored := a.getConfig(); stored != got {
+		t.Errorf("after rejected PATCHes config = %+v, want it unchanged", stored)
 	}
 }
 
@@ -693,7 +779,7 @@ func TestRootRedirectsToHomePage(t *testing.T) {
 func TestThemeCSS(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
+	rec := a.patchConfig("theme", map[string]string{
 		"accent_color": "#ff0000", "font_family": "Inter, sans-serif",
 	})
 	assertStatus(t, rec, http.StatusOK)
@@ -717,7 +803,7 @@ func TestThemeCSS(t *testing.T) {
 func TestThemeCSSFontStacks(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
+	rec := a.patchConfig("theme", map[string]string{
 		"font_family": "System", "taplist_title_font": "Playfair Display",
 	})
 	assertStatus(t, rec, http.StatusOK)
@@ -742,7 +828,7 @@ func TestThemeCSSFontStacks(t *testing.T) {
 func TestThemeCSSRejectsInjection(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/config/theme", map[string]string{
+	rec := a.patchConfig("theme", map[string]string{
 		"accent_color": "red; } body { display: none; } :root { --x: y",
 		"bg_color":     "url(https://example.com/track.png)",
 	})
@@ -762,7 +848,7 @@ func TestMalformedJSONIsRejected(t *testing.T) {
 	a := newTestAPI(t)
 	a.storeKeg("keg-1", "vw\x0051\x001.000")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/kegs/keg-1/label",
+	req := httptest.NewRequest(http.MethodPatch, "/api/kegs/keg-1",
 		strings.NewReader("{not json"))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -788,19 +874,17 @@ func TestStaticUIIsServed(t *testing.T) {
 func TestAmountDisplay(t *testing.T) {
 	a := newTestAPI(t)
 
-	var got map[string]string
-	a.decode(a.do(http.MethodGet, "/api/config/amount-display", nil), &got)
-	if got["amount_display"] != store.AmountDisplayAmount {
-		t.Errorf("default = %q, want %q", got["amount_display"], store.AmountDisplayAmount)
+	if got := a.getConfig().AmountDisplay; got != store.AmountDisplayAmount {
+		t.Errorf("default = %q, want %q", got, store.AmountDisplayAmount)
 	}
 
-	rec := a.do(http.MethodPost, "/api/config/amount-display", map[string]string{"amount_display": "percent"})
+	rec := a.patchConfig("amount_display", "percent")
 	assertStatus(t, rec, http.StatusOK)
 	if cfg, _ := a.store.GetAppConfig(); cfg.AmountDisplay != store.AmountDisplayPercent {
 		t.Errorf("AmountDisplay = %q after saving percent", cfg.AmountDisplay)
 	}
 
-	a.do(http.MethodPost, "/api/config/amount-display", map[string]string{"amount_display": "sideways"})
+	a.patchConfig("amount_display", "sideways")
 	if cfg, _ := a.store.GetAppConfig(); cfg.AmountDisplay != store.AmountDisplayAmount {
 		t.Errorf("AmountDisplay = %q after an unknown value, want the default", cfg.AmountDisplay)
 	}
@@ -810,12 +894,12 @@ func TestAmountDisplay(t *testing.T) {
 // so Tap Setup can say where to unlink it.
 func TestTapKegConflict(t *testing.T) {
 	a := newTestAPI(t)
-	rec := a.do(http.MethodPost, "/api/taps/tap-1", map[string]any{
+	rec := a.do(http.MethodPost, "/api/taps", map[string]any{
 		"tap_number": 3, "name": "Red Barn Amber", "keg_id": "keg-1",
 	})
-	assertStatus(t, rec, http.StatusOK)
+	assertStatus(t, rec, http.StatusCreated)
 
-	rec = a.do(http.MethodPost, "/api/taps/tap-2", map[string]any{
+	rec = a.do(http.MethodPost, "/api/taps", map[string]any{
 		"tap_number": 4, "name": "Pils", "keg_id": "keg-1",
 	})
 	assertStatus(t, rec, http.StatusConflict)
@@ -838,7 +922,7 @@ func TestTapLinks(t *testing.T) {
 		}
 	}
 
-	rec := a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{
+	rec := a.do(http.MethodPatch, "/api/taps/links", map[string]any{"links": []map[string]string{
 		{"tap_id": "a", "keg_id": "keg-2"},
 		{"tap_id": "b", "keg_id": "keg-1"},
 	}})
@@ -851,14 +935,14 @@ func TestTapLinks(t *testing.T) {
 		t.Errorf("taps after swap = %+v", resp.Taps)
 	}
 
-	rec = a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{
+	rec = a.do(http.MethodPatch, "/api/taps/links", map[string]any{"links": []map[string]string{
 		{"tap_id": "c", "keg_id": "keg-1"},
 	}})
 	assertStatus(t, rec, http.StatusConflict)
 
-	rec = a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{}})
+	rec = a.do(http.MethodPatch, "/api/taps/links", map[string]any{"links": []map[string]string{}})
 	assertStatus(t, rec, http.StatusBadRequest)
-	rec = a.do(http.MethodPost, "/api/taps/links", map[string]any{"links": []map[string]string{
+	rec = a.do(http.MethodPatch, "/api/taps/links", map[string]any{"links": []map[string]string{
 		{"tap_id": "nope", "keg_id": ""},
 	}})
 	assertStatus(t, rec, http.StatusNotFound)

@@ -279,7 +279,7 @@
 
       try {
         const res = await fetch('/api/taps/links', {
-          method: 'POST',
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ links }),
         });
@@ -420,8 +420,10 @@
       };
 
       try {
-        const res = await fetch(`/api/taps/${currentTapId}`, {
-          method: 'POST',
+        // A new tap's id is only a placeholder until the server assigns one.
+        const exists = allTaps.some(t => t.id === currentTapId);
+        const res = await fetch(exists ? `/api/taps/${encodeURIComponent(currentTapId)}` : '/api/taps', {
+          method: exists ? 'PUT' : 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(body),
         });
@@ -442,7 +444,8 @@
       if (!currentTapId) return;
       if (!confirm('Delete this tap? This cannot be undone.')) return;
       try {
-        await fetch(`/api/taps/${currentTapId}/delete`, {method: 'POST'});
+        const res = await fetch(`/api/taps/${encodeURIComponent(currentTapId)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(res.status);
         showToast('Tap deleted', 'success');
         await loadAll();
         backToList();

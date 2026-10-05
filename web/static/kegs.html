@@ -300,7 +300,7 @@
       const ids = keepEmptyInPlace(sortKegs(Object.values(kegs)).map(k => k.id), moved);
       ids.forEach((id, i) => { if (kegs[id]) kegs[id].sort_order = i; });
       fetch('/api/kegs/order', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ordered_ids: ids }),
       }).catch(err => console.error('Error saving keg order:', err));
@@ -320,25 +320,21 @@
       } catch (_) {}
     }
 
-    // A failed read keeps the current choice rather than flipping every tile.
-    async function loadAmountDisplay() {
+    // A failed read keeps the current choices rather than flipping every
+    // tile; the time format is only for the last pour's time.
+    async function loadConfig() {
       try {
-        const res = await fetch('/api/config/amount-display');
-        if (res.ok) amountDisplay = (await res.json()).amount_display || 'amount';
-      } catch (_) {}
-    }
-
-    // Only for the last pour's time, so a failure keeps the current format.
-    async function loadTimeFormat() {
-      try {
-        const res = await fetch('/api/config/time-format');
-        if (res.ok) timeFormat = (await res.json()).time_format || '12h';
+        const res = await fetch('/api/config');
+        if (!res.ok) return;
+        const cfg = await res.json();
+        amountDisplay = cfg.amount_display || 'amount';
+        timeFormat = cfg.time_format || '12h';
       } catch (_) {}
     }
 
     async function loadAll() {
       try {
-        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps(), loadAmountDisplay(), loadTimeFormat()]);
+        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps(), loadConfig()]);
         if (!kegsRes.ok) throw new Error(kegsRes.status);
         for (const id in kegs) delete kegs[id];
         for (const k of await kegsRes.json()) kegs[k.id] = k;

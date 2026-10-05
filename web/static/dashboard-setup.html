@@ -343,12 +343,13 @@
         toastTimer = setTimeout(() => t.classList.add('is-hidden'), 2500);
       }
 
-      async function post(url, body) {
+      // Saves the settings named in changes; the rest are left as stored.
+      async function saveConfig(changes) {
         try {
-          const res = await fetch(url, {
-            method: 'POST',
+          const res = await fetch('/api/config', {
+            method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
+            body: JSON.stringify(changes),
           });
           if (!res.ok) throw new Error(res.status);
           showToast('Saved', 'success');
@@ -369,7 +370,7 @@
       let themeTimer;
       function saveThemeSoon(delay = 500) {
         clearTimeout(themeTimer);
-        themeTimer = setTimeout(() => post('/api/config/theme', currentTheme()), delay);
+        themeTimer = setTimeout(() => saveConfig({ theme: currentTheme() }), delay);
       }
 
       // ── Live appearance ────────────────────────────────
@@ -439,7 +440,7 @@
         applyAppearance();
         clearTimeout(themeTimer);
         // An empty theme is the defaults, so nothing is pinned to today's.
-        post('/api/config/theme', {});
+        saveConfig({ theme: {} });
       });
 
       // ── Preferences ─────────────────────────────────────
@@ -453,15 +454,20 @@
           b.classList.toggle('is-selected', b.dataset.value === value));
       }
 
-      function savePreference(name) {
-        if (name === 'homePage') return post('/api/config/home-page', { home_page: choice('homePage') });
-        if (name === 'timeFormat') return post('/api/config/time-format', { time_format: choice('timeFormat') });
-        if (name === 'amountDisplay') return post('/api/config/amount-display', { amount_display: choice('amountDisplay') });
+      // The setting a preference control changes, as /api/config names it.
+      function preferenceChange(name) {
+        if (name === 'homePage') return { home_page: choice('homePage') };
+        if (name === 'timeFormat') return { time_format: choice('timeFormat') };
+        if (name === 'amountDisplay') return { amount_display: choice('amountDisplay') };
         if (name === 'minPourUnit') {
           const value = Number($('minPourValue').value);
-          return post('/api/config/min-pour', { value: Number.isFinite(value) && value > 0 ? value : 0, unit: choice('minPourUnit') });
+          return { min_pour: { value: Number.isFinite(value) && value > 0 ? value : 0, unit: choice('minPourUnit') } };
         }
-        return post('/api/config/display-units', { system: choice('unitSystem'), measure: choice('unitMeasure') });
+        return { display_units: { system: choice('unitSystem'), measure: choice('unitMeasure') } };
+      }
+
+      function savePreference(name) {
+        return saveConfig(preferenceChange(name));
       }
 
       document.querySelectorAll('[data-choice]').forEach(group => {
@@ -487,10 +493,8 @@
         $('minPourValue').value = MIN_POUR_DEFAULT;
         clearTimeout(minPourTimer);
         showPreviewAmount();
-        await Promise.all([
-          savePreference('homePage'), savePreference('timeFormat'), savePreference('unitSystem'),
-          savePreference('amountDisplay'), savePreference('minPourUnit'),
-        ]);
+        await saveConfig(Object.assign({},
+          ...['homePage', 'timeFormat', 'unitSystem', 'amountDisplay', 'minPourUnit'].map(preferenceChange)));
       });
 
       // The preview keg is drawn 65% full, so either figure matches it.

@@ -345,8 +345,8 @@
       if (!edits.length || invalid) return;
       $('saveBtn').disabled = true;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/update`, {
-          method: 'POST',
+        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/rows`, {
+          method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ entries: edits }),
         });
@@ -369,8 +369,8 @@
       const what = timestamps.length === 1 ? 'this reading' : `these ${timestamps.length} readings`;
       if (!confirm(`Delete ${what}? Recorded pours are kept. It cannot be undone.`)) return;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/delete`, {
-          method: 'POST',
+        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/rows`, {
+          method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ timestamps }),
         });
@@ -393,7 +393,7 @@
       try {
         const [kegsRes, tf, tapList] = await Promise.all([
           fetch('/api/kegs'),
-          fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
+          fetch('/api/config').then(r => r.json()).catch(() => ({})),
           // Only for naming the scale.
           fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
         ]);

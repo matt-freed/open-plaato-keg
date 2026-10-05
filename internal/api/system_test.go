@@ -64,7 +64,7 @@ func TestSetLogLevel(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "") // so the configured level is the default
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/system/log-level", map[string]string{"level": "DEBUG"})
+	rec := a.do(http.MethodPut, "/api/system/log-level", map[string]string{"level": "DEBUG"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -78,7 +78,7 @@ func TestSetLogLevel(t *testing.T) {
 		t.Errorf("level = %q, configured = %q", body.Level, body.ConfiguredLevel)
 	}
 
-	if rec := a.do(http.MethodPost, "/api/system/log-level", map[string]string{"level": "loud"}); rec.Code != http.StatusBadRequest {
+	if rec := a.do(http.MethodPut, "/api/system/log-level", map[string]string{"level": "loud"}); rec.Code != http.StatusBadRequest {
 		t.Errorf("unknown level: status = %d, want 400", rec.Code)
 	}
 	if a.level.Level() != slog.LevelDebug {

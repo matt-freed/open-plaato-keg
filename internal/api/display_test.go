@@ -18,37 +18,30 @@ func metricVolumeKeg(a *testAPI, id string) *store.Keg {
 
 func setUS(t *testing.T, a *testAPI) {
 	t.Helper()
-	rec := a.do(http.MethodPost, "/api/config/display-units",
-		map[string]string{"system": "us", "measure": "volume"})
+	rec := a.patchConfig("display_units", map[string]string{"system": "us", "measure": "volume"})
 	assertStatus(t, rec, http.StatusOK)
 }
 
 func TestDisplayUnitsEndpointRoundTrip(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodGet, "/api/config/display-units", nil)
-	assertStatus(t, rec, http.StatusOK)
-	var got store.DisplayUnits
-	a.decode(rec, &got)
+	got := a.getConfig().DisplayUnits
 	if got.System != store.DisplaySystemDevice || got.Measure != store.DisplayMeasureDevice {
 		t.Errorf("default = %+v, want both axes following the device", got)
 	}
 
 	setUS(t, a)
 
-	rec = a.do(http.MethodGet, "/api/config/display-units", nil)
-	a.decode(rec, &got)
+	got = a.getConfig().DisplayUnits
 	if got.System != store.DisplaySystemUS || got.Measure != store.DisplayMeasureVolume {
 		t.Errorf("display units = %+v", got)
 	}
 
 	// An unrecognised value falls back to following the device rather than
 	// being stored as-is.
-	rec = a.do(http.MethodPost, "/api/config/display-units",
-		map[string]string{"system": "cubits", "measure": "nonsense"})
+	rec := a.patchConfig("display_units", map[string]string{"system": "cubits", "measure": "nonsense"})
 	assertStatus(t, rec, http.StatusOK)
-	rec = a.do(http.MethodGet, "/api/config/display-units", nil)
-	a.decode(rec, &got)
+	got = a.getConfig().DisplayUnits
 	if got.System != store.DisplaySystemDevice || got.Measure != store.DisplayMeasureDevice {
 		t.Errorf("junk was accepted: %+v", got)
 	}
@@ -163,7 +156,7 @@ func TestHistoryCSVStaysInDeviceUnits(t *testing.T) {
 func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	a := newTestAPI(t)
 
-	rec := a.do(http.MethodPost, "/api/config/theme", map[string]any{
+	rec := a.patchConfig("theme", map[string]any{
 		"accent_color": "#f59e0b",
 		"bg_color":     "#0c0d11",
 		"card_bg":      "#16181f",
@@ -174,10 +167,7 @@ func TestThemeAcceptsTheSettingsPagePayload(t *testing.T) {
 	})
 	assertStatus(t, rec, http.StatusOK)
 
-	rec = a.do(http.MethodGet, "/api/config/theme", nil)
-	assertStatus(t, rec, http.StatusOK)
-	var theme store.Theme
-	a.decode(rec, &theme)
+	theme := a.getConfig().Theme
 	if theme.AccentColor != "#f59e0b" || theme.BgColor != "#0c0d11" || theme.FontFamily != "System" {
 		t.Errorf("theme did not round trip: %+v", theme)
 	}

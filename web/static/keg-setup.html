@@ -800,7 +800,7 @@
         }
       });
 
-      fetch("/api/config/time-format")
+      fetch("/api/config")
         .then(r => r.json())
         .then(tf => { timeFormat = tf.time_format || "12h"; })
         .catch(() => {});
@@ -941,8 +941,26 @@
       }
 
       function sendKegLabel() {
-        const value = document.getElementById("kegLabel").value;
-        sendCommand("label", { value });
+        const label = document.getElementById("kegLabel").value;
+        saveKeg({ label }, "Label saved");
+      }
+
+      // Saves settings kept on the server rather than the device, so they
+      // work whether or not the scale is connected.
+      function saveKeg(changes, message) {
+        const kegId = getSelectedKeg();
+        if (!kegId) return;
+        fetch(`/api/kegs/${encodeURIComponent(kegId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(changes),
+        })
+          .then(async (response) => {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || data.error || response.status);
+            showToast(message, "success");
+          })
+          .catch((err) => showToast(`Error: ${err.message}`, "danger"));
       }
 
       function forgetSelectedScale() {
@@ -956,11 +974,7 @@
           return;
         }
 
-        fetch(`/api/kegs/${encodeURIComponent(kegId)}/delete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({})
-        })
+        fetch(`/api/kegs/${encodeURIComponent(kegId)}`, { method: "DELETE" })
           .then((response) => response.json())
           .then((data) => {
             if (data.status === "ok") {
@@ -1000,21 +1014,9 @@
       }
 
       function saveCO2Capacity() {
-        const kegId = selectedKegId;
-        if (!kegId) { showToast('Select a keg first', 'warning'); return; }
         const value = document.getElementById('co2CapacityInput').value.trim();
         if (!value) { showToast('Enter a capacity value', 'warning'); return; }
-        fetch(`/api/kegs/${kegId}/co2-capacity`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value }),
-        })
-          .then(r => r.json())
-          .then(data => {
-            if (data.status === 'ok') showToast('CO₂ capacity saved', 'success');
-            else showToast(`Error: ${data.error}`, 'danger');
-          })
-          .catch(err => showToast(`Error: ${err.message}`, 'danger'));
+        saveKeg({ co2_capacity: value }, 'CO₂ capacity saved');
       }
 
       function setSensitivity(level) {

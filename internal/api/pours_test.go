@@ -87,10 +87,10 @@ func TestDeletePourOverHTTP(t *testing.T) {
 	var pours []store.Pour
 	a.decode(a.do(http.MethodGet, "/api/pours", nil), &pours)
 
-	path := "/api/pours/" + strconv.FormatInt(pours[0].ID, 10) + "/delete"
-	assertStatus(t, a.do(http.MethodPost, path, nil), http.StatusOK)
-	assertStatus(t, a.do(http.MethodPost, path, nil), http.StatusNotFound)
-	assertStatus(t, a.do(http.MethodPost, "/api/pours/abc/delete", nil), http.StatusNotFound)
+	path := "/api/pours/" + strconv.FormatInt(pours[0].ID, 10)
+	assertStatus(t, a.do(http.MethodDelete, path, nil), http.StatusOK)
+	assertStatus(t, a.do(http.MethodDelete, path, nil), http.StatusNotFound)
+	assertStatus(t, a.do(http.MethodDelete, "/api/pours/abc", nil), http.StatusNotFound)
 
 	a.decode(a.do(http.MethodGet, "/api/pours", nil), &pours)
 	if len(pours) != 0 {
@@ -102,7 +102,7 @@ func TestDeletePourOverHTTP(t *testing.T) {
 func TestClearHistoryKeepsPoursInTheFullList(t *testing.T) {
 	a := newTestAPI(t)
 	pourFrom(a, "keg-1")
-	assertStatus(t, a.do(http.MethodPost, "/api/kegs/keg-1/log/clear", nil), http.StatusOK)
+	assertStatus(t, a.do(http.MethodDelete, "/api/kegs/keg-1/log", nil), http.StatusOK)
 
 	var pours []store.Pour
 	a.decode(a.do(http.MethodGet, "/api/kegs/keg-1/pours", nil), &pours)
@@ -118,23 +118,18 @@ func TestClearHistoryKeepsPoursInTheFullList(t *testing.T) {
 func TestMinPourEndpoint(t *testing.T) {
 	a := newTestAPI(t)
 
-	var got store.MinPour
-	a.decode(a.do(http.MethodGet, "/api/config/min-pour", nil), &got)
-	if got != store.DefaultMinPour {
+	if got := a.getConfig().MinPour; got != store.DefaultMinPour {
 		t.Errorf("default = %+v, want %+v", got, store.DefaultMinPour)
 	}
 
-	rec := a.do(http.MethodPost, "/api/config/min-pour", map[string]any{"value": -5, "unit": "gallons"})
+	rec := a.patchConfig("min_pour", map[string]any{"value": -5, "unit": "gallons"})
 	assertStatus(t, rec, http.StatusOK)
-	a.decode(a.do(http.MethodGet, "/api/config/min-pour", nil), &got)
-	if got != (store.MinPour{Value: 0, Unit: store.MinPourUnitOz}) {
+	if got := a.getConfig().MinPour; got != (store.MinPour{Value: 0, Unit: store.MinPourUnitOz}) {
 		t.Errorf("junk normalised to %+v, want 0 oz", got)
 	}
 
-	assertStatus(t, a.do(http.MethodPost, "/api/config/min-pour", map[string]any{"value": 60, "unit": "ml"}), http.StatusOK)
-	var cfg store.AppConfig
-	a.decode(a.do(http.MethodGet, "/api/config", nil), &cfg)
-	if cfg.MinPour != (store.MinPour{Value: 60, Unit: store.MinPourUnitMl}) {
+	assertStatus(t, a.patchConfig("min_pour", map[string]any{"value": 60, "unit": "ml"}), http.StatusOK)
+	if cfg := a.getConfig(); cfg.MinPour != (store.MinPour{Value: 60, Unit: store.MinPourUnitMl}) {
 		t.Errorf("config MinPour = %+v, want 60 ml", cfg.MinPour)
 	}
 }
@@ -167,7 +162,7 @@ func TestKegsCarryTheLatestPour(t *testing.T) {
 	}
 
 	// Clearing the history clears the tile's last pour too.
-	assertStatus(t, a.do(http.MethodPost, "/api/kegs/keg-1/log/clear", nil), http.StatusOK)
+	assertStatus(t, a.do(http.MethodDelete, "/api/kegs/keg-1/log", nil), http.StatusOK)
 	k = store.Keg{}
 	a.decode(a.do(http.MethodGet, "/api/kegs/keg-1", nil), &k)
 	if k.LatestPour != nil {

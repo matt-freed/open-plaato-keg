@@ -78,7 +78,7 @@ func TestUpdateLogConvertsToDeviceUnits(t *testing.T) {
 	base, _ := seedEditLog(t, a, k, 2)
 	setUS(t, a)
 
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/update", map[string]any{
+	rec := a.do(http.MethodPatch, "/api/kegs/keg-1/log/rows", map[string]any{
 		"entries": []map[string]any{{
 			"timestamp":       base.Unix(),
 			"amount_left":     5.0,  // gal
@@ -129,22 +129,22 @@ func TestUpdateLogRejectsBadEdits(t *testing.T) {
 		"not a number":  map[string]any{"entries": []any{map[string]any{"timestamp": ts, "amount_left": "1"}}},
 		"not a boolean": map[string]any{"entries": []any{map[string]any{"timestamp": ts, "is_pouring": 1}}},
 	} {
-		rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/update", body)
+		rec := a.do(http.MethodPatch, "/api/kegs/keg-1/log/rows", body)
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: status %d, want 400", name, rec.Code)
 		}
 	}
 	// JSON cannot carry NaN or infinity; an overflowing number is refused.
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/update", nil)
+	rec := a.do(http.MethodPatch, "/api/kegs/keg-1/log/rows", nil)
 	assertStatus(t, rec, http.StatusBadRequest)
 	req := `{"entries":[{"timestamp":` + strconv.FormatInt(ts, 10) + `,"amount_left":1e999}]}`
-	rec = a.doRaw(http.MethodPost, "/api/kegs/keg-1/log/update", req)
+	rec = a.doRaw(http.MethodPatch, "/api/kegs/keg-1/log/rows", req)
 	assertStatus(t, rec, http.StatusBadRequest)
 
-	rec = a.do(http.MethodPost, "/api/kegs/keg-1/log/update",
+	rec = a.do(http.MethodPatch, "/api/kegs/keg-1/log/rows",
 		map[string]any{"entries": []any{map[string]any{"timestamp": ts + 7, "amount_left": 1}}})
 	assertStatus(t, rec, http.StatusConflict)
-	rec = a.do(http.MethodPost, "/api/kegs/nope/log/update",
+	rec = a.do(http.MethodPatch, "/api/kegs/nope/log/rows",
 		map[string]any{"entries": []any{map[string]any{"timestamp": ts}}})
 	assertStatus(t, rec, http.StatusNotFound)
 }
@@ -154,7 +154,7 @@ func TestDeleteLogEntriesEndpoint(t *testing.T) {
 	k := metricVolumeKeg(a, "keg-1")
 	base, window := seedEditLog(t, a, k, 3)
 
-	rec := a.do(http.MethodPost, "/api/kegs/keg-1/log/delete",
+	rec := a.do(http.MethodDelete, "/api/kegs/keg-1/log/rows",
 		map[string]any{"timestamps": []int64{base.Unix(), base.Unix() + 60}})
 	assertStatus(t, rec, http.StatusOK)
 	var resp struct {
@@ -170,9 +170,9 @@ func TestDeleteLogEntriesEndpoint(t *testing.T) {
 		t.Errorf("%d entries left, want 1", len(page.Entries))
 	}
 
-	assertStatus(t, a.do(http.MethodPost, "/api/kegs/keg-1/log/delete",
+	assertStatus(t, a.do(http.MethodDelete, "/api/kegs/keg-1/log/rows",
 		map[string]any{"timestamps": []int64{}}), http.StatusBadRequest)
-	assertStatus(t, a.do(http.MethodPost, "/api/kegs/nope/log/delete",
+	assertStatus(t, a.do(http.MethodDelete, "/api/kegs/nope/log/rows",
 		map[string]any{"timestamps": []int64{1}}), http.StatusNotFound)
 }
 
