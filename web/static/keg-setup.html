@@ -609,6 +609,20 @@
               </tr>`;
       }
 
+      // A reading the device never sent is N/A. Only a missing value counts:
+      // 0 is a genuine reading, such as a 0 °C minimum temperature.
+      const present = v => v != null && v !== "";
+      const orNA = v => present(v) ? v : "N/A";
+
+      // "weight" or "volume" from the scale's own measure setting (pin 75),
+      // or, when it never reported one, from its derived unit; null if
+      // neither says. The unit alone cannot tell for a CO₂ scale.
+      function measureOf(data) {
+        const fromPin = { 1: "weight", 2: "volume" }[data.measure_unit];
+        if (fromPin) return fromPin;
+        return { lbs: "weight", kg: "weight", gal: "volume", litre: "volume" }[data.beer_left_unit] ?? null;
+      }
+
       function updateSettingsDisplay(data) {
         const kegModeMap = { 1: "Beer", 2: "CO₂" };
         const sensMap = { 1: "Very Low", 2: "Low", 3: "Medium", 4: "High" };
@@ -617,11 +631,12 @@
         // Unit system: 1 = Metric, 2 = US
         const unitSystemDisplay = unitMap[data.unit] || "Not set";
 
-        // Measure mode based on beer_left_unit: lbs/kg = Weight, gal/litre = Volume
-        const beerLeftUnit = data.beer_left_unit;
-        const measureModeDisplay = (beerLeftUnit === "lbs" || beerLeftUnit === "kg") ? `Weight (${beerLeftUnit})`
-                                 : (beerLeftUnit === "gal" || beerLeftUnit === "litre") ? `Volume (${beerLeftUnit})`
-                                 : "Not set";
+        // A CO₂ scale weighs whatever its measure is set to, so its own
+        // reading's unit is shown alongside only for beer.
+        const measure = measureOf(data);
+        const measureNote = data.keg_mode === 2 ? "CO₂ is always weighed" : data.beer_left_unit;
+        const measureModeDisplay = !measure ? "Not set"
+          : `${measure === "weight" ? "Weight" : "Volume"} (${measureNote})`;
 
         const html = `
           <table class="table is-fullwidth is-hoverable">
@@ -644,15 +659,15 @@
               </tr>
               <tr>
                 <td><strong>Temperature</strong></td>
-                <td>${esc(data.keg_temperature_string || data.keg_temperature || "N/A")}</td>
+                <td>${esc(orNA(present(data.keg_temperature_string) ? data.keg_temperature_string : data.keg_temperature))}</td>
               </tr>
               <tr>
                 <td><strong>Chip Temperature</strong></td>
-                <td>${esc(data.chip_temperature_string || "N/A")}</td>
+                <td>${esc(orNA(data.chip_temperature_string))}</td>
               </tr>
               <tr>
                 <td><strong>Amount Left</strong></td>
-                <td>${esc(data.amount_left || "N/A")} ${esc(data.beer_left_unit || "")}</td>
+                <td>${esc(present(data.amount_left) ? `${data.amount_left} ${data.beer_left_unit ?? ""}`.trim() : "N/A")}</td>
               </tr>
             </tbody>
           </table>
@@ -662,11 +677,11 @@
               ${connectionRows(data)}
               <tr>
                 <td><strong>WiFi Signal</strong></td>
-                <td>${esc(data.wifi_signal_strength || "N/A")}</td>
+                <td>${esc(orNA(data.wifi_signal_strength))}</td>
               </tr>
               <tr>
                 <td><strong>Firmware Version</strong></td>
-                <td>${esc(data.firmware_version || "N/A")}</td>
+                <td>${esc(orNA(data.firmware_version))}</td>
               </tr>
               <tr>
                 <td><strong>Leak Detection</strong></td>
@@ -674,11 +689,11 @@
               </tr>
               <tr>
                 <td><strong>Min Temperature</strong></td>
-                <td>${esc(data.min_temperature || "N/A")}</td>
+                <td>${esc(orNA(data.min_temperature))}</td>
               </tr>
               <tr>
                 <td><strong>Max Temperature</strong></td>
-                <td>${esc(data.max_temperature || "N/A")}</td>
+                <td>${esc(orNA(data.max_temperature))}</td>
               </tr>
               <tr>
                 <td><strong>Device</strong></td>
@@ -731,8 +746,7 @@
         select("unit", { 1: "metric", 2: "us" }[data.unit]);
         updateUnitLabels(data.unit ?? 1);
 
-        // Measure mode follows beer_left_unit: lbs/kg = Weight, gal/litre = Volume
-        select("measure", { lbs: "weight", kg: "weight", gal: "volume", litre: "volume" }[data.beer_left_unit]);
+        select("measure", measureOf(data));
 
         // Keg mode: 1 = Beer, 2 = CO2
         select("kegMode", { 1: "beer", 2: "co2" }[data.keg_mode]);
