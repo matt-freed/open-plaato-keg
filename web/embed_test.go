@@ -373,3 +373,47 @@ func TestPageTitlesMatchHeadings(t *testing.T) {
 		}
 	}
 }
+
+// buttonClasses is the button set documented at the top of the Buttons
+// section in style.css: the variants, then the layout classes a page may add.
+var buttonClasses = map[string]bool{
+	"button": true, "is-primary": true, "is-danger": true, "is-small": true,
+	"is-fullwidth": true, "is-static": true, "is-selected": true,
+	"sensitivity-btn": true, "scale-option": true, "return-link": true,
+}
+
+// A button uses only the documented set, so a class that promises a look
+// style.css does not give it (is-info, is-warning, ...) cannot creep back.
+func TestButtonsUseTheDocumentedSet(t *testing.T) {
+	static := Static()
+	classAttr := regexp.MustCompile(`class="([^"$]*)"`)
+	entries, err := fs.ReadDir(static, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".html") && !strings.HasSuffix(name, ".js") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, m := range classAttr.FindAllStringSubmatch(string(data), -1) {
+			classes := strings.Fields(m[1])
+			isButton := false
+			for _, c := range classes {
+				isButton = isButton || c == "button"
+			}
+			if !isButton {
+				continue
+			}
+			for _, c := range classes {
+				if !buttonClasses[c] {
+					t.Errorf("%s: button class %q is not in the documented set (class=%q)", name, c, m[1])
+				}
+			}
+		}
+	}
+}

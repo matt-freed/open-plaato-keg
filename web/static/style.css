@@ -108,7 +108,6 @@ hr {
    weight and case rather than from greying out what the user needs to read. */
 .box .has-text-grey, .card .has-text-grey { color: var(--text); }
 .has-text-danger { color: var(--danger); }
-.has-text-warning-dark { color: var(--warn); }
 /* Marks a setting that is experimental or needs care. */
 .req { color: var(--warn); }
 
@@ -245,6 +244,16 @@ hr {
 .field.has-addons .control:last-child .button { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
 /* ─── Buttons ────────────────────────────────── */
+/* The whole set, and a page uses nothing else (web/embed_test.go checks):
+     .button               an ordinary button, which most are
+     .button.is-primary    the main action of a form or card: Save, Set
+     .button.is-danger     anything that deletes, forgets, clears or resets
+     .is-small             toolbars and compact rows
+     .is-fullwidth         fills its column
+     .button.is-static     a unit label beside an input, not clickable
+     .buttons.has-addons   a set of choices; the chosen one is .is-selected
+   A few pages add a layout class of their own (.sensitivity-btn,
+   .scale-option, .return-link). Those change the shape, never the meaning. */
 .button {
   display: inline-flex;
   align-items: center;
@@ -275,16 +284,6 @@ hr {
 }
 .button.is-primary:hover { background: color-mix(in srgb, var(--action) 85%, white); }
 
-/* Quiet buttons for everything that is not the page's main action. */
-.button.is-light, .button.is-info, .button.is-warning, .button.is-success {
-  background: var(--tile-2);
-  border-color: var(--line-strong);
-  color: var(--text);
-}
-.button.is-light:hover, .button.is-info:hover, .button.is-warning:hover, .button.is-success:hover {
-  background: var(--tile-3);
-}
-
 .button.is-danger {
   background: color-mix(in srgb, var(--danger) 14%, transparent);
   border-color: color-mix(in srgb, var(--danger) 35%, transparent);
@@ -302,15 +301,12 @@ hr {
 .button.is-static:hover { background: var(--tile-2); }
 
 .button.is-small { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
-.button.is-medium { padding: 0.7rem 1.4rem; font-size: 0.95rem; }
 .button.is-fullwidth { display: flex; width: 100%; }
-.button.is-loading { opacity: 0.6; pointer-events: none; }
 
 .buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 /* A set of choices, drawn as a segmented control like the colour picker's
-   SRM / Preset switch. The chosen one carries is-selected (and, on some
-   pages, is-primary or is-info, which here look the same). */
+   SRM / Preset switch. The chosen one carries is-selected. */
 .buttons.has-addons {
   display: inline-flex;
   gap: 2px;
@@ -330,15 +326,15 @@ hr {
 .buttons.has-addons .button:hover,
 .sensitivity-buttons .button:hover { color: var(--text); background: var(--overlay); }
 .buttons.has-addons .button.is-selected,
-.buttons.has-addons .button.is-primary,
-.buttons.has-addons .button.is-info,
 .sensitivity-buttons .button.is-selected {
   background: var(--overlay-strong);
   color: var(--text);
 }
 
 /* ─── Scale sensitivity ──────────────────────── */
+/* The same choices as .has-addons, laid out as a grid of four. */
 .sensitivity-buttons {
+  margin-bottom: 0.35rem;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 2px;

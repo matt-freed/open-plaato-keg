@@ -453,7 +453,15 @@ The pages are styled as one application, in the tap list's look:
 - The dragging and menu styles are in `tiles.css`.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
-  tables and toasts.
+  tables and toasts. Buttons come from one small set, listed at the top of its
+  Buttons section: plain, `is-primary` for a form's main action, `is-danger`
+  for anything destructive, `is-small`, `is-fullwidth`, `is-static` for a unit
+  label, and `.buttons.has-addons` for a set of choices with `is-selected` on
+  the chosen one. A page may add a layout class (`sensitivity-btn`,
+  `scale-option`, `return-link`) but nothing else; `TestButtonsUseTheDocumentedSet`
+  in `web/embed_test.go` fails otherwise. Choice groups carry `data-choice`
+  and are marked by a page's `select(name, value)`, on Dashboard Setup and
+  Keg Scale Setup alike.
 
 Tap Setup and Keg Scale Setup share one pattern: a list of taps or scales in a
 single centred column, where choosing one opens its editor as a view of its

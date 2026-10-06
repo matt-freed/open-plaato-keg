@@ -66,7 +66,7 @@
           <!-- Units Section -->
           <div class="box section-box">
             <h2 class="title is-4">Units & Mode</h2>
-            <p class="help" style="margin-bottom: 1rem;">
+            <p class="help mb-4">
               These are written to the scale itself: they change what it reports, what is
               stored, and what is forwarded to BarHelper. Every value on this page is in the
               scale&rsquo;s own units. To change only how readings are shown in the UI, use
@@ -79,11 +79,11 @@
                   <label class="label">Unit System</label>
                   <p class="help">Metric or US units</p>
                   <div class="control">
-                    <div class="buttons has-addons">
-                      <button class="button unit-btn" id="unitMetric" data-value="metric" onclick="setUnit('metric')">
+                    <div class="buttons has-addons" data-choice="unit">
+                      <button class="button" type="button" data-value="metric" onclick="setUnit('metric')">
                         <span>Metric</span>
                       </button>
-                      <button class="button unit-btn" id="unitUS" data-value="us" onclick="setUnit('us')">
+                      <button class="button" type="button" data-value="us" onclick="setUnit('us')">
                         <span>US</span>
                       </button>
                     </div>
@@ -96,11 +96,11 @@
                   <label class="label">Measure Mode</label>
                   <p class="help">Display by weight or volume</p>
                   <div class="control">
-                    <div class="buttons has-addons">
-                      <button class="button measure-btn" id="measureWeight" data-value="weight" onclick="setMeasureUnit('weight')">
+                    <div class="buttons has-addons" data-choice="measure">
+                      <button class="button" type="button" data-value="weight" onclick="setMeasureUnit('weight')">
                         <span>Weight</span>
                       </button>
-                      <button class="button measure-btn" id="measureVolume" data-value="volume" onclick="setMeasureUnit('volume')">
+                      <button class="button" type="button" data-value="volume" onclick="setMeasureUnit('volume')">
                         <span>Volume</span>
                       </button>
                     </div>
@@ -113,14 +113,14 @@
               <label class="label">Keg Scale Sensitivity <span class="req">*</span></label>
               <p class="help">Higher = detects smaller pours</p>
               <div class="control">
-                <div class="sensitivity-buttons">
-                  <button class="button sensitivity-btn" id="sens1" data-value="1" onclick="setSensitivity(1)" title="Very Low">▂</button>
-                  <button class="button sensitivity-btn" id="sens2" data-value="2" onclick="setSensitivity(2)" title="Low">▃</button>
-                  <button class="button sensitivity-btn" id="sens3" data-value="3" onclick="setSensitivity(3)" title="Medium">▅</button>
-                  <button class="button sensitivity-btn" id="sens4" data-value="4" onclick="setSensitivity(4)" title="High">█</button>
+                <div class="sensitivity-buttons" data-choice="sensitivity">
+                  <button class="button sensitivity-btn" type="button" data-value="1" onclick="setSensitivity(1)" title="Very Low">▂</button>
+                  <button class="button sensitivity-btn" type="button" data-value="2" onclick="setSensitivity(2)" title="Low">▃</button>
+                  <button class="button sensitivity-btn" type="button" data-value="3" onclick="setSensitivity(3)" title="Medium">▅</button>
+                  <button class="button sensitivity-btn" type="button" data-value="4" onclick="setSensitivity(4)" title="High">█</button>
                 </div>
               </div>
-              <p class="help has-text-warning-dark" style="margin-top: 0.5rem;">
+              <p class="help is-warning">
                 <span class="req">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
               </p>
             </div>
@@ -136,7 +136,7 @@
                   <label class="label">Tare Keg Scale</label>
                   <p class="help">Zero the scale with an empty keg on it</p>
                   <div class="control">
-                    <button class="button is-warning" id="tareBtn" onclick="sendTare()">
+                    <button class="button" type="button" id="tareBtn" onclick="sendTare()">
                       <span>Tare</span>
                     </button>
                   </div>
@@ -148,7 +148,7 @@
                   <label class="label">Set Empty Keg Weight</label>
                   <p class="help">Store the current weight as empty keg reference</p>
                   <div class="control">
-                    <button class="button is-info" id="emptyKegBtn" onclick="sendEmptyKeg()">
+                    <button class="button" type="button" id="emptyKegBtn" onclick="sendEmptyKeg()">
                       <span>Set Empty</span>
                     </button>
                   </div>
@@ -160,7 +160,7 @@
                   <label class="label">Reset Last Pour</label>
                   <p class="help">Clear a spurious last pour reading (e.g. from vibration)</p>
                   <div class="control">
-                    <button class="button is-danger is-light" onclick="resetLastPour()">
+                    <button class="button is-danger" type="button" onclick="resetLastPour()">
                       <span>Reset</span>
                     </button>
                   </div>
@@ -246,13 +246,13 @@
               <label class="label">Forget Saved Keg Scale</label>
               <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID, local settings and all of its history. This cannot be undone. The scale can reconnect and create a fresh record later, with empty history. To keep the scale and only remove its readings, use Clear history on the <a href="/history.html">History</a> page.</p>
               <div class="control">
-                <button class="button is-danger is-light" type="button" onclick="forgetSelectedScale()">
+                <button class="button is-danger" type="button" onclick="forgetSelectedScale()">
                   Forget Keg Scale
                 </button>
               </div>
             </div>
 
-            <p class="help" style="margin-bottom: 1rem;">
+            <p class="help mb-4">
               Beverage details and the date kegged are managed from <a href="/taplist-setup.html">Tap Setup</a>.
             </p>
 
@@ -282,18 +282,18 @@
               <label class="label">Keg Mode</label>
               <p class="help">Beer or CO₂ monitoring</p>
               <div class="control">
-                <div class="buttons has-addons">
-                  <button class="button kegmode-btn" id="kegModeBeer" data-value="beer" onclick="setKegMode('beer')">
+                <div class="buttons has-addons" data-choice="kegMode">
+                  <button class="button" type="button" data-value="beer" onclick="setKegMode('beer')">
                     <span>Beer</span>
                   </button>
-                  <button class="button kegmode-btn" id="kegModeCO2" data-value="co2" onclick="setKegMode('co2')">
+                  <button class="button" type="button" data-value="co2" onclick="setKegMode('co2')">
                     <span>CO₂</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            <div id="co2CapacityField" class="field" style="display:none; margin-top:1rem;">
+            <div id="co2CapacityField" class="field" hidden>
               <label class="label">CO₂ Cylinder Capacity</label>
               <p class="help">Total weight of a full CO₂ cylinder (kg or lbs, matching your unit setting). Used to track how much CO₂ is remaining.</p>
               <div class="control">
@@ -494,7 +494,7 @@
           document.getElementById(id).value = "";
         }
         document.getElementById("currentSettings").innerHTML = '<p class="has-text-grey">Loading…</p>';
-        document.getElementById("co2CapacityField").style.display = "none";
+        document.getElementById("co2CapacityField").hidden = true;
         clearActiveButtons();
         updateUnitLabels("1");
       }
@@ -726,47 +726,36 @@
         document.getElementById("currentSettings").innerHTML = html;
       }
 
+      // Marks the button in a data-choice group whose data-value is value;
+      // a value the group does not have leaves none marked.
+      function select(name, value) {
+        document.querySelectorAll(`[data-choice="${name}"] .button`).forEach(b =>
+          b.classList.toggle("is-selected", b.dataset.value === String(value)));
+      }
+
       function clearActiveButtons() {
-        document.querySelectorAll(".unit-btn, .measure-btn, .kegmode-btn, .sensitivity-btn")
-          .forEach(btn => btn.classList.remove("is-primary", "is-selected"));
+        document.querySelectorAll("[data-choice] .button")
+          .forEach(btn => btn.classList.remove("is-selected"));
       }
 
       function highlightCurrentSettings(data) {
-        clearActiveButtons();
-
         // Unit system: 1 = Metric, 2 = US
-        if (data.unit === 1) {
-          document.getElementById("unitMetric")?.classList.add("is-primary", "is-selected");
-        }
-        if (data.unit === 2) {
-          document.getElementById("unitUS")?.classList.add("is-primary", "is-selected");
-        }
-
+        select("unit", { 1: "metric", 2: "us" }[data.unit]);
         updateUnitLabels(data.unit ?? 1);
 
-        const beerLeftUnit = data.beer_left_unit;
+        // Measure mode follows beer_left_unit: lbs/kg = Weight, gal/litre = Volume
+        select("measure", { lbs: "weight", kg: "weight", gal: "volume", litre: "volume" }[data.beer_left_unit]);
 
-        // Measure mode based on beer_left_unit: lbs/kg = Weight, gal/litre = Volume
-        if (beerLeftUnit === "lbs" || beerLeftUnit === "kg") {
-          document.getElementById("measureWeight")?.classList.add("is-primary", "is-selected");
-        }
-        if (beerLeftUnit === "gal" || beerLeftUnit === "litre") {
-          document.getElementById("measureVolume")?.classList.add("is-primary", "is-selected");
-        }
-
-        // Keg mode
-        if (data.keg_mode === 1) document.getElementById("kegModeBeer")?.classList.add("is-primary", "is-selected");
-        if (data.keg_mode === 2) document.getElementById("kegModeCO2")?.classList.add("is-primary", "is-selected");
+        // Keg mode: 1 = Beer, 2 = CO2
+        select("kegMode", { 1: "beer", 2: "co2" }[data.keg_mode]);
         const co2Field = document.getElementById('co2CapacityField');
-        if (co2Field) co2Field.style.display = data.keg_mode === 2 ? 'block' : 'none';
+        if (co2Field) co2Field.hidden = data.keg_mode !== 2;
         if (data.co2_capacity) {
           const cap = document.getElementById('co2CapacityInput');
           if (cap && document.activeElement !== cap) cap.value = data.co2_capacity;
         }
 
-        // Sensitivity
-        const sensId = `sens${data.sensitivity}`;
-        document.getElementById(sensId)?.classList.add("is-primary", "is-selected");
+        select("sensitivity", data.sensitivity);
       }
 
       liveUpdates(msg => {
@@ -944,7 +933,7 @@
 
       function setKegMode(value) {
         sendCommand("keg-mode", { value });
-        document.getElementById('co2CapacityField').style.display = value === 'co2' ? 'block' : 'none';
+        document.getElementById('co2CapacityField').hidden = value !== 'co2';
       }
 
       function saveCO2Capacity() {
