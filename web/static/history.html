@@ -365,9 +365,16 @@
     // ── Figures ─────────────────────────────────────
     // Pours are detected and stored by the server, so the page only counts
     // them. A pour's size arrives already in a pour-sized display unit.
-    function pourTotal(list) {
-      const unit = list[0]?.display?.unit ?? '';
-      return { total: list.reduce((s, p) => s + (p.display?.amount ?? 0), 0), unit };
+    // One total per display unit, in the order first seen. A scale switched
+    // between unit systems within the range pours in both oz and ml, which
+    // are never added together, as All Pours does.
+    function pourTotals(list) {
+      const totals = new Map();
+      for (const p of list) {
+        if (!p.display) continue;
+        totals.set(p.display.unit, (totals.get(p.display.unit) ?? 0) + p.display.amount);
+      }
+      return [...totals].map(([unit, amount]) => ({ amount, unit }));
     }
 
     const pourSize = p => p.display ? `${Math.round(p.display.amount)} ${p.display.unit}` : '—';
@@ -381,7 +388,7 @@
 
     function renderStats(keg) {
       const u = units(keg);
-      const { total, unit: pourUnit } = pourTotal(pours);
+      const totals = pourTotals(pours);
       pourPoints = pours.map(p => ({ pour: p, entry: nearestEntry(p.ended_at * 1000) })).filter(pp => pp.entry);
       const temps = entries.map(e => e.keg_temperature).filter(Number.isFinite);
       // What is left now is the keg's current reading. The last entry of a
@@ -398,7 +405,10 @@
           <span class="stat-label">${esc(label)}</span>
         </div>`;
       $('stats').innerHTML = [
-        stat(pours.length ? String(Math.round(total)) : '0', pourUnit, 'Poured'),
+        totals.length === 1
+          ? stat(String(Math.round(totals[0].amount)), totals[0].unit, 'Poured')
+          : stat(totals.map(t => `${Math.round(t.amount)}<small>${esc(t.unit)}</small>`).join(' + ') || '0',
+              '', 'Poured'),
         stat(String(pours.length), '', pours.length === 1 ? 'Pour' : 'Pours'),
         stat(fmt(leftNow, 2), u.amount,
           Number.isFinite(pctNow) ? `Left now · ${Math.round(pctNow)}%` : 'Left now'),

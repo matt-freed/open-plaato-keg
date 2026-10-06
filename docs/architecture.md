@@ -532,7 +532,9 @@ readout by 128 in the browser; the figures and the Pours table stay as they are.
 Its poured and pours figures, the pour markers on the amount chart and the
 Pours table below the charts all come from the stored pours in
 `/api/kegs/{id}/pours`; a marker sits at the pour's end time, on the nearest
-logged reading. "Left now" is the keg's current reading, fetched with each
+logged reading. The poured figure is totalled per display unit by `pourTotals`,
+so a range in which the scale changed unit system reads "257 oz + 9690 ml"
+rather than adding the two. "Left now" is the keg's current reading, fetched with each
 range, rather than the last point, which on a long range is an average. Each
 row of the table can be deleted.
 Clear history sends `DELETE /api/kegs/{id}/log`, which `handleClearKegLog`
