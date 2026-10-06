@@ -406,7 +406,7 @@ Configure menu, and marks the current page. All Pours
 has no link of its own; it is reached from History, which stays marked there. Pages load
 it in `<head>` without `defer`, so the element is defined before the parser
 reaches it. The tap list sets the beer count beside its title through the
-element's `count` property.
+element's `count` property; it counts only the taps above the Empty section.
 
 The pages are styled as one application, in the tap list's look:
 

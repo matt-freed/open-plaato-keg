@@ -222,10 +222,8 @@
       // the drop renders instead.
       if (gestures.active) { renderPending = true; return; }
 
-      document.querySelector('site-header').count =
-        taps.length ? `${taps.length} ${taps.length === 1 ? 'beer' : 'beers'}` : '';
-
       if (!taps.length) {
+        showBeerCount(0);
         grid.replaceChildren();
         emptyGrid.replaceChildren();
         emptySection.hidden = true;
@@ -248,6 +246,14 @@
       placeTiles(grid, full);
       placeTiles(emptyGrid, empty);
       emptySection.hidden = !empty.length;
+      showBeerCount(full.length);
+    }
+
+    // The count beside the title is the beers that can be poured, so taps in
+    // the Empty section are left out. A keg emptying or being refilled moves
+    // its tile between sections, which re-renders, so the count follows.
+    function showBeerCount(n) {
+      document.querySelector('site-header').count = n ? `${n} ${n === 1 ? 'beer' : 'beers'}` : '';
     }
 
     // placeTiles puts tiles into a grid in order. Only nodes whose position
