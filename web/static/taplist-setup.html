@@ -34,7 +34,7 @@
     <!-- Editor view -->
     <div id="editView" hidden>
       <div class="back-links">
-        <a class="back-link" href="#">← All taps</a>
+        <a class="back-link" data-list-link href="#">← All taps</a>
         <a class="back-link return-link" hidden></a>
       </div>
         <div class="box">
@@ -149,7 +149,7 @@
 
           <div class="form-actions">
             <button class="button is-primary" onclick="saveTap()">Save Tap</button>
-            <a class="button" href="#">Cancel</a>
+            <a class="button" id="cancelLink" href="#">Cancel</a>
           </div>
         </div>
     </div>
@@ -289,25 +289,30 @@
       window.scrollTo(0, 0);
     }
 
-    // A page opened from a tile's menu also links back to the screen it came
-    // from, named by ?from= so a reload keeps the link.
+    // A page opened from a tile's menu returns to the screen it came from,
+    // named by ?from= so a reload keeps it. Its back link replaces the one to
+    // the list, and Cancel, Save and Delete go there too.
+    const returnTarget = {
+      taplist: { href: '/taplist.html', label: '← Tap List' },
+      kegs: { href: '/kegs.html', label: '← Keg Scales' },
+    }[new URLSearchParams(location.search).get('from')];
+
     function showReturnLinks() {
-      const target = {
-        taplist: { href: '/taplist.html', label: '← Tap List' },
-        kegs: { href: '/kegs.html', label: '← Keg Scales' },
-      }[new URLSearchParams(location.search).get('from')];
+      if (!returnTarget) return;
+      for (const link of document.querySelectorAll('[data-list-link]')) link.hidden = true;
       for (const link of document.querySelectorAll('.return-link')) {
-        link.hidden = !target;
-        if (target) {
-          link.href = target.href;
-          link.textContent = target.label;
-        }
+        link.hidden = false;
+        link.href = returnTarget.href;
+        link.textContent = returnTarget.label;
       }
+      document.getElementById('cancelLink').href = returnTarget.href;
     }
 
-    // backToList returns to the list, as the editor's Back link does.
+    // backToList leaves the editor after a save or delete: for the screen the
+    // page was opened from, or else the list.
     function backToList() {
-      if (location.hash) location.hash = '';
+      if (returnTarget) location.href = returnTarget.href;
+      else if (location.hash) location.hash = '';
       else showView();
     }
 

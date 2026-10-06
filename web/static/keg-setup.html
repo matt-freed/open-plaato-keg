@@ -50,7 +50,7 @@
           <!-- Editor view -->
           <div id="editView" hidden>
           <div class="back-links">
-            <a class="back-link" href="#">← All keg scales</a>
+            <a class="back-link" data-list-link href="#">← All keg scales</a>
             <a class="back-link return-link" hidden></a>
           </div>
           <div class="edit-head">
@@ -307,7 +307,7 @@
 
           <!-- The settings run long, so the way back is at the bottom too. -->
           <div class="buttons">
-            <a class="button" href="#">← All keg scales</a>
+            <a class="button" data-list-link href="#">← All keg scales</a>
             <a class="button return-link" hidden></a>
           </div>
           </div>
@@ -454,24 +454,27 @@
         window.scrollTo(0, 0);
       }
 
-      // A page opened from a tile"s menu also links back to the screen it came
-      // from, named by ?from= so a reload keeps the link.
+      // A page opened from a tile's menu returns to the screen it came from,
+      // named by ?from= so a reload keeps it. Its back links replace the ones
+      // to the list, and forgetting a scale goes there too.
+      const returnTarget = {
+        taplist: { href: "/taplist.html", label: "← Tap List" },
+        kegs: { href: "/kegs.html", label: "← Keg Scales" },
+      }[new URLSearchParams(location.search).get("from")];
+
       function showReturnLinks() {
-        const target = {
-          taplist: { href: "/taplist.html", label: "← Tap List" },
-          kegs: { href: "/kegs.html", label: "← Keg Scales" },
-        }[new URLSearchParams(location.search).get("from")];
+        if (!returnTarget) return;
+        for (const link of document.querySelectorAll("[data-list-link]")) link.hidden = true;
         for (const link of document.querySelectorAll(".return-link")) {
-          link.hidden = !target;
-          if (target) {
-            link.href = target.href;
-            link.textContent = target.label;
-          }
+          link.hidden = false;
+          link.href = returnTarget.href;
+          link.textContent = returnTarget.label;
         }
       }
 
       function backToList() {
-        if (location.hash) location.hash = "";
+        if (returnTarget) location.href = returnTarget.href;
+        else if (location.hash) location.hash = "";
         else showView();
       }
 
