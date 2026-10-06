@@ -154,18 +154,6 @@
                   </div>
                 </div>
               </div>
-
-              <div class="column">
-                <div class="field">
-                  <label class="label">Reset Last Pour</label>
-                  <p class="help">Clear a spurious last pour reading (e.g. from vibration)</p>
-                  <div class="control">
-                    <button class="button is-danger" type="button" onclick="resetLastPour()">
-                      <span>Reset</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div class="field">
@@ -817,10 +805,6 @@
 
       function sendEmptyKeg() {
         sendCommandWithRelease("empty-keg", "empty-keg-release", "emptyKegBtn");
-      }
-
-      function resetLastPour() {
-        sendCommand("reset-last-pour");
       }
 
       // Momentary commands: the press, then a second later the release the

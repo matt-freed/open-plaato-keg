@@ -233,7 +233,6 @@ are changed with `PATCH /api/kegs/{id}`.
 | `/api/kegs/{id}/measure-unit` | `{"value": "weight"\|"volume"}` | |
 | `/api/kegs/{id}/keg-mode` | `{"value": "beer"\|"co2"}` | |
 | `/api/kegs/{id}/sensitivity` | `{"value": "very_low"\|"low"\|"medium"\|"high"}` | |
-| `/api/kegs/{id}/reset-last-pour` | — | Stored here only |
 
 Numeric values may be sent as JSON numbers or as strings.
 

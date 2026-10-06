@@ -267,11 +267,6 @@ func (s *Server) mountKegCommands(r chi.Router) {
 		"medium": 3, "3": 3,
 		"high": 4, "4": 4,
 	}, func(id string, v int) error { return s.commander.SetSensitivity(id, v) }))
-
-	// Kept here, since the device has no pin for it. The label and CO2
-	// capacity are settings rather than actions, so they are changed through
-	// PATCH /api/kegs/{id} instead.
-	r.Post("/reset-last-pour", s.handleResetLastPour)
 }
 
 // kegAction builds a handler for a command that takes no value.
@@ -341,16 +336,6 @@ func (s *Server) updateKeg(w http.ResponseWriter, id string, mutate func(*store.
 	}
 	s.bus.Publish(events.Event{Kind: events.KegUpdated, KegID: id})
 	return k, true
-}
-
-// handleResetLastPour clears the last pour reading, which is otherwise only
-// replaced by the next pour.
-func (s *Server) handleResetLastPour(w http.ResponseWriter, r *http.Request) {
-	zero := 0.0
-	if _, ok := s.updateKeg(w, chi.URLParam(r, "id"), func(k *store.Keg) { k.LastPour = &zero }); !ok {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": "reset_last_pour"})
 }
 
 func sortedKeys(m map[string]int) []string {
