@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Keg Setup - Open Plaato</title>
+    <title>Keg Scale Setup - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
@@ -28,17 +28,17 @@
     </style>
   </head>
   <body>
-    <site-header heading="Keg Setup"></site-header>
+    <site-header heading="Keg Scale Setup"></site-header>
 
     <section class="section">
         <div class="container is-centered">
-          <p class="subtitle">Configure and calibrate your scale</p>
+          <p class="subtitle">Configure and calibrate your keg scale</p>
 
           <!-- List view -->
           <div id="listView">
             <div class="box">
               <div class="list-head">
-                <h2 class="title is-5">Scales</h2>
+                <h2 class="title is-5">Keg Scales</h2>
                 <span class="help" id="connectionStatus"></span>
               </div>
               <div id="kegListContainer">
@@ -50,7 +50,7 @@
           <!-- Editor view -->
           <div id="editView" hidden>
           <div class="back-links">
-            <a class="back-link" href="#">← All scales</a>
+            <a class="back-link" href="#">← All keg scales</a>
             <a class="back-link return-link" hidden></a>
           </div>
           <div class="edit-head">
@@ -110,7 +110,7 @@
             </div>
 
             <div class="field">
-              <label class="label">Scale Sensitivity <span class="req">*</span></label>
+              <label class="label">Keg Scale Sensitivity <span class="req">*</span></label>
               <p class="help">Higher = detects smaller pours</p>
               <div class="control">
                 <div class="sensitivity-buttons">
@@ -133,7 +133,7 @@
             <div class="columns">
               <div class="column">
                 <div class="field">
-                  <label class="label">Tare Scale</label>
+                  <label class="label">Tare Keg Scale</label>
                   <p class="help">Zero the scale with an empty keg on it</p>
                   <div class="control">
                     <button class="button is-warning" id="tareBtn" onclick="sendTare()">
@@ -223,12 +223,12 @@
             </div>
           </div>
 
-          <!-- Scale Info Section -->
+          <!-- Keg Scale Info Section -->
           <div class="box section-box">
-            <h2 class="title is-4">Scale Information</h2>
+            <h2 class="title is-4">Keg Scale Information</h2>
 
             <div class="field">
-              <label class="label">Scale Label <span class="req">*</span></label>
+              <label class="label">Keg Scale Label <span class="req">*</span></label>
               <p class="help">Friendly name shown on the dashboard (e.g. "Basement Tap", "Fridge #1")</p>
               <div class="control">
                 <div class="field has-addons">
@@ -243,11 +243,11 @@
             </div>
 
             <div class="field">
-              <label class="label">Forget Saved Scale</label>
+              <label class="label">Forget Saved Keg Scale</label>
               <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID, local settings and all of its history. This cannot be undone. The scale can reconnect and create a fresh record later, with empty history. To keep the scale and only remove its readings, use Clear history on the <a href="/history.html">History</a> page.</p>
               <div class="control">
                 <button class="button is-danger is-light" type="button" onclick="forgetSelectedScale()">
-                  Forget Scale
+                  Forget Keg Scale
                 </button>
               </div>
             </div>
@@ -319,7 +319,7 @@
 
           <!-- The settings run long, so the way back is at the bottom too. -->
           <div class="buttons">
-            <a class="button" href="#">← All scales</a>
+            <a class="button" href="#">← All keg scales</a>
             <a class="button return-link" hidden></a>
           </div>
           </div>
@@ -360,7 +360,7 @@
           updateEditHead();
           loadConnection();
         } catch (_) {
-          connectionStatus.textContent = "Could not load the scales";
+          connectionStatus.textContent = "Could not load the keg scales";
           connectionStatus.className = "help is-danger";
         }
       }
@@ -374,7 +374,7 @@
 
         const container = document.getElementById("kegListContainer");
         if (!allKegs.length) {
-          container.innerHTML = '<p class="has-text-grey">No scales yet. Once a Plaato Keg connects, it appears here.</p>';
+          container.innerHTML = '<p class="has-text-grey">No keg scales yet. Once a Plaato Keg connects, it appears here.</p>';
           return;
         }
         container.innerHTML = allKegs.map((keg, index) => {
@@ -398,7 +398,7 @@
         if (!selectedKegId) return;
         const index = allKegs.findIndex(k => k.id === selectedKegId);
         const online = connectedIds.has(selectedKegId);
-        document.getElementById("editTitle").textContent = index >= 0 ? kegName(allKegs[index], index) : "Scale";
+        document.getElementById("editTitle").textContent = index >= 0 ? kegName(allKegs[index], index) : "Keg Scale";
         const pill = document.getElementById("editStatus");
         pill.textContent = online ? "Connected" : "Offline";
         pill.classList.toggle("is-online", online);
@@ -470,7 +470,7 @@
       function showReturnLinks() {
         const target = {
           taplist: { href: "/taplist.html", label: "← Tap List" },
-          kegs: { href: "/kegs.html", label: "← Kegs" },
+          kegs: { href: "/kegs.html", label: "← Keg Scales" },
         }[new URLSearchParams(location.search).get("from")];
         for (const link of document.querySelectorAll(".return-link")) {
           link.hidden = !target;
@@ -799,7 +799,7 @@
       function getSelectedKeg() {
         const kegId = selectedKegId;
         if (!kegId) {
-          showToast("Please select a keg first", "warning");
+          showToast("Please select a keg scale first", "warning");
           return null;
         }
         return kegId;
@@ -905,11 +905,11 @@
       async function forgetSelectedScale() {
         const kegId = selectedKegId;
         if (!kegId) {
-          showToast("Please select a scale first", "warning");
+          showToast("Please select a keg scale first", "warning");
           return;
         }
 
-        if (!confirm(`Forget this saved scale record?\n\n${kegId}\n\nThis removes the stored scale ID, local settings and all of its history from the server. This cannot be undone.`)) {
+        if (!confirm(`Forget this saved keg scale record?\n\n${kegId}\n\nThis removes the stored scale ID, local settings and all of its history from the server. This cannot be undone.`)) {
           return;
         }
 
@@ -919,7 +919,7 @@
           showToast(`Error: ${err.message}`, "danger");
           return;
         }
-        showToast("Scale record removed", "success");
+        showToast("Keg scale record removed", "success");
         loadKegs().then(backToList);
       }
 

@@ -1,7 +1,7 @@
 # From keg reading to browser
 
 This follows one reading — "17.8 left" — from a Plaato Keg's TCP socket to a
-tile on the Kegs page, and explains why the path is shaped the way it is.
+tile on the Keg Scales page, and explains why the path is shaped the way it is.
 
 ## Overview
 
@@ -242,7 +242,7 @@ Steps 7 to 12 are shared by everything that publishes a keg event:
   `KegUpdated`.
 - **Deleting a keg** — `internal/api/kegs.go` publishes `KegRemoved`. The flush
   skips the database read and broadcasts `{"type":"keg_removed","id":…}`, and
-  the Kegs page removes the scale's tile.
+  the Keg Scales page removes the scale's tile.
 
 A newly opened tab does not wait for this path: `ServeHTTP` immediately sends it
 a snapshot of every keg from `ListKegs`, then it receives updates like any other

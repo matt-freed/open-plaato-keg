@@ -172,7 +172,7 @@
       tile.classList.toggle('is-empty', isKegEmpty(keg));
 
       tile.querySelector('.keg-name').textContent =
-        keg ? (keg.label || 'Keg ' + keg.id.slice(0, 6)) : '';
+        keg ? kegName(keg, Object.keys(kegs).indexOf(keg.id)) : '';
       tile.querySelector('.beer').textContent = tap.name || 'Unnamed beer';
 
       const specs = [
@@ -190,7 +190,7 @@
       // date moves into its place.
       let readings = '';
       if (tap.keg_id && !keg) {
-        readings = '<span class="no-keg">Waiting for the scale…</span>';
+        readings = '<span class="no-keg">Waiting for the keg scale…</span>';
       } else if (keg) {
         readings = `
           <div class="reading temp">

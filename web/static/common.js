@@ -11,10 +11,10 @@ function esc(v) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-// kegName is what the UI calls a scale: its label, or "Scale n" by its place
-// in the display order that /api/kegs returns.
+// kegName is what the UI calls a keg scale: its label, or "Keg Scale n" by
+// its place in the display order that /api/kegs returns.
 function kegName(keg, index) {
-  return keg.label?.trim() || `Scale ${index + 1}`;
+  return keg.label?.trim() || `Keg Scale ${index + 1}`;
 }
 
 // kegNameWithBeer puts the beer on the scale's tap first, as History and its

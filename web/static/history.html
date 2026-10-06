@@ -94,7 +94,7 @@
 
       <div class="controls">
         <div class="field">
-          <span class="label">Scale</span>
+          <span class="label">Keg Scale</span>
           <div class="buttons has-addons" id="scaleChoice"></div>
         </div>
         <div class="field">
@@ -952,11 +952,11 @@
           if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;
         }
       } catch (_) {
-        $('pageStatus').textContent = 'Could not load the scales. Is the server running?';
+        $('pageStatus').textContent = 'Could not load the keg scales. Is the server running?';
         return;
       }
       if (!kegs.length) {
-        $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history appears here.';
+        $('pageStatus').textContent = 'No keg scales yet. Once a Plaato Keg connects, its history appears here.';
         $('downloadBtn').hidden = true;
         $('clearBtn').hidden = true;
         $('editBtn').hidden = true;

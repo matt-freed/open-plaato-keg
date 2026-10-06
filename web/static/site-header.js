@@ -1,6 +1,6 @@
 'use strict';
 
-// <site-header heading="Kegs"></site-header> renders the header bar every
+// <site-header heading="Keg Scales"></site-header> renders the header bar every
 // page shares: the page title, then the navigation with the Configure menu.
 // Load this script in <head>, without defer, so the element is defined before
 // the parser reaches it and the bar never renders empty.
@@ -10,13 +10,13 @@
 (() => {
   const LINKS = [
     ['/taplist.html', 'Tap List'],
-    ['/kegs.html', 'Kegs'],
+    ['/kegs.html', 'Keg Scales'],
     // All Pours and Edit history are reached from History, so they keep it marked.
     ['/history.html', 'History', ['/pours.html', '/history-edit.html']],
   ];
   const CONFIGURE = [
     ['/taplist-setup.html', 'Tap Setup'],
-    ['/keg-setup.html', 'Keg Setup'],
+    ['/keg-setup.html', 'Keg Scale Setup'],
     ['/dashboard-setup.html', 'Dashboard Setup'],
     ['/system.html', 'System'],
   ];

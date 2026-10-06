@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kegs - Open Plaato</title>
+    <title>Keg Scales - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/tiles.css">
@@ -13,10 +13,10 @@
     <script src="/common.js"></script>
 </head>
 <body>
-  <site-header heading="Kegs"></site-header>
+  <site-header heading="Keg Scales"></site-header>
 
   <section class="section">
-    <p class="empty-state" id="status">Loading scales…</p>
+    <p class="empty-state" id="status">Loading keg scales…</p>
     <div class="grid" id="kegContainer"></div>
     <div class="empty-section" id="emptySection" hidden>
       <h2 class="empty-section-heading">Empty</h2>
@@ -251,7 +251,7 @@
         kegContainer.replaceChildren();
         emptyContainer.replaceChildren();
         emptySection.hidden = true;
-        statusEl.textContent = 'No scales yet. Once a Plaato Keg connects, it appears here.';
+        statusEl.textContent = 'No keg scales yet. Once a Plaato Keg connects, it appears here.';
         return;
       }
       statusEl.textContent = '';
@@ -329,7 +329,7 @@
         for (const k of kegList) kegs[k.id] = k;
         render();
       } catch (err) {
-        if (!Object.keys(kegs).length) statusEl.textContent = 'Could not load the scales. Is the server running?';
+        if (!Object.keys(kegs).length) statusEl.textContent = 'Could not load the keg scales. Is the server running?';
       }
     }
 

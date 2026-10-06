@@ -366,11 +366,11 @@
           if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;
         }
       } catch (_) {
-        $('pageStatus').textContent = 'Could not load the scales. Is the server running?';
+        $('pageStatus').textContent = 'Could not load the keg scales. Is the server running?';
         return;
       }
       if (!kegs.length) {
-        $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history can be edited here.';
+        $('pageStatus').textContent = 'No keg scales yet. Once a Plaato Keg connects, its history can be edited here.';
         return;
       }
       show();

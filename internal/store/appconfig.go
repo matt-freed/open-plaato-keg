@@ -35,7 +35,7 @@ const (
 	DisplayMeasureVolume = "volume"
 )
 
-// Which figure a keg graphic shows large on the Kegs page and the tap list.
+// Which figure a keg graphic shows large on the Keg Scales page and the tap list.
 const (
 	AmountDisplayAmount  = "amount"  // the amount left, in the display units
 	AmountDisplayPercent = "percent" // the percentage left

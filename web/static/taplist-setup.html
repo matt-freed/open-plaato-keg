@@ -134,12 +134,12 @@
           <hr />
 
           <div class="field">
-            <label class="label">Linked Keg Sensor</label>
+            <label class="label">Linked Keg Scale</label>
             <p class="help">The scale that provides live fill and temperature data for this tap. Each scale feeds one tap; to move one here, unlink it from its current tap first, or drag the tap on the list of all taps.</p>
             <div class="control">
               <div class="select is-fullwidth">
                 <select id="linkedKeg">
-                  <option value="">No sensor linked</option>
+                  <option value="">No keg scale linked</option>
                 </select>
               </div>
             </div>
@@ -190,7 +190,7 @@
       for (const tap of allTaps) {
         const keg = tap.keg_id && allKegs.find(k => k.id === tap.keg_id);
         if (!tap.keg_id) tray.push([tap, '']);
-        else if (!keg) tray.push([tap, 'Scale not found']);
+        else if (!keg) tray.push([tap, 'Keg scale not found']);
         else if (onScale.has(keg.id)) tray.push([tap, `Also on ${kegName(keg, allKegs.indexOf(keg))}`]);
         else onScale.set(keg.id, tap);
       }
@@ -215,8 +215,8 @@
         ${allKegs.length
           ? `<p class="board-help">Drag a tap beside the scale it pours from. Dropping it on a scale that has a tap swaps the two.</p>
              <div class="tap-board">${rows}</div>`
-          : '<p class="board-help">No scales yet. Once a keg connects it appears in <a href="/keg-setup.html">Keg Setup</a>, and its taps can be placed here.</p>'}
-        <h3 class="board-tray-head">Not on a scale</h3>
+          : '<p class="board-help">No keg scales yet. Once a keg scale connects it appears in <a href="/keg-setup.html">Keg Scale Setup</a>, and its taps can be placed here.</p>'}
+        <h3 class="board-tray-head">Not on a keg scale</h3>
         <div class="board-slot board-tray" data-slot="">
           ${tray.map(([tap, note]) => tapCard(tap, note)).join('')
             || '<span class="board-slot-empty">Drop a tap here to unlink it</span>'}
@@ -294,7 +294,7 @@
     function showReturnLinks() {
       const target = {
         taplist: { href: '/taplist.html', label: '← Tap List' },
-        kegs: { href: '/kegs.html', label: '← Kegs' },
+        kegs: { href: '/kegs.html', label: '← Keg Scales' },
       }[new URLSearchParams(location.search).get('from')];
       for (const link of document.querySelectorAll('.return-link')) {
         link.hidden = !target;
@@ -315,11 +315,11 @@
       // Kegs
       const kegSel = document.getElementById('linkedKeg');
       const prev = kegSel.value;
-      kegSel.innerHTML = '<option value="">No sensor linked</option>';
+      kegSel.innerHTML = '<option value="">No keg scale linked</option>';
       allKegs.forEach((k, index) => {
         const opt = document.createElement('option');
         opt.value = k.id;
-        const label = k.label || `Scale ${index + 1}`;
+        const label = kegName(k, index);
         opt.textContent = `${label} ${k.beer_left_unit || ''} ${k.amount_left != null ? '('+k.amount_left.toFixed(1)+' left)' : ''}`;
         // A scale feeds one tap, so one already linked elsewhere cannot be
         // picked here until it is unlinked from that tap.

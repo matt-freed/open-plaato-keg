@@ -96,7 +96,7 @@ func (s *Server) saveTap(w http.ResponseWriter, r *http.Request, id string, stat
 		var inUse *store.KegInUseError
 		if errors.As(err, &inUse) {
 			writeError(w, http.StatusConflict, "keg_in_use",
-				"that scale is already linked to "+tapDescription(inUse.Tap)+"; unlink it there first")
+				"that keg scale is already linked to "+tapDescription(inUse.Tap)+"; unlink it there first")
 			return
 		}
 		writeStoreError(w, err, "tap")
@@ -143,7 +143,7 @@ func (s *Server) handleTapLinks(w http.ResponseWriter, r *http.Request) {
 		var inUse *store.KegInUseError
 		if errors.As(err, &inUse) {
 			writeError(w, http.StatusConflict, "keg_in_use",
-				"that scale is already linked to "+tapDescription(inUse.Tap))
+				"that keg scale is already linked to "+tapDescription(inUse.Tap))
 			return
 		}
 		writeStoreError(w, err, "tap")

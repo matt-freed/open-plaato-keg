@@ -74,7 +74,7 @@
           <div class="select"><select id="beerFilter"></select></div>
         </div>
         <div class="field">
-          <label class="label" for="scaleFilter">Scale</label>
+          <label class="label" for="scaleFilter">Keg Scale</label>
           <div class="select"><select id="scaleFilter"></select></div>
         </div>
       </div>
@@ -157,7 +157,7 @@
     const selected = new Set();
 
     const beerOf = p => p.beer_name?.trim() || NO_BEER;
-    const scaleName = (label, kegId) => label?.trim() || `Scale …${kegId.slice(-4)}`;
+    const scaleName = (label, kegId) => label?.trim() || `Keg Scale …${kegId.slice(-4)}`;
     const scaleOf = p => scaleName(p.scale_label, p.keg_id);
     const size = p => p.display ? `${Math.round(p.display.amount)} ${p.display.unit}` : '—';
     const totalsText = list => list?.map(t => `${Math.round(t.amount)} ${t.unit}`).join(' + ') || '—';
@@ -215,7 +215,7 @@
 
       const scales = [...summary.scales];
       if (view.keg && !scales.some(s => s.keg_id === view.keg)) scales.unshift({ keg_id: view.keg, label: '' });
-      $('scaleFilter').innerHTML = '<option value="">All scales</option>' + scales.map(s =>
+      $('scaleFilter').innerHTML = '<option value="">All keg scales</option>' + scales.map(s =>
         `<option value="${esc(s.keg_id)}">${esc(scaleName(s.label, s.keg_id))}</option>`).join('');
       $('scaleFilter').value = view.keg;
     }
@@ -260,7 +260,7 @@
     function renderView(range) {
       $('poursHead').innerHTML = `<tr>
         <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th>
-        <th class="scale-col">Scale</th><th class="num">Took</th><th class="num">Amount</th>
+        <th class="scale-col">Keg Scale</th><th class="num">Took</th><th class="num">Amount</th>
       </tr>`;
       $('poursBody').innerHTML = pours.map(p => `
         <tr>
@@ -269,7 +269,7 @@
           <td>${esc(p.beer_style)}</td>
           <td class="num">${Number.isFinite(p.abv) ? `${p.abv.toFixed(1)}%` : ''}</td>
           <td class="scale-col">${esc(scaleOf(p))}${p.hidden_from_keg
-            ? '<span class="hidden-tag" title="This scale’s history was cleared, so the pour only shows here.">history cleared</span>' : ''}</td>
+            ? '<span class="hidden-tag" title="This keg scale’s history was cleared, so the pour only shows here.">history cleared</span>' : ''}</td>
           <td class="num">${esc(took(p))}</td>
           <td class="num">${esc(size(p))}</td>
         </tr>`).join('');
@@ -286,7 +286,7 @@
       $('poursHead').innerHTML = `<tr>
         <th class="check"><input type="checkbox" id="selectAll" aria-label="Select every pour on this page"></th>
         <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th><th class="num">Tap</th>
-        <th>Scale</th><th class="num">Took</th><th class="num">Amount</th>
+        <th>Keg Scale</th><th class="num">Took</th><th class="num">Amount</th>
       </tr>`;
       $('poursBody').innerHTML = pours.map(p => {
         const was = {
@@ -310,7 +310,7 @@
             <td>${text('beer_style', 'Style')}</td>
             <td class="num">${num('abv', 'ABV')}</td>
             <td class="num">${num('tap_number', 'Tap number')}</td>
-            <td>${text('scale_label', 'Scale label')}</td>
+            <td>${text('scale_label', 'Keg scale label')}</td>
             <td class="num">${esc(took(p))}</td>
             <td class="num"><span class="amount-cell">${num('amount', 'Amount', '')}<span class="unit">${esc(p.display?.unit ?? '')}</span></span></td>
           </tr>`;
