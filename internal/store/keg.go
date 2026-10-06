@@ -321,7 +321,19 @@ func (s *Store) DeleteKeg(id string) error {
 // a packet only carries the handful of pins that changed, and fields it does
 // not mention must keep their stored value.
 func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
-	return s.updateKegTx(id, func(_ *sql.Tx, k *Keg) error {
+	return s.updateKegTx(id, true, func(_ *sql.Tx, k *Keg) error {
+		mutate(k)
+		return nil
+	})
+}
+
+// UpdateExistingKeg is UpdateKeg for a keg that must already exist: it returns
+// ErrNotFound rather than creating one. Anything other than device data uses
+// it, so a change that lands just after a keg was deleted cannot bring the keg
+// back. The existence check shares the write's transaction, so there is no
+// window between them.
+func (s *Store) UpdateExistingKeg(id string, mutate func(*Keg)) (*Keg, error) {
+	return s.updateKegTx(id, false, func(_ *sql.Tx, k *Keg) error {
 		mutate(k)
 		return nil
 	})
@@ -330,7 +342,8 @@ func (s *Store) UpdateKeg(id string, mutate func(*Keg)) (*Keg, error) {
 // updateKegTx is UpdateKeg for a mutation that also writes other tables, such
 // as a finished pour, and must commit or roll back with the keg itself. All
 // queries inside mutate must go through tx: the store holds one connection.
-func (s *Store) updateKegTx(id string, mutate func(*sql.Tx, *Keg) error) (*Keg, error) {
+// A missing keg is created when create is set and is ErrNotFound otherwise.
+func (s *Store) updateKegTx(id string, create bool, mutate func(*sql.Tx, *Keg) error) (*Keg, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -340,8 +353,10 @@ func (s *Store) updateKegTx(id string, mutate func(*sql.Tx, *Keg) error) (*Keg, 
 	query := fmt.Sprintf("SELECT %s FROM kegs WHERE id = ?", kegColumnList)
 	k, err := scanKeg(tx.QueryRow(query, id))
 	switch {
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, sql.ErrNoRows) && create:
 		k = newKeg(id)
+	case errors.Is(err, sql.ErrNoRows):
+		return nil, ErrNotFound
 	case err != nil:
 		return nil, err
 	}

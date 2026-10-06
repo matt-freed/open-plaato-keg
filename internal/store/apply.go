@@ -70,7 +70,7 @@ var defaultPourRange = [2]float64{0.05, 1.4}
 // updated record. A pour that the packet ends is recorded in the same
 // transaction.
 func (s *Store) ApplyPacket(id string, pkt plaato.Packet) (*Keg, error) {
-	return s.updateKegTx(id, func(tx *sql.Tx, k *Keg) error {
+	return s.updateKegTx(id, true, func(tx *sql.Tx, k *Keg) error {
 		now := time.Now()
 		wasPouring := k.IsPouring != nil && *k.IsPouring
 		prevAmount := k.AmountLeft
@@ -132,8 +132,12 @@ func plausiblePour(k *Keg, value any) bool {
 // SetPouring records a pouring state change without touching anything else.
 // Used to clear a stale "pouring" flag when a keg disconnects, which also ends
 // any pour in progress, measured against the last amount the keg reported.
+//
+// It returns ErrNotFound rather than creating a keg. Deleting a connected keg
+// closes its connection, and this runs as that connection winds down, by
+// which time the keg is usually gone.
 func (s *Store) SetPouring(id string, pouring bool) (*Keg, error) {
-	return s.updateKegTx(id, func(tx *sql.Tx, k *Keg) error {
+	return s.updateKegTx(id, false, func(tx *sql.Tx, k *Keg) error {
 		wasPouring := k.IsPouring != nil && *k.IsPouring
 		k.IsPouring = &pouring
 		return trackPour(tx, k, wasPouring, k.AmountLeft, time.Now())

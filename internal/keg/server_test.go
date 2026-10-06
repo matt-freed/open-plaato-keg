@@ -696,3 +696,29 @@ func TestMalformedTokenClosesConnection(t *testing.T) {
 		t.Errorf("registered ids = %v, want none", got)
 	}
 }
+
+// Deleting a connected keg closes its connection, and that connection's
+// clean-up clears the pouring flag. The clean-up must not recreate the keg.
+func TestDeletedConnectedKegStaysDeleted(t *testing.T) {
+	h := newHarness(t)
+	c := h.dial()
+	sendAndRead(t, c, loginSegment())
+	sendAndRead(t, c, pinWrite(2, "51", "10.5"))
+	waitFor(t, "the keg to be stored", func() bool {
+		_, err := h.store.GetKeg(testToken)
+		return err == nil
+	})
+
+	// What the API's delete does.
+	if err := h.store.DeleteKeg(testToken); err != nil {
+		t.Fatalf("DeleteKeg: %v", err)
+	}
+	NewCommander(h.server.Registry()).Disconnect(testToken)
+	// Wait for the connection's clean-up. Shutdown would wait too, but it
+	// empties the registry first, which skips the clean-up under test.
+	h.server.wg.Wait()
+
+	if _, err := h.store.GetKeg(testToken); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("GetKeg after delete and disconnect: err = %v, want ErrNotFound", err)
+	}
+}

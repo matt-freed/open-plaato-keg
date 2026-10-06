@@ -192,6 +192,11 @@ func (s *Server) finish(state *connState) {
 	// The device stops reporting mid-pour, so without this the UI would show
 	// it pouring forever.
 	k, err := s.store.SetPouring(state.kegID, false)
+	if errors.Is(err, store.ErrNotFound) {
+		// Deleted while connected: deleting closes the connection, and the
+		// keg must stay deleted.
+		return
+	}
 	if err != nil {
 		slog.Error("failed to clear pouring state", "keg", state.kegID, "error", err)
 		return

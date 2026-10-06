@@ -238,6 +238,8 @@ Steps 7 to 12 are shared by everything that publishes a keg event:
 
 - **A keg disconnecting** — `finish` clears the pouring flag with `SetPouring`,
   which also ends and records any pour in progress, and publishes `KegUpdated`.
+  When the disconnect came from deleting the keg, `SetPouring` finds no keg,
+  creates none, and nothing is published.
 - **An edit in the UI** — `internal/api/kegs.go` updates the store and publishes
   `KegUpdated`.
 - **Deleting a keg** — `internal/api/kegs.go` publishes `KegRemoved`. The flush

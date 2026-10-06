@@ -298,6 +298,39 @@ func TestSetPouring(t *testing.T) {
 	}
 }
 
+// Clearing the pouring flag runs as a deleted keg's connection closes, so it
+// must not bring the keg back.
+func TestSetPouringDoesNotCreateAKeg(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.SetPouring("keg-1", false); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("SetPouring on a missing keg: err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.GetKeg("keg-1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetKeg after SetPouring: err = %v, want the keg still missing", err)
+	}
+}
+
+func TestUpdateExistingKeg(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.UpdateExistingKeg("keg-1", func(k *Keg) { k.Label = "x" }); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("UpdateExistingKeg on a missing keg: err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.GetKeg("keg-1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetKeg: err = %v, want the keg still missing", err)
+	}
+
+	if _, err := s.ApplyPacket("keg-1", decode(t, "vw\x0051\x002.000")); err != nil {
+		t.Fatalf("ApplyPacket: %v", err)
+	}
+	k, err := s.UpdateExistingKeg("keg-1", func(k *Keg) { k.Label = "Basement" })
+	if err != nil {
+		t.Fatalf("UpdateExistingKeg: %v", err)
+	}
+	if k.Label != "Basement" || k.AmountLeft == nil || *k.AmountLeft != 2 {
+		t.Errorf("keg = label %q amount %v, want the label set and the amount kept", k.Label, k.AmountLeft)
+	}
+}
+
 func TestUnknownPinsLandInExtra(t *testing.T) {
 	s := newTestStore(t)
 	pkt := plaato.Decode([]blynk.Frame{{

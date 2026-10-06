@@ -183,7 +183,10 @@ anything outside a device's own goroutine reaches that device.
   connection, so a displaced connection's cleanup cannot remove its
   replacement. When it does remove the entry, `finish` clears the keg's pouring
   flag with `SetPouring`, since a device that drops mid-pour never reports the
-  pour ending. That also ends and records the pour in progress.
+  pour ending. That also ends and records the pour in progress. `SetPouring`
+  never creates a keg: deleting a connected keg closes its connection, so this
+  clean-up runs just after the delete and finds the keg gone, and `finish`
+  then publishes nothing.
 - `Conn.Send` serialises writes, because acknowledgements from the read loop
   and commands from HTTP handlers share one socket.
 - Each `Conn` records when it was accepted and, on every read that returns
@@ -247,9 +250,11 @@ the row (or start a new one), apply each non-transient property through
 the same without access to the transaction. Because a packet carries only the
 pins that changed, fields it does not mention keep their stored values. The
 first confirmed packet from a new keg id creates its row. `UpdateKeg` also
-creates a row it does not find, so the API's callers (`Server.updateKeg` and
-`handleKegOrder`) check the keg exists first and answer 404, rather than let a
-request for an unknown id create a phantom keg.
+creates a row it does not find; only device data should, so everything else
+uses `UpdateExistingKeg` or `SetPouring`, which return `ErrNotFound` instead.
+The check shares the write's transaction, so an API change (`Server.updateKeg`,
+`handleKegOrder`) or a connection's clean-up that lands just after a delete
+cannot bring the keg back as a phantom.
 
 Two values get special treatment:
 

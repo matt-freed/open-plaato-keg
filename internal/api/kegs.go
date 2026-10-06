@@ -204,7 +204,7 @@ func (s *Server) handleKegOrder(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for position, id := range req.OrderedIDs {
-		if _, err := s.store.UpdateKeg(id, func(k *store.Keg) { k.SortOrder = position }); err != nil {
+		if _, err := s.store.UpdateExistingKeg(id, func(k *store.Keg) { k.SortOrder = position }); err != nil {
 			writeStoreError(w, err, "keg")
 			return
 		}
@@ -331,14 +331,10 @@ func (s *Server) kegEnumCommand(name string, allowed map[string]int, run func(id
 // updateKeg applies a change to the stored keg and broadcasts it.
 //
 // store.UpdateKeg creates a keg it does not find, which is right for device
-// traffic but would let a request for an unknown id create a phantom keg, so
-// the keg must already exist.
+// traffic but would let a request for an unknown or just-deleted id create a
+// phantom keg, so the keg must already exist.
 func (s *Server) updateKeg(w http.ResponseWriter, id string, mutate func(*store.Keg)) (*store.Keg, bool) {
-	if _, err := s.store.GetKeg(id); err != nil {
-		writeStoreError(w, err, "keg")
-		return nil, false
-	}
-	k, err := s.store.UpdateKeg(id, mutate)
+	k, err := s.store.UpdateExistingKeg(id, mutate)
 	if err != nil {
 		writeStoreError(w, err, "keg")
 		return nil, false
