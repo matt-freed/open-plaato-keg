@@ -291,7 +291,7 @@ func TestMetadataOnlyDeviceCreatesNoKeg(t *testing.T) {
 	h := newHarness(t)
 	c := h.dial()
 
-	sendAndRead(t, c, blynk.NewCommand(blynk.CmdLogin, 1, []byte("airlock-token")))
+	sendAndRead(t, c, blynk.NewCommand(blynk.CmdLogin, 1, []byte("A1rL0ckA1rL0ckA1rL0ckA1rL0ck0000")))
 	sendAndRead(t, c, blynk.NewCommand(blynk.CmdInternal, 2, []byte("ver\x000.5.1\x00dev\x00NodeMCU\x00")))
 	// Airlock pins: bubble count and temperature, which are not keg pins.
 	sendAndRead(t, c, pinWrite(3, "100", "42"))
@@ -663,5 +663,36 @@ func TestConnectionInfo(t *testing.T) {
 	})
 	if later, _ := cmd.Connection(testToken); !later.ConnectedAt.Equal(info.ConnectedAt) {
 		t.Errorf("ConnectedAt moved from %v to %v", info.ConnectedAt, later.ConnectedAt)
+	}
+}
+
+// A login whose token is not a plausible auth token is refused: the connection
+// is closed and nothing is stored under it, since the token would otherwise
+// become a keg id that the UI shows.
+func TestMalformedTokenClosesConnection(t *testing.T) {
+	h := newHarness(t)
+	c := h.dial()
+
+	token := `<img src=x onerror=alert(1)>xxxx`
+	sendAndRead(t, c, blynk.NewCommand(blynk.CmdGetSharedDash, 1, []byte(token)))
+
+	// The connection is closed after the acknowledgement, so the next read
+	// ends rather than timing out.
+	if err := c.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("set deadline: %v", err)
+	}
+	if _, err := c.Read(make([]byte, 1)); err == nil || isTimeout(err) {
+		t.Fatalf("read after a malformed token = %v, want the connection closed", err)
+	}
+
+	ids, err := h.store.ListKegIDs()
+	if err != nil {
+		t.Fatalf("ListKegIDs: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Errorf("stored kegs = %v, want none", ids)
+	}
+	if got := h.server.Registry().IDs(); len(got) != 0 {
+		t.Errorf("registered ids = %v, want none", got)
 	}
 }

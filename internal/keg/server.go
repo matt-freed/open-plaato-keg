@@ -140,7 +140,10 @@ func (s *Server) handle(nc net.Conn) {
 					slog.Debug("failed to acknowledge", "remote", c.RemoteAddr(), "error", err)
 					return
 				}
-				s.ingest(state, frames)
+				if err := s.ingest(state, frames); err != nil {
+					slog.Warn("closing connection", "remote", c.RemoteAddr(), "error", err)
+					return
+				}
 			}
 
 			if frameErr != nil {
@@ -196,9 +199,16 @@ func (s *Server) finish(state *connState) {
 	s.bus.Publish(events.Event{Kind: events.KegUpdated, KegID: k.ID})
 }
 
-// ingest decodes a batch of frames and applies whatever it carries.
-func (s *Server) ingest(state *connState, frames []blynk.Frame) {
+// ingest decodes a batch of frames and applies whatever it carries. An error
+// means the device cannot be served and the connection should be closed.
+func (s *Server) ingest(state *connState, frames []blynk.Frame) error {
 	pkt := plaato.Decode(frames, s.includeUnknown)
+
+	// A malformed token is never registered or stored: it would become a keg
+	// id that the UI and API then handle as trusted.
+	if pkt.DeviceID != "" && !plaato.ValidDeviceID(pkt.DeviceID) {
+		return fmt.Errorf("auth token %q is not 32 letters or digits", truncate(pkt.DeviceID, 64))
+	}
 
 	if pkt.DeviceID != "" && pkt.DeviceID != state.kegID {
 		state.kegID = pkt.DeviceID
@@ -222,12 +232,12 @@ func (s *Server) ingest(state *connState, frames []blynk.Frame) {
 				state.pendingInternal[k] = v
 			}
 		}
-		return
+		return nil
 	}
 
 	if state.kegID == "" {
 		slog.Warn("keg data arrived before the device announced its auth token", "remote", state.conn.RemoteAddr())
-		return
+		return nil
 	}
 
 	if len(state.pendingInternal) > 0 {
@@ -243,13 +253,13 @@ func (s *Server) ingest(state *connState, frames []blynk.Frame) {
 	}
 
 	if len(pkt.Props) == 0 && len(pkt.Internal) == 0 && len(pkt.Unknown) == 0 {
-		return
+		return nil
 	}
 
 	k, err := s.store.ApplyPacket(state.kegID, pkt)
 	if err != nil {
 		slog.Error("failed to store keg data", "keg", state.kegID, "error", err)
-		return
+		return nil
 	}
 
 	// The reading check comes first so an empty row never consumes the
@@ -269,6 +279,7 @@ func (s *Server) ingest(state *connState, frames []blynk.Frame) {
 			consumer.KegAmount(k.ID, amount)
 		}
 	}
+	return nil
 }
 
 // identifiesAKeg reports whether the packet contains a value only a keg sends.
@@ -279,6 +290,14 @@ func identifiesAKeg(pkt plaato.Packet) bool {
 		}
 	}
 	return false
+}
+
+// truncate shortens s for a log line, so a hostile token cannot flood it.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 func isTimeout(err error) bool {

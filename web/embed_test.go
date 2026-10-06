@@ -417,3 +417,40 @@ func TestButtonsUseTheDocumentedSet(t *testing.T) {
 		}
 	}
 }
+
+// deviceTextFields are the keg fields whose text comes straight from the
+// device. Anything that can reach the keg port can set them, so they are
+// untrusted wherever a page builds HTML.
+var deviceTextFields = []string{
+	"keg_temperature_string", "chip_temperature_string", "firmware_version",
+	"beer_left_unit", "internal", "last_pour_string", "calculated_alcohol_string",
+	"device_beer_style", "device_date", "weight_unit", "volume_unit", "temperature_unit",
+}
+
+// A template interpolation that reads a device-reported text field must pass
+// it through esc, or a device can put script into the page. A line that sets
+// textContent is skipped, since the browser never parses that as HTML.
+func TestDeviceTextIsEscaped(t *testing.T) {
+	interpolation := regexp.MustCompile(`\$\{((?:[^{}]|\{[^{}]*\})*)\}`)
+	field := regexp.MustCompile(`\.(?:` + strings.Join(deviceTextFields, "|") + `)\b`)
+	for _, name := range pages {
+		if !strings.HasSuffix(name, ".html") && !strings.HasSuffix(name, ".js") {
+			continue
+		}
+		data, err := fs.ReadFile(Static(), name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if strings.Contains(line, ".textContent =") {
+				continue
+			}
+			for _, m := range interpolation.FindAllStringSubmatch(line, -1) {
+				expr := strings.TrimSpace(m[1])
+				if field.MatchString(expr) && !strings.HasPrefix(expr, "esc(") {
+					t.Errorf("%s:%d: device text interpolated without esc: ${%s}", name, i+1, expr)
+				}
+			}
+		}
+	}
+}

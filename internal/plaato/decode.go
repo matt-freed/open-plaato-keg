@@ -20,8 +20,8 @@ type Property struct {
 
 // Packet is everything decoded from one batch of frames.
 type Packet struct {
-	// DeviceID is the 32-character auth token, set when the batch contained a
-	// login frame.
+	// DeviceID is the auth token, set when the batch contained a login frame.
+	// It is as the device sent it; check it with ValidDeviceID before use.
 	DeviceID string
 	// Props are in wire order. A batch may carry the same pin more than once,
 	// in which case the later value is the current one.
@@ -49,6 +49,26 @@ func splitBody(body []byte) []string {
 		}
 	}
 	return out
+}
+
+// ValidDeviceID reports whether id has the form of an auth token: exactly 32
+// ASCII letters or digits.
+//
+// The token becomes the keg's id and reaches URLs, logs and the UI, and
+// anything that can open a connection to the keg port chooses it, so it is
+// checked before it is used for anything. The README asks for lowercase hex,
+// but letters beyond that are accepted so a keg set up with them keeps working.
+func ValidDeviceID(id string) bool {
+	if len(id) != 32 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		if !('0' <= c && c <= '9' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z') {
+			return false
+		}
+	}
+	return true
 }
 
 // Decode interprets a batch of Blynk frames as Plaato data.

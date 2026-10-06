@@ -640,31 +640,31 @@
             <tbody>
               <tr>
                 <td><strong>Unit System</strong></td>
-                <td>${unitSystemDisplay}</td>
+                <td>${esc(unitSystemDisplay)}</td>
               </tr>
               <tr>
                 <td><strong>Measure Mode</strong></td>
-                <td>${measureModeDisplay}</td>
+                <td>${esc(measureModeDisplay)}</td>
               </tr>
               <tr>
                 <td><strong>Keg Mode</strong></td>
-                <td>${kegModeMap[data.keg_mode] || data.keg_mode || "Not set"}</td>
+                <td>${esc(kegModeMap[data.keg_mode] || data.keg_mode || "Not set")}</td>
               </tr>
               <tr>
                 <td><strong>Sensitivity</strong></td>
-                <td>${sensMap[data.sensitivity] || data.sensitivity || "Not set"}</td>
+                <td>${esc(sensMap[data.sensitivity] || data.sensitivity || "Not set")}</td>
               </tr>
               <tr>
                 <td><strong>Temperature</strong></td>
-                <td>${data.keg_temperature_string || data.keg_temperature || "N/A"}</td>
+                <td>${esc(data.keg_temperature_string || data.keg_temperature || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Chip Temperature</strong></td>
-                <td>${data.chip_temperature_string || "N/A"}</td>
+                <td>${esc(data.chip_temperature_string || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Amount Left</strong></td>
-                <td>${data.amount_left || "N/A"} ${data.beer_left_unit || ""}</td>
+                <td>${esc(data.amount_left || "N/A")} ${esc(data.beer_left_unit || "")}</td>
               </tr>
             </tbody>
           </table>
@@ -674,51 +674,51 @@
               ${connectionRows(data)}
               <tr>
                 <td><strong>WiFi Signal</strong></td>
-                <td>${data.wifi_signal_strength || "N/A"}</td>
+                <td>${esc(data.wifi_signal_strength || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Firmware Version</strong></td>
-                <td>${data.firmware_version || "N/A"}</td>
+                <td>${esc(data.firmware_version || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Leak Detection</strong></td>
-                <td>${data.leak_detection === 1 ? "⚠️ Leak detected" : data.leak_detection === 0 ? "✅ No leak" : "N/A"}</td>
+                <td>${esc(data.leak_detection === 1 ? "⚠️ Leak detected" : data.leak_detection === 0 ? "✅ No leak" : "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Min Temperature</strong></td>
-                <td>${data.min_temperature || "N/A"}</td>
+                <td>${esc(data.min_temperature || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Max Temperature</strong></td>
-                <td>${data.max_temperature || "N/A"}</td>
+                <td>${esc(data.max_temperature || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Device</strong></td>
-                <td>${data.internal?.dev || "N/A"}</td>
+                <td>${esc(data.internal?.dev || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Version</strong></td>
-                <td>${data.internal?.ver || "N/A"}</td>
+                <td>${esc(data.internal?.ver || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Firmware</strong></td>
-                <td>${data.internal?.fw || "N/A"}</td>
+                <td>${esc(data.internal?.fw || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Build</strong></td>
-                <td>${data.internal?.build || "N/A"}</td>
+                <td>${esc(data.internal?.build || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Template</strong></td>
-                <td>${data.internal?.tmpl || "N/A"}</td>
+                <td>${esc(data.internal?.tmpl || "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Heartbeat</strong></td>
-                <td>${data.internal?.["h-beat"] ? data.internal["h-beat"] + "s" : "N/A"}</td>
+                <td>${esc(data.internal?.["h-beat"] ? data.internal["h-beat"] + "s" : "N/A")}</td>
               </tr>
               <tr>
                 <td><strong>Buffer</strong></td>
-                <td>${data.internal?.["buff-in"] ? data.internal["buff-in"] + " bytes" : "N/A"}</td>
+                <td>${esc(data.internal?.["buff-in"] ? data.internal["buff-in"] + " bytes" : "N/A")}</td>
               </tr>
             </tbody>
           </table>

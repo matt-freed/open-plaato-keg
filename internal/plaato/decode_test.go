@@ -252,3 +252,21 @@ func TestGetReturnsLatestValue(t *testing.T) {
 		t.Error("keg_temperature reported present but was never sent")
 	}
 }
+
+func TestValidDeviceID(t *testing.T) {
+	for id, want := range map[string]bool{
+		"00000000000000000000000000000001":     true,
+		"0123456789abcdef0123456789abcdef":     true,
+		"A1rL0ckA1rL0ckA1rL0ckA1rL0ck0000":     true,
+		"":                                     false,
+		"0000000000000000000000000000001":      false, // 31
+		"000000000000000000000000000000001":    false, // 33
+		"0000000000000000000000000000000-":     false,
+		"<img src=x onerror=alert(1)>xxxx":     false,
+		"000000000000000000000000000000\u00e9": false, // 32 bytes, not ASCII
+	} {
+		if got := ValidDeviceID(id); got != want {
+			t.Errorf("ValidDeviceID(%q) = %v, want %v", id, got, want)
+		}
+	}
+}

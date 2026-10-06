@@ -56,6 +56,7 @@ needs to be registered anywhere.
    - **WiFi SSID** and **Password** — 2.4 GHz only; the keg has no 5 GHz radio
    - **Auth token** — a 32-character hex string (digits and lowercase `a`–`f`)
      of your choosing. This becomes the keg's id, so give each keg its own.
+     The server refuses a token that is not exactly 32 letters or digits.
    - **Host** and **Port** — the address of this server and `KEG_LISTENER_PORT`
 
 The same thing without the form:

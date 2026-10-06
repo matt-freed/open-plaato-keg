@@ -198,12 +198,12 @@
       const rows = allKegs.map((keg, index) => {
         const tap = onScale.get(keg.id);
         const left = keg.amount_left != null
-          ? `${keg.amount_left.toFixed(1)} ${keg.beer_left_unit || ''} left` : 'No reading yet';
+          ? `${keg.amount_left.toFixed(1)} ${esc(keg.beer_left_unit)} left` : 'No reading yet';
         return `
           <div class="board-row">
             <div class="board-scale">
               <span class="board-scale-name">${esc(kegName(keg, index))}</span>
-              <span class="board-scale-meta">${esc(left)}</span>
+              <span class="board-scale-meta">${left}</span>
             </div>
             <div class="board-slot" data-slot="${esc(keg.id)}">
               ${tap ? tapCard(tap) : '<span class="board-slot-empty">Drop a tap here</span>'}

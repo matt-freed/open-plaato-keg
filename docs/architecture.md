@@ -137,7 +137,7 @@ are only ever button echoes, such as tare, are marked `Transient`.
 
 | Frame | Becomes |
 |---|---|
-| login / get_shared_dash | `DeviceID`, the 32-hex auth token |
+| login / get_shared_dash | `DeviceID`, the auth token as sent; `ValidDeviceID` checks it |
 | internal | `Internal`, the metadata map (`fw`, `build`, `h-beat`, …) |
 | hardware `vw pin value` | a typed `Property` in `Props` |
 | property `pin prop value` | a typed `Property` (e.g. a slider's bounds) |
@@ -160,7 +160,11 @@ acknowledgement per read echoing the first frame's message id**, and calls
 
 **`ingest`** is a small state machine over the per-connection `connState`:
 
-1. A `DeviceID` registers the connection under that keg id.
+1. A `DeviceID` registers the connection under that keg id. A token that
+   `plaato.ValidDeviceID` rejects — anything but 32 ASCII letters or digits —
+   closes the connection instead, with a warning, before it is registered or
+   stored. Anything on the network can reach the keg port and choose the
+   token, which becomes an id the API and UI use.
 2. The device is *confirmed* as a keg only once it sends a keg-only pin
    (`amount_left`, `keg_temperature`, `percent_of_beer_left`, `is_pouring`,
    `firmware_version`). A Plaato Airlock sends indistinguishable metadata, and
@@ -426,6 +430,11 @@ The pages are styled as one application, in the tap list's look:
   with the server's `detail` on failure, and `showToast`. Pages use `fetch`
   directly only where they need a response header, such as `X-Total-Count`.
   A test in `web/embed_test.go` fails if a page redeclares one of these names.
+  Text the device reports — its temperature and chip strings, firmware
+  version, units and `internal` metadata — is untrusted, since anything on the
+  network can pose as a keg. Pages pass it through `esc` wherever they build
+  HTML, and a test in `web/embed_test.go` fails on a template interpolation
+  that reads one of those fields without it.
 - `live.js` is the WebSocket feed, through `liveUpdates(onMessage)`, used by
   the tap list, the Keg Scales page and Keg Scale Setup. It builds the full `ws://` or
   `wss://` address, since older browsers reject a relative one, passes each
