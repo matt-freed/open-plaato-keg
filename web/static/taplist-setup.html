@@ -229,7 +229,7 @@
           <span class="list-row-dot" style="background:${esc(beerColor(tap))};"></span>
           <span class="list-row-text">
             <span class="list-row-name">Tap ${esc(tap.tap_number || '?')} — ${esc(tap.name || 'Unnamed')}</span>
-            <span class="list-row-meta">${esc(tap.style || '')}${tap.abv ? ' · ' + esc(tap.abv) + '%' : ''}</span>
+            <span class="list-row-meta">${esc(tap.style || '')}${Number.isFinite(tap.abv) ? ' · ' + esc(tap.abv) + '%' : ''}</span>
           </span>
           ${note ? `<span class="list-row-aside is-empty">${esc(note)}</span>` : ''}
           <span class="list-row-go" aria-hidden="true">›</span>
@@ -356,8 +356,9 @@
       document.getElementById('beerName').value     = tap.name || '';
       document.getElementById('breweryName').value  = tap.brewery || '';
       document.getElementById('beerStyle').value    = tap.style || '';
-      document.getElementById('beerAbv').value      = tap.abv || '';
-      document.getElementById('beerIbu').value      = tap.ibu || '';
+      // ?? rather than ||, so a 0% ABV drink or a 0 IBU beer keeps its value.
+      document.getElementById('beerAbv').value      = tap.abv ?? '';
+      document.getElementById('beerIbu').value      = tap.ibu ?? '';
       document.getElementById('beerDescription').value = tap.description || '';
       document.getElementById('tastingNotes').value = tap.tasting_notes || '';
       // Rebuilt for this tap, so scales on other taps are the ones disabled.
@@ -375,7 +376,9 @@
       if (!name) { showToast('Beer name is required', 'warning'); return; }
 
       const body = {
-        tap_number:    parseInt(document.getElementById('tapNumber').value) || 1,
+        // An emptied box leaves the tap unnumbered, which sorts last, rather
+        // than quietly making it a second tap 1.
+        tap_number:    parseInt(document.getElementById('tapNumber').value) || null,
         name,
         brewery:       document.getElementById('breweryName').value.trim(),
         style:         document.getElementById('beerStyle').value.trim(),
