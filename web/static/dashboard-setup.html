@@ -383,13 +383,27 @@
         document.head.appendChild(link);
       }
 
+      // The text colour for an #rrggbb background, near-black or white by
+      // WCAG contrast. Matches onColor in internal/api/config.go, which sets
+      // it in /theme.css; this previews it before a reload.
+      function onColor(hex) {
+        const [r, g, b] = [1, 3, 5].map(i => {
+          const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+          return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return (l + 0.05) ** 2 >= 0.0525 ? '#0c0d11' : '#ffffff';
+      }
+
       function applyAppearance() {
         const t = currentTheme();
         const root = document.documentElement.style;
         root.setProperty('--bg', HEX.test(t.bg_color) ? t.bg_color : DEFAULTS.bg_color);
         root.setProperty('--tile', HEX.test(t.card_bg) ? t.card_bg : DEFAULTS.card_bg);
         root.setProperty('--text', HEX.test(t.text_color) ? t.text_color : DEFAULTS.text_color);
-        root.setProperty('--action', HEX.test(t.accent_color) ? t.accent_color : DEFAULTS.accent_color);
+        const accent = HEX.test(t.accent_color) ? t.accent_color : DEFAULTS.accent_color;
+        root.setProperty('--action', accent);
+        root.setProperty('--on-action', onColor(accent));
 
         FONTS.forEach(([key]) => loadFont(t[key]));
         const fontStack = stackFor(t.font_family);

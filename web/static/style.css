@@ -190,11 +190,11 @@ hr {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .textarea { resize: vertical; line-height: 1.45; }
-.input:hover, .select select:hover, .textarea:hover { border-color: rgba(255, 255, 255, 0.2); }
+.input:hover, .select select:hover, .textarea:hover { border-color: var(--line-hover); }
 .input:focus, .select select:focus, .textarea:focus {
   outline: none;
   border-color: var(--soft);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 3px var(--overlay);
 }
 .input::placeholder, .textarea::placeholder { color: var(--faint); }
 .input[type="date"], .input[type="datetime-local"] { color-scheme: dark; }
@@ -264,14 +264,14 @@ hr {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
 }
-.button:hover { background: #262a35; border-color: rgba(255, 255, 255, 0.2); }
+.button:hover { background: var(--tile-3); border-color: var(--line-hover); }
 .button:focus-visible { outline: 2px solid var(--soft); outline-offset: 2px; }
 .button:disabled, .button[disabled] { opacity: 0.45; cursor: not-allowed; }
 
 .button.is-primary {
   background: var(--action);
   border-color: transparent;
-  color: #0c0d11;
+  color: var(--on-action);
 }
 .button.is-primary:hover { background: color-mix(in srgb, var(--action) 85%, white); }
 
@@ -282,7 +282,7 @@ hr {
   color: var(--text);
 }
 .button.is-light:hover, .button.is-info:hover, .button.is-warning:hover, .button.is-success:hover {
-  background: #262a35;
+  background: var(--tile-3);
 }
 
 .button.is-danger {
@@ -315,7 +315,7 @@ hr {
   display: inline-flex;
   gap: 2px;
   padding: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay);
   border-radius: var(--radius-sm);
 }
 .buttons.has-addons .button,
@@ -328,12 +328,12 @@ hr {
   font-weight: 500;
 }
 .buttons.has-addons .button:hover,
-.sensitivity-buttons .button:hover { color: var(--text); background: rgba(255, 255, 255, 0.05); }
+.sensitivity-buttons .button:hover { color: var(--text); background: var(--overlay); }
 .buttons.has-addons .button.is-selected,
 .buttons.has-addons .button.is-primary,
 .buttons.has-addons .button.is-info,
 .sensitivity-buttons .button.is-selected {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--overlay-strong);
   color: var(--text);
 }
 
@@ -343,7 +343,7 @@ hr {
   grid-template-columns: repeat(4, 1fr);
   gap: 2px;
   padding: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay);
   border-radius: var(--radius-sm);
 }
 .sensitivity-buttons .sensitivity-btn { padding: 0.7rem 0.5rem; font-size: 1.3rem; line-height: 1; }
@@ -359,7 +359,7 @@ hr {
   align-items: center;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay);
   color: var(--text);
   font-size: 0.75rem;
 }
@@ -587,7 +587,7 @@ body.is-board-dragging, body.is-board-dragging * { cursor: grabbing; }
   gap: 0.4rem;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--overlay);
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -716,27 +716,27 @@ body.is-board-dragging, body.is-board-dragging * { cursor: grabbing; }
   border: 2px solid var(--bg);
   border-radius: 6px;
 }
-::-webkit-scrollbar-thumb:hover { background: #2a2e38; }
+::-webkit-scrollbar-thumb:hover { background: var(--tile-3); }
 
 /* ─── Drink colour picker (beer-color.js) ────── */
 .bc-modes {
   display: inline-flex; padding: 3px; margin-bottom: 0.75rem;
-  border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm); background: var(--overlay);
 }
 .bc-mode {
   font: inherit; font-size: 0.85rem; color: var(--muted); cursor: pointer;
   padding: 0.3rem 0.9rem; border: 0; border-radius: 7px; background: none;
 }
 .bc-mode:hover { color: var(--text); }
-.bc-mode[aria-checked="true"] { background: rgba(255, 255, 255, 0.14); color: var(--text); }
+.bc-mode[aria-checked="true"] { background: var(--overlay-strong); color: var(--text); }
 .bc-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .bc-preset {
   display: inline-flex; align-items: center; gap: 0.45rem;
   font: inherit; font-size: 0.85rem; color: var(--text); cursor: pointer;
   padding: 0.35rem 0.75rem 0.35rem 0.4rem; border-radius: 999px;
-  border: 1px solid var(--line-strong); background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line-strong); background: var(--overlay-faint);
 }
-.bc-preset[aria-pressed="true"] { border-color: var(--text); background: rgba(255, 255, 255, 0.12); color: var(--text); }
+.bc-preset[aria-pressed="true"] { border-color: var(--text); background: var(--overlay-strong); color: var(--text); }
 .bc-dot { width: 20px; height: 20px; border-radius: 50%; background: var(--c); }
 /* Clear shows a faint tint over a checkerboard, as the tap list draws it. */
 .bc-dot.is-clear {

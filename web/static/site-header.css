@@ -63,7 +63,7 @@ site-header { display: block; }
 /* The menu is already the raised colour, so its hover and current page take
    a lighter fill to show. */
 .site-menu-list a:hover,
-.site-menu-list [aria-current="page"] { background: rgba(255, 255, 255, 0.08); }
+.site-menu-list [aria-current="page"] { background: var(--overlay); }
 
 @media (max-width: 640px) {
   .site-header { flex-wrap: wrap; }

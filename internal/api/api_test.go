@@ -962,3 +962,46 @@ func TestKegConnection(t *testing.T) {
 
 	assertStatus(t, a.do(http.MethodGet, "/api/kegs/nope/connection", nil), http.StatusNotFound)
 }
+
+// Text on the accent is near-black or white, whichever reads better on it.
+func TestOnColor(t *testing.T) {
+	for _, tc := range []struct {
+		accent, want string
+		ok           bool
+	}{
+		{"#f59e0b", "#0c0d11", true}, // the default amber
+		{"#ffffff", "#0c0d11", true},
+		{"#fff", "#0c0d11", true},
+		{"#1e3a8a", "#ffffff", true}, // dark blue
+		{"#000000", "#ffffff", true},
+		{"#757575", "#ffffff", true}, // the last grey on the dark side of the crossover
+		{"#767676", "#0c0d11", true}, // the first on the light side
+		{" #F59E0B ", "#0c0d11", true},
+		{"", "", false},
+		{"red", "", false},
+		{"f59e0b", "", false},
+		{"#f59e0", "", false},
+		{"#gggggg", "", false},
+	} {
+		got, ok := onColor(tc.accent)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("onColor(%q) = %q, %v; want %q, %v", tc.accent, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+// theme.css carries the text colour for the chosen accent, and leaves it to
+// the stylesheet's default when the accent is not a hex colour.
+func TestThemeCSSOnAccent(t *testing.T) {
+	a := newTestAPI(t)
+
+	assertStatus(t, a.patchConfig("theme", map[string]string{"accent_color": "#1e3a8a"}), http.StatusOK)
+	if body := a.do(http.MethodGet, "/theme.css", nil).Body.String(); !strings.Contains(body, "--on-accent-color: #ffffff;") {
+		t.Errorf("a dark accent should get white text:\n%s", body)
+	}
+
+	assertStatus(t, a.patchConfig("theme", map[string]string{"accent_color": "orange"}), http.StatusOK)
+	if body := a.do(http.MethodGet, "/theme.css", nil).Body.String(); strings.Contains(body, "--on-accent-color") {
+		t.Errorf("a named accent should leave the default text colour:\n%s", body)
+	}
+}

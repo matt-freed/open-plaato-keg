@@ -411,10 +411,10 @@ element's `count` property.
 The pages are styled as one application, in the tap list's look:
 
 - `tokens.css` holds the design tokens every page loads first: the page, tile
-  and text colours, the greys for secondary text, the radii, the fonts and
+  and text colours, the greys, borders and overlays mixed from them, the radii, the fonts and
   `--action`, the accent used for main buttons and selections. The themeable
   ones read the variables from `/theme.css` (see Theme below).
-- `tiles.css` is the tile grid and tile shared by the tap list and the Kegs
+- `tiles.css` is the tile grid and tile shared by the tap list and the Keg Scales
   page: the heading, specs, readings and the keg graphic.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
   sets its level. The tap list, the Keg Scales page and the Dashboard Setup preview
@@ -618,6 +618,22 @@ defaults, which are the tap list's palette, the system font and an amber
 accent, so an unset value leaves the page in its default look. The tap list
 does not use the accent, since each tile takes its beer's colour. The tap list
 title font is also the font of the page title in the header bar.
+
+The four colours are the only ones chosen. `tokens.css` mixes every other
+neutral from them with `color-mix()`: the raised surfaces (`--tile-2`,
+`--tile-3`) from the tile and text, the secondary text (`--soft`, `--muted`,
+`--faint`) from the text and page, and the borders and hover overlays
+(`--line*`, `--overlay*`) from the text over transparent. A light theme
+therefore gets dark greys and darkening overlays with no further settings. The
+mixes sit in an `@supports` block after the default dark values, since a
+custom property cannot fall back by declaring it twice. The pour, warning and
+danger colours, shadows and the CO₂ cylinder drawing stay fixed. Text on the
+accent, such as a primary button's, is `--on-action`: `onColor` picks
+near-black or white for a hex accent by WCAG contrast and `/theme.css` sends it
+as `--on-accent-color`; Dashboard Setup computes the same choice in the browser
+to preview it. History's charts draw through Chart.js on a canvas, which cannot
+read `var()` or `color-mix()`, so its `color` helper resolves a token to
+`rgba()` before handing it over.
 `fontStack` turns a stored family name into a full stack that falls back to the
 system font, and `System` selects that stack with no Google Fonts import.
 `GetAppConfig` runs a stored theme through `dropLegacyThemeDefaults`, which

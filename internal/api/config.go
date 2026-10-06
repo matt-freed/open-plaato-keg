@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/matt-freed/open-plaato-keg/internal/store"
@@ -99,6 +101,9 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 	}
 	b.WriteString(":root {\n")
 	writeCSSVar(&b, "--accent-color", theme.AccentColor)
+	if on, ok := onColor(theme.AccentColor); ok {
+		writeCSSVar(&b, "--on-accent-color", on)
+	}
 	writeCSSVar(&b, "--bg-color", theme.BgColor)
 	writeCSSVar(&b, "--card-bg", theme.CardBg)
 	writeCSSVar(&b, "--text-color", theme.TextColor)
@@ -111,6 +116,41 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 	// The theme changes from the settings page and must take effect on reload.
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(w, b.String())
+}
+
+// onColor picks the text colour for a background of the given hex colour:
+// near-black or white, whichever contrasts more by the WCAG measure. It
+// reports false for anything that is not #rgb or #rrggbb, which leaves the
+// stylesheet's default in place.
+func onColor(background string) (string, bool) {
+	hex, ok := strings.CutPrefix(strings.TrimSpace(background), "#")
+	if !ok {
+		return "", false
+	}
+	if len(hex) == 3 {
+		hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
+	}
+	if len(hex) != 6 {
+		return "", false
+	}
+	v, err := strconv.ParseUint(hex, 16, 32)
+	if err != nil {
+		return "", false
+	}
+	channel := func(shift uint) float64 {
+		c := float64((v>>shift)&0xff) / 255
+		if c <= 0.04045 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	l := 0.2126*channel(16) + 0.7152*channel(8) + 0.0722*channel(0)
+	// Contrast with black is (l+0.05)/0.05 and with white 1.05/(l+0.05);
+	// they are equal where (l+0.05)² = 0.0525.
+	if (l+0.05)*(l+0.05) >= 0.0525 {
+		return "#0c0d11", true
+	}
+	return "#ffffff", true
 }
 
 // systemFontStack is the default UI font, and what "System" selects.

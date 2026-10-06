@@ -266,9 +266,24 @@
     let poursView = '';
 
     const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    // The theme stores colours as #rrggbb, which takes a hex alpha suffix.
-    const withAlpha = (hex, a) => /^#[0-9a-f]{6}$/i.test(hex)
-      ? hex + Math.round(a * 255).toString(16).padStart(2, '0') : 'transparent';
+
+    // color resolves a colour token to rgba(), with an optional alpha. The
+    // charts draw on a canvas through Chart.js, and neither can read the
+    // var() and color-mix() that tokens.css derives its greys with. The
+    // browser computes the colour, and a one-pixel canvas turns whatever form
+    // it computes to into plain channels.
+    const colorProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    function color(name, alpha = 1) {
+      const el = document.body.appendChild(document.createElement('span'));
+      el.style.color = `var(${name})`;
+      const computed = getComputedStyle(el).color;
+      el.remove();
+      colorProbe.clearRect(0, 0, 1, 1);
+      colorProbe.fillStyle = computed;
+      colorProbe.fillRect(0, 0, 1, 1);
+      const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
 
     function units(keg) {
       const raw = keg?.display?.amount_unit || keg?.beer_left_unit || '';
@@ -437,7 +452,7 @@
         if (x < left || x > right) return;
         const ctx = chart.ctx;
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.strokeStyle = color('--text', 0.35);
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(Math.round(x) + 0.5, top);
@@ -570,14 +585,14 @@
 
     function renderCharts(keg, win) {
       destroyCharts();
-      Chart.defaults.color = token('--muted');
-      Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
+      Chart.defaults.color = color('--muted');
+      Chart.defaults.borderColor = color('--text', 0.06);
       Chart.defaults.font.family = token('--sans');
 
       const u = units(keg);
-      const action = token('--action');
-      const pour = token('--pour');
-      const surface = token('--tile');
+      const action = color('--action');
+      const pour = color('--pour');
+      const surface = color('--tile');
       const pct = measure === 'percent';
       const amt = chartAmount(keg);
       $('amountUnitChoice').hidden = pct || u.amount !== 'gal';
@@ -608,7 +623,7 @@
             {
               data: amountPoints,
               borderColor: action,
-              backgroundColor: withAlpha(action, 0.1),
+              backgroundColor: color('--action', 0.1),
               borderWidth: 2,
               borderJoinStyle: 'round',
               borderCapStyle: 'round',
