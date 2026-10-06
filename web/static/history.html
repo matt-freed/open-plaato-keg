@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
     <style>
@@ -264,19 +265,10 @@
     let poursPage = 1;
     let poursView = '';
 
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
-
     const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     // The theme stores colours as #rrggbb, which takes a hex alpha suffix.
     const withAlpha = (hex, a) => /^#[0-9a-f]{6}$/i.test(hex)
       ? hex + Math.round(a * 255).toString(16).padStart(2, '0') : 'transparent';
-
-    function kegName(keg, index) {
-      return keg.label?.trim() || `Scale ${index + 1}`;
-    }
 
     function units(keg) {
       const raw = keg?.display?.amount_unit || keg?.beer_left_unit || '';
@@ -760,19 +752,16 @@
       const seq = ++loadSeq;
       $('page').classList.add('is-loading');
       try {
-        const [res, pourRes, kegRes] = await Promise.all([
+        const [res, pourList, fresh] = await Promise.all([
+          // fetch rather than api, for the X-Log-Step-Seconds header.
           fetch(`/api/kegs/${encodeURIComponent(id)}/log?${query}`),
-          fetch(`/api/kegs/${encodeURIComponent(id)}/pours?${query}`),
+          api('GET', `/api/kegs/${encodeURIComponent(id)}/pours?${query}`),
           // The keg's current readings, for "Left now"; the list loaded with
           // the page may be stale by now.
-          fetch(`/api/kegs/${encodeURIComponent(id)}`).catch(() => null),
+          api('GET', `/api/kegs/${encodeURIComponent(id)}`).catch(() => null),
         ]);
         if (!res.ok) throw new Error(res.status);
-        if (!pourRes.ok) throw new Error(pourRes.status);
-        const [list, pourList, fresh] = await Promise.all([
-          res.json(), pourRes.json(),
-          kegRes?.ok ? kegRes.json().catch(() => null) : null,
-        ]);
+        const list = await res.json();
         if (seq !== loadSeq) return; // a newer choice has already been made
         entries = list;
         pours = pourList;
@@ -902,21 +891,8 @@
       if (entries.length) renderCharts(kegs.find(k => k.id === readHash().keg), shownWindow);
     });
     // ── Clearing ────────────────────────────────────
-    let toastTimer;
-    function showToast(message, type) {
-      const t = $('toast');
-      t.textContent = message;
-      t.className = `notification toast is-${type}`;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
-
     // The scale as the selector names it: its beer, if a tap draws from it.
-    function displayName(keg) {
-      const name = kegName(keg, kegs.indexOf(keg));
-      const beer = tapsByKeg[keg.id]?.name?.trim();
-      return beer ? `${beer} (${name})` : name;
-    }
+    const displayName = keg => kegNameWithBeer(keg, kegs.indexOf(keg), tapsByKeg[keg.id]);
 
     $('clearBtn').addEventListener('click', async () => {
       const keg = kegs.find(k => k.id === readHash().keg);
@@ -928,8 +904,7 @@
           'not just the one shown, and removes its pours from this page. ' +
           'The pours stay on All Pours. It cannot be undone.')) return;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(keg.id)}/log`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(res.status);
+        await api('DELETE', `/api/kegs/${encodeURIComponent(keg.id)}/log`);
         showToast('History cleared', 'success');
       } catch (e) {
         showToast('Could not clear the history: ' + e.message, 'danger');
@@ -943,8 +918,7 @@
       const p = pours.find(x => String(x.id) === b.dataset.delete);
       if (!p || !confirm(`Delete this ${pourSize(p)} pour? It is removed everywhere, including All Pours.`)) return;
       try {
-        const res = await fetch(`/api/pours/${encodeURIComponent(p.id)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(res.status);
+        await api('DELETE', `/api/pours/${encodeURIComponent(p.id)}`);
         showToast('Pour deleted', 'success');
       } catch (err) {
         showToast('Could not delete the pour: ' + err.message, 'danger');
@@ -962,17 +936,16 @@
       select('axisChoice', axisScale);
       select('amountUnitChoice', amountUnit);
       try {
-        const [kegsRes, cfg, tapList] = await Promise.all([
-          fetch('/api/kegs'),
+        const [kegList, cfg, tapList] = await Promise.all([
+          api('GET', '/api/kegs'),
           // The minimum pour is only for the note under the figures.
-          fetch('/api/config').then(r => r.ok ? r.json() : {}).catch(() => ({})),
+          api('GET', '/api/config').catch(() => ({})),
           // Only for labelling the scales, so a failure just leaves them
           // named by scale.
-          fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
+          api('GET', '/api/taps').catch(() => []),
         ]);
         minPour = cfg.min_pour ?? null;
-        if (!kegsRes.ok) throw new Error(kegsRes.status);
-        kegs = await kegsRes.json();
+        kegs = kegList;
         timeFormat = cfg.time_format || '12h';
         // The first tap, by tap number, that draws from each scale.
         for (const tap of tapList) {

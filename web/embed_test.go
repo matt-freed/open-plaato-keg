@@ -12,7 +12,7 @@ var pages = []string{
 	"kegs.html", "taplist.html", "taplist-setup.html", "history.html", "history-edit.html", "pours.html",
 	"dashboard-setup.html", "keg-setup.html", "system.html",
 	"style.css", "site-header.css", "site-header.js",
-	"tokens.css", "tiles.css", "keg-graphic.js", "live.js",
+	"tokens.css", "tiles.css", "keg-graphic.js", "live.js", "common.js",
 }
 
 func TestPagesArePresent(t *testing.T) {
@@ -312,6 +312,39 @@ func TestLiveUpdatesReconnectsToAbsoluteURL(t *testing.T) {
 	for _, want := range []string{"new WebSocket(url)", "'wss' : 'ws'}://${location.host}/ws`", "setTimeout(connect"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("live.js is missing %q", want)
+		}
+	}
+}
+
+// sharedHelpers are the names common.js declares for every page.
+var sharedHelpers = []string{"esc", "kegName", "kegNameWithBeer", "api", "showToast"}
+
+// Every page loads common.js before its own script and leaves its helpers to
+// it. A page that declared one again with let or const would stop with a
+// SyntaxError, and a function of the same name would silently replace it.
+func TestPagesUseCommonHelpers(t *testing.T) {
+	static := Static()
+	redeclared := regexp.MustCompile(`(?m)\b(?:function|const|let|var)\s+(` +
+		strings.Join(sharedHelpers, "|") + `)\b`)
+	for _, name := range pages {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body := string(data)
+		load := strings.Index(body, `<script src="/common.js"></script>`)
+		if load < 0 {
+			t.Errorf("%s does not load common.js", name)
+			continue
+		}
+		if inline := strings.Index(body, "<script>"); inline >= 0 && inline < load {
+			t.Errorf("%s runs its own script before common.js loads", name)
+		}
+		for _, m := range redeclared.FindAllStringSubmatch(body, -1) {
+			t.Errorf("%s declares its own %s; use the one in common.js", name, m[1])
 		}
 	}
 }

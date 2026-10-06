@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
+  <script src="/common.js"></script>
 </head>
 <body>
   <site-header heading="Tap List Setup"></site-header>
@@ -164,33 +165,11 @@
     let allTaps = [];
     let allKegs = [];
 
-    function showToast(msg, type = 'info') {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.className = `notification toast is-${type}`;
-      setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
-
     // ── Load all data ─────────────────────────────
     async function loadAll() {
-      const [tapsRes, kegsRes] = await Promise.all([
-        fetch('/api/taps'),
-        fetch('/api/kegs'),
-      ]);
-      allTaps = await tapsRes.json();
-      allKegs = await kegsRes.json();
+      [allTaps, allKegs] = await Promise.all([api('GET', '/api/taps'), api('GET', '/api/kegs')]);
       if (!board.active) renderBoard();
       populateDropdowns();
-    }
-
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
-
-    // kegName names a scale as the editor's sensor list does.
-    function kegName(keg) {
-      return keg.label?.trim() || `Scale ${allKegs.indexOf(keg) + 1}`;
     }
 
     // ── Board ─────────────────────────────────────
@@ -212,18 +191,18 @@
         const keg = tap.keg_id && allKegs.find(k => k.id === tap.keg_id);
         if (!tap.keg_id) tray.push([tap, '']);
         else if (!keg) tray.push([tap, 'Scale not found']);
-        else if (onScale.has(keg.id)) tray.push([tap, `Also on ${kegName(keg)}`]);
+        else if (onScale.has(keg.id)) tray.push([tap, `Also on ${kegName(keg, allKegs.indexOf(keg))}`]);
         else onScale.set(keg.id, tap);
       }
 
-      const rows = allKegs.map(keg => {
+      const rows = allKegs.map((keg, index) => {
         const tap = onScale.get(keg.id);
         const left = keg.amount_left != null
           ? `${keg.amount_left.toFixed(1)} ${keg.beer_left_unit || ''} left` : 'No reading yet';
         return `
           <div class="board-row">
             <div class="board-scale">
-              <span class="board-scale-name">${esc(kegName(keg))}</span>
+              <span class="board-scale-name">${esc(kegName(keg, index))}</span>
               <span class="board-scale-meta">${esc(left)}</span>
             </div>
             <div class="board-slot" data-slot="${esc(keg.id)}">
@@ -278,14 +257,7 @@
       renderBoard();
 
       try {
-        const res = await fetch('/api/taps/links', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ links }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.detail || body.error || res.status);
-        allTaps = body.taps;
+        allTaps = (await api('PATCH', '/api/taps/links', { links })).taps;
       } catch (e) {
         allTaps = previous;
         showToast('Could not move the tap: ' + e.message, 'danger');
@@ -422,15 +394,8 @@
       try {
         // A new tap's id is only a placeholder until the server assigns one.
         const exists = allTaps.some(t => t.id === currentTapId);
-        const res = await fetch(exists ? `/api/taps/${encodeURIComponent(currentTapId)}` : '/api/taps', {
-          method: exists ? 'PUT' : 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || err.error || res.status);
-        }
+        if (exists) await api('PUT', `/api/taps/${encodeURIComponent(currentTapId)}`, body);
+        else await api('POST', '/api/taps', body);
         showToast('Tap saved!', 'success');
         await loadAll();
         backToList();
@@ -444,13 +409,12 @@
       if (!currentTapId) return;
       if (!confirm('Delete this tap? This cannot be undone.')) return;
       try {
-        const res = await fetch(`/api/taps/${encodeURIComponent(currentTapId)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error(res.status);
+        await api('DELETE', `/api/taps/${encodeURIComponent(currentTapId)}`);
         showToast('Tap deleted', 'success');
         await loadAll();
         backToList();
       } catch (e) {
-        showToast('Delete failed', 'danger');
+        showToast('Delete failed: ' + e.message, 'danger');
       }
     }
 

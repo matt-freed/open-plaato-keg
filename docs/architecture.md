@@ -420,6 +420,12 @@ The pages are styled as one application, in the tap list's look:
   sets its level. The tap list, the Kegs page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
   list and the Kegs page share.
+- `common.js` holds the helpers every page loads before its own script:
+  `esc` for HTML, `kegName` and `kegNameWithBeer` for naming a scale
+  ("Scale n" when it has no label), `api` for JSON requests, which throws
+  with the server's `detail` on failure, and `showToast`. Pages use `fetch`
+  directly only where they need a response header, such as `X-Total-Count`.
+  A test in `web/embed_test.go` fails if a page redeclares one of these names.
 - `live.js` is the WebSocket feed, through `liveUpdates(onMessage)`, used by
   the tap list, the Kegs page and Keg Setup. It builds the full `ws://` or
   `wss://` address, since older browsers reject a relative one, passes each

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
+  <script src="/common.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -68,11 +69,6 @@
 
     // ── Formatting ─────────────────────────────────
     const UNIT_LABELS = { litre: 'L' };
-
-    function esc(s) {
-      return String(s).replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
 
     function num(v, digits) {
       return Number.isFinite(v) ? v.toFixed(digits) : null;
@@ -303,12 +299,7 @@
       const byId = new Map(taps.map(t => [t.id, t]));
       taps = order.map(id => byId.get(id)).filter(Boolean);
       try {
-        const res = await fetch('/api/taps/order', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ordered_ids: order }),
-        });
-        if (!res.ok) throw new Error(res.status);
+        await api('PUT', '/api/taps/order', { ordered_ids: order });
       } catch (_) {
         // Fall back to whatever the server has.
         loadAll();
@@ -319,17 +310,14 @@
     // A failed read keeps the current choice rather than flipping every tile.
     async function loadAmountDisplay() {
       try {
-        const res = await fetch('/api/config');
-        if (res.ok) amountDisplay = (await res.json()).amount_display || 'amount';
+        amountDisplay = (await api('GET', '/api/config')).amount_display || 'amount';
       } catch (_) {}
     }
 
     async function loadAll() {
       try {
         const settings = loadAmountDisplay();
-        const [tapsRes, kegsRes] = await Promise.all([fetch('/api/taps'), fetch('/api/kegs')]);
-        if (!tapsRes.ok || !kegsRes.ok) throw new Error('bad response');
-        const [nextTaps, kegList] = await Promise.all([tapsRes.json(), kegsRes.json()]);
+        const [nextTaps, kegList] = await Promise.all([api('GET', '/api/taps'), api('GET', '/api/kegs')]);
         taps = nextTaps;
         for (const id in kegs) delete kegs[id];
         for (const k of kegList) kegs[k.id] = k;

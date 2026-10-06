@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <script src="/live.js"></script>
     <style>
       /* The open scale's name, with whether it is connected. */
@@ -341,31 +342,20 @@
       let connInfo = null;
       let timeFormat = "12h";
 
-      function esc(v) {
-        return String(v ?? "").replace(/[&<>"']/g, c =>
-          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-      }
-
-      function kegName(keg) {
-        const index = allKegs.findIndex(k => k.id === keg.id);
-        return keg.label?.trim() || `Scale ${index + 1}`;
-      }
-
       // Every scale the server knows, with whether it is connected now.
       // Settings that go to the scale itself need it connected, but its
       // label, display and record can be changed either way.
       async function loadKegs() {
         try {
-          const [kegsRes, connectedRes, tapsRes] = await Promise.all([
-            fetch("/api/kegs"),
-            fetch("/api/kegs/connected"),
-            fetch("/api/taps"),
+          const [kegList, connected, tapList] = await Promise.all([
+            api("GET", "/api/kegs"),
+            api("GET", "/api/kegs/connected"),
+            // Taps only name the beer; without them the rest of the page still works.
+            api("GET", "/api/taps").catch(() => null),
           ]);
-          if (!kegsRes.ok || !connectedRes.ok) throw new Error("bad response");
-          allKegs = await kegsRes.json();
-          connectedIds = new Set(await connectedRes.json());
-          // Taps only name the beer; without them the rest of the page still works.
-          if (tapsRes.ok) allTaps = await tapsRes.json();
+          allKegs = kegList;
+          connectedIds = new Set(connected);
+          if (tapList) allTaps = tapList;
           renderKegList();
           updateEditHead();
           loadConnection();
@@ -387,7 +377,7 @@
           container.innerHTML = '<p class="has-text-grey">No scales yet. Once a Plaato Keg connects, it appears here.</p>';
           return;
         }
-        container.innerHTML = allKegs.map(keg => {
+        container.innerHTML = allKegs.map((keg, index) => {
           const online = connectedIds.has(keg.id);
           const left = amountLeft(keg);
           const taps = tapsFor(keg.id);
@@ -395,7 +385,7 @@
           return `
             <a class="list-row" href="#keg=${encodeURIComponent(keg.id)}">
               <span class="list-row-text">
-                <span class="list-row-name">${esc(kegName(keg))}</span>
+                <span class="list-row-name">${esc(kegName(keg, index))}</span>
                 <span class="list-row-meta">${first}${left}</span>
               </span>
               <span class="status-pill${online ? " is-online" : ""}">${online ? "Connected" : "Offline"}</span>
@@ -406,9 +396,9 @@
 
       function updateEditHead() {
         if (!selectedKegId) return;
-        const keg = allKegs.find(k => k.id === selectedKegId);
+        const index = allKegs.findIndex(k => k.id === selectedKegId);
         const online = connectedIds.has(selectedKegId);
-        document.getElementById("editTitle").textContent = keg ? kegName(keg) : "Scale";
+        document.getElementById("editTitle").textContent = index >= 0 ? kegName(allKegs[index], index) : "Scale";
         const pill = document.getElementById("editStatus");
         pill.textContent = online ? "Connected" : "Offline";
         pill.classList.toggle("is-online", online);
@@ -513,8 +503,7 @@
       function loadKegData(kegId) {
         if (!kegId) return;
 
-        fetch(`/api/kegs/${kegId}`)
-          .then((response) => response.json())
+        api("GET", `/api/kegs/${encodeURIComponent(kegId)}`)
           .then((data) => {
             currentKegData = data;
             populateFormFields(data);
@@ -568,9 +557,7 @@
         const id = selectedKegId;
         if (!id) return;
         try {
-          const res = await fetch(`/api/kegs/${encodeURIComponent(id)}/connection`);
-          if (!res.ok) return;
-          const info = await res.json();
+          const info = await api("GET", `/api/kegs/${encodeURIComponent(id)}/connection`);
           if (id !== selectedKegId) return;
           connInfo = info;
           if (currentKegData.id === id) updateSettingsDisplay(currentKegData);
@@ -800,9 +787,8 @@
         }
       });
 
-      fetch("/api/config")
-        .then(r => r.json())
-        .then(tf => { timeFormat = tf.time_format || "12h"; })
+      api("GET", "/api/config")
+        .then(cfg => { timeFormat = cfg.time_format || "12h"; })
         .catch(() => {});
 
       showReturnLinks();
@@ -819,35 +805,20 @@
         return kegId;
       }
 
-      function showToast(message, type = "info") {
-        const toast = document.getElementById("toast");
-        toast.textContent = message;
-        toast.className = `notification toast is-${type}`;
-        setTimeout(() => {
-          toast.classList.add("is-hidden");
-        }, 3000);
+      // Sends the open scale a command, answering with the command's name.
+      function postCommand(kegId, command, body = {}) {
+        return api("POST", `/api/kegs/${encodeURIComponent(kegId)}/${command}`, body);
       }
 
-      function sendCommand(endpoint, body = {}) {
+      async function sendCommand(endpoint, body = {}) {
         const kegId = getSelectedKeg();
         if (!kegId) return;
-
-        fetch(`/api/kegs/${kegId}/${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.status === "ok") {
-              showToast(`Command sent: ${data.command}`, "success");
-            } else {
-              showToast(`Error: ${data.error}`, "danger");
-            }
-          })
-          .catch((err) => {
-            showToast(`Error: ${err.message}`, "danger");
-          });
+        try {
+          const data = await postCommand(kegId, endpoint, body);
+          showToast(`Command sent: ${data.command}`, "success");
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+        }
       }
 
       // Calibration commands with auto-release after 1 second
@@ -863,8 +834,9 @@
         sendCommand("reset-last-pour");
       }
 
-      // Helper function to send command, wait 1s, then send release
-      function sendCommandWithRelease(command, releaseCommand, buttonId) {
+      // Momentary commands: the press, then a second later the release the
+      // device needs before it will act on the button again.
+      async function sendCommandWithRelease(command, releaseCommand, buttonId) {
         const kegId = getSelectedKeg();
         if (!kegId) return;
 
@@ -873,46 +845,18 @@
         button.disabled = true;
         button.innerHTML = '<span>Working...</span>';
 
-        fetch(`/api/kegs/${kegId}/${command}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.status === "ok") {
-              showToast(`Command sent: ${data.command}`, "success");
-              // Wait 1 second then send release
-              setTimeout(() => {
-                fetch(`/api/kegs/${kegId}/${releaseCommand}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({}),
-                })
-                  .then((response) => response.json())
-                  .then((releaseData) => {
-                    if (releaseData.status === "ok") {
-                      showToast(`${data.command} completed`, "success");
-                    }
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                  })
-                  .catch(() => {
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                  });
-              }, 1000);
-            } else {
-              showToast(`Error: ${data.error}`, "danger");
-              button.disabled = false;
-              button.innerHTML = originalText;
-            }
-          })
-          .catch((err) => {
-            showToast(`Error: ${err.message}`, "danger");
-            button.disabled = false;
-            button.innerHTML = originalText;
-          });
+        try {
+          const data = await postCommand(kegId, command);
+          showToast(`Command sent: ${data.command}`, "success");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await postCommand(kegId, releaseCommand);
+          showToast(`${data.command} completed`, "success");
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+        } finally {
+          button.disabled = false;
+          button.innerHTML = originalText;
+        }
       }
 
       function sendKnownWeight() {
@@ -947,23 +891,18 @@
 
       // Saves settings kept on the server rather than the device, so they
       // work whether or not the scale is connected.
-      function saveKeg(changes, message) {
+      async function saveKeg(changes, message) {
         const kegId = getSelectedKeg();
         if (!kegId) return;
-        fetch(`/api/kegs/${encodeURIComponent(kegId)}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(changes),
-        })
-          .then(async (response) => {
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || data.error || response.status);
-            showToast(message, "success");
-          })
-          .catch((err) => showToast(`Error: ${err.message}`, "danger"));
+        try {
+          await api("PATCH", `/api/kegs/${encodeURIComponent(kegId)}`, changes);
+          showToast(message, "success");
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+        }
       }
 
-      function forgetSelectedScale() {
+      async function forgetSelectedScale() {
         const kegId = selectedKegId;
         if (!kegId) {
           showToast("Please select a scale first", "warning");
@@ -974,19 +913,14 @@
           return;
         }
 
-        fetch(`/api/kegs/${encodeURIComponent(kegId)}`, { method: "DELETE" })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.status === "ok") {
-              showToast("Scale record removed", "success");
-              loadKegs().then(backToList);
-            } else {
-              showToast(`Error: ${data.error || "Failed to forget scale"}`, "danger");
-            }
-          })
-          .catch((err) => {
-            showToast(`Error: ${err.message}`, "danger");
-          });
+        try {
+          await api("DELETE", `/api/kegs/${encodeURIComponent(kegId)}`);
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+          return;
+        }
+        showToast("Scale record removed", "success");
+        loadKegs().then(backToList);
       }
 
       // Settings commands

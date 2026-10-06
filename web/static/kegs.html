@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
 </head>
 <body>
   <site-header heading="Kegs"></site-header>
@@ -46,11 +47,6 @@
     // chosen on Dashboard Setup.
     let amountDisplay = 'amount';
     let timeFormat = '12h';
-
-    function esc(s) {
-      return String(s).replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
 
     function num(v, digits) {
       return Number.isFinite(v) ? v.toFixed(digits) : null;
@@ -154,7 +150,7 @@
         ? '<span class="co2-badge">CO₂</span>'
         : tap ? esc(tap.name || 'Unnamed beer') : 'Not on tap';
       tile.querySelector('.beer').textContent =
-        keg.label?.trim() || `Scale ${(index ?? 0) + 1}`;
+        kegName(keg, index ?? 0);
 
       const readings = [
         `<div class="reading">
@@ -299,11 +295,8 @@
     function persistKegOrder(moved) {
       const ids = keepEmptyInPlace(sortKegs(Object.values(kegs)).map(k => k.id), moved);
       ids.forEach((id, i) => { if (kegs[id]) kegs[id].sort_order = i; });
-      fetch('/api/kegs/order', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ordered_ids: ids }),
-      }).catch(err => console.error('Error saving keg order:', err));
+      api('PUT', '/api/kegs/order', { ordered_ids: ids })
+        .catch(err => console.error('Error saving keg order:', err));
     }
 
     // ── Data ───────────────────────────────────────
@@ -311,10 +304,9 @@
     // with the kegs and refreshed on the same slow cycle as the tap list.
     async function loadTaps() {
       try {
-        const res = await fetch('/api/taps');
-        if (!res.ok) return;
+        const tapList = await api('GET', '/api/taps');
         tapsByKeg = {};
-        for (const tap of await res.json()) {
+        for (const tap of tapList) {
           if (tap.keg_id && !tapsByKeg[tap.keg_id]) tapsByKeg[tap.keg_id] = tap;
         }
       } catch (_) {}
@@ -324,9 +316,7 @@
     // tile; the time format is only for the last pour's time.
     async function loadConfig() {
       try {
-        const res = await fetch('/api/config');
-        if (!res.ok) return;
-        const cfg = await res.json();
+        const cfg = await api('GET', '/api/config');
         amountDisplay = cfg.amount_display || 'amount';
         timeFormat = cfg.time_format || '12h';
       } catch (_) {}
@@ -334,10 +324,9 @@
 
     async function loadAll() {
       try {
-        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps(), loadConfig()]);
-        if (!kegsRes.ok) throw new Error(kegsRes.status);
+        const [kegList] = await Promise.all([api('GET', '/api/kegs'), loadTaps(), loadConfig()]);
         for (const id in kegs) delete kegs[id];
-        for (const k of await kegsRes.json()) kegs[k.id] = k;
+        for (const k of kegList) kegs[k.id] = k;
         render();
       } catch (err) {
         if (!Object.keys(kegs).length) statusEl.textContent = 'Could not load the scales. Is the server running?';

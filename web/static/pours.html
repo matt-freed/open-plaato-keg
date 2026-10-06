@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <style>
       /* Scale follows the right-aligned ABV, so it needs its own space. */
       .data-table .scale-col { padding-left: 1.25rem; }
@@ -154,11 +155,6 @@
     // Values as loaded, by pour id, so only what changed is saved.
     let original = new Map();
     const selected = new Set();
-
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
 
     const beerOf = p => p.beer_name?.trim() || NO_BEER;
     const scaleName = (label, kegId) => label?.trim() || `Scale …${kegId.slice(-4)}`;
@@ -437,13 +433,14 @@
       $('page').classList.add('is-loading');
       let sum, list, count;
       try {
-        const [sumRes, res] = await Promise.all([
-          fetch(`/api/pours/summary?${query}`),
+        let res;
+        [sum, res] = await Promise.all([
+          api('GET', `/api/pours/summary?${query}`),
+          // fetch rather than api, for the X-Total-Count header.
           fetch(`/api/pours?${pageQuery}`),
         ]);
-        if (!sumRes.ok) throw new Error(sumRes.status);
         if (!res.ok) throw new Error(res.status);
-        [sum, list] = await Promise.all([sumRes.json(), res.json()]);
+        list = await res.json();
         count = Number(res.headers.get('X-Total-Count')) || 0;
       } catch (_) {
         if (seq !== loadSeq) return;
@@ -469,26 +466,6 @@
       renderFilters(view);
       renderSummary(view);
       renderTable();
-    }
-
-    let toastTimer;
-    function showToast(message, type) {
-      const t = $('toast');
-      t.textContent = message;
-      t.className = `notification toast is-${type}`;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
-
-    async function sendJSON(method, path, body) {
-      const res = await fetch(path, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || res.status);
-      return data;
     }
 
     // ── Controls ────────────────────────────────────
@@ -531,7 +508,7 @@
       if (!edits.length || invalid) return;
       $('saveBtn').disabled = true;
       try {
-        await sendJSON('PATCH', '/api/pours', { pours: edits });
+        await api('PATCH', '/api/pours', { pours: edits });
         showToast(edits.length === 1 ? 'Pour saved' : `${edits.length} pours saved`, 'success');
       } catch (err) {
         showToast('Could not save: ' + err.message, 'danger');
@@ -547,7 +524,7 @@
       const what = ids.length === 1 ? 'this pour' : `these ${ids.length} pours`;
       if (!confirm(`Delete ${what}? They are removed everywhere, including History. It cannot be undone.`)) return;
       try {
-        const { deleted } = await sendJSON('DELETE', '/api/pours', { ids });
+        const { deleted } = await api('DELETE', '/api/pours', { ids });
         showToast(deleted === 1 ? 'Pour deleted' : `${deleted} pours deleted`, 'success');
       } catch (err) {
         showToast('Could not delete: ' + err.message, 'danger');
@@ -562,7 +539,7 @@
     window.addEventListener('hashchange', show);
 
     async function init() {
-      const tf = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+      const tf = await api('GET', '/api/config').catch(() => ({}));
       timeFormat = tf.time_format || '12h';
       show();
     }
