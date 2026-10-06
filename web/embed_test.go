@@ -348,3 +348,28 @@ func TestPagesUseCommonHelpers(t *testing.T) {
 		}
 	}
 }
+
+// Every page's browser title is its heading followed by the application name,
+// so tabs and bookmarks read the same as the header bar.
+func TestPageTitlesMatchHeadings(t *testing.T) {
+	static := Static()
+	title := regexp.MustCompile(`<title>([^<]*)</title>`)
+	heading := regexp.MustCompile(`<site-header heading="([^"]*)">`)
+	for _, name := range pages {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		tm, hm := title.FindSubmatch(data), heading.FindSubmatch(data)
+		if tm == nil || hm == nil {
+			t.Errorf("%s is missing its <title> or <site-header heading>", name)
+			continue
+		}
+		if want := string(hm[1]) + " - Open Plaato"; string(tm[1]) != want {
+			t.Errorf("%s title = %q, want %q", name, tm[1], want)
+		}
+	}
+}
