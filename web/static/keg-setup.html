@@ -422,12 +422,13 @@
         return keg?.keg_mode === 2 ? "CO₂" : "Not on a tap";
       }
 
-      // " · 3.2 gal left" in the display units, or "" before the scale has
+      // " · 3.2 gal left" in the scale's own units, or "" before it has
       // reported an amount. Shared by the list and the editor so they agree.
+      // Like everything on this page it ignores the display units: this is
+      // where the scale is configured, so it shows what the scale reports.
       function amountLeft(keg) {
-        const d = keg.display ?? {};
-        const amount = d.amount_left ?? keg.amount_left;
-        const rawUnit = d.amount_unit ?? keg.beer_left_unit ?? "";
+        const amount = keg.amount_left;
+        const rawUnit = keg.beer_left_unit ?? "";
         const unit = rawUnit === "litre" ? "L" : rawUnit;
         return Number.isFinite(amount) ? ` · ${amount.toFixed(1)} ${esc(unit)} left` : "";
       }

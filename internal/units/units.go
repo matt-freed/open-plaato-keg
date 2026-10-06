@@ -132,9 +132,9 @@ func TempLabel(sys System) string {
 
 // ParseTempLabel reads a device-reported temperature unit.
 //
-// The device sends this as a free-form string, so anything ending in an F is
-// taken as Fahrenheit and anything ending in a C as Celsius; ok is false for
-// a string that is neither.
+// The device sends this as a free-form string, so only the spellings below are
+// recognised: °F, F, f or ℉ as Fahrenheit and °C, C, c or ℃ as Celsius. ok is
+// false for anything else, and callers then fall back to the unit system.
 func ParseTempLabel(s string) (fahrenheit, ok bool) {
 	switch s {
 	case "°F", "F", "f", "℉":
