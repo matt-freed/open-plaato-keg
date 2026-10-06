@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kegs</title>
+    <title>Keg Scales - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/tiles.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
 </head>
 <body>
-  <site-header heading="Kegs"></site-header>
+  <site-header heading="Keg Scales"></site-header>
 
   <section class="section">
-    <p class="empty-state" id="status">Loading scales…</p>
+    <p class="empty-state" id="status">Loading keg scales…</p>
     <div class="grid" id="kegContainer"></div>
     <div class="empty-section" id="emptySection" hidden>
       <h2 class="empty-section-heading">Empty</h2>
@@ -27,6 +28,7 @@
   <script src="/keg-graphic.js"></script>
   <script src="/tile-menu.js"></script>
   <script src="/tile-gestures.js"></script>
+  <script src="/live.js"></script>
   <script>
     'use strict';
 
@@ -45,11 +47,6 @@
     // chosen on Dashboard Setup.
     let amountDisplay = 'amount';
     let timeFormat = '12h';
-
-    function esc(s) {
-      return String(s).replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
 
     function num(v, digits) {
       return Number.isFinite(v) ? v.toFixed(digits) : null;
@@ -153,7 +150,7 @@
         ? '<span class="co2-badge">CO₂</span>'
         : tap ? esc(tap.name || 'Unnamed beer') : 'Not on tap';
       tile.querySelector('.beer').textContent =
-        keg.label?.trim() || `Scale ${(index ?? 0) + 1}`;
+        kegName(keg, index ?? 0);
 
       const readings = [
         `<div class="reading">
@@ -254,7 +251,7 @@
         kegContainer.replaceChildren();
         emptyContainer.replaceChildren();
         emptySection.hidden = true;
-        statusEl.textContent = 'No scales yet. Once a Plaato Keg connects, it appears here.';
+        statusEl.textContent = 'No keg scales yet. Once a Plaato Keg connects, it appears here.';
         return;
       }
       statusEl.textContent = '';
@@ -298,11 +295,8 @@
     function persistKegOrder(moved) {
       const ids = keepEmptyInPlace(sortKegs(Object.values(kegs)).map(k => k.id), moved);
       ids.forEach((id, i) => { if (kegs[id]) kegs[id].sort_order = i; });
-      fetch('/api/kegs/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ordered_ids: ids }),
-      }).catch(err => console.error('Error saving keg order:', err));
+      api('PUT', '/api/kegs/order', { ordered_ids: ids })
+        .catch(err => console.error('Error saving keg order:', err));
     }
 
     // ── Data ───────────────────────────────────────
@@ -310,65 +304,48 @@
     // with the kegs and refreshed on the same slow cycle as the tap list.
     async function loadTaps() {
       try {
-        const res = await fetch('/api/taps');
-        if (!res.ok) return;
+        const tapList = await api('GET', '/api/taps');
         tapsByKeg = {};
-        for (const tap of await res.json()) {
+        for (const tap of tapList) {
           if (tap.keg_id && !tapsByKeg[tap.keg_id]) tapsByKeg[tap.keg_id] = tap;
         }
       } catch (_) {}
     }
 
-    // A failed read keeps the current choice rather than flipping every tile.
-    async function loadAmountDisplay() {
+    // A failed read keeps the current choices rather than flipping every
+    // tile; the time format is only for the last pour's time.
+    async function loadConfig() {
       try {
-        const res = await fetch('/api/config/amount-display');
-        if (res.ok) amountDisplay = (await res.json()).amount_display || 'amount';
-      } catch (_) {}
-    }
-
-    // Only for the last pour's time, so a failure keeps the current format.
-    async function loadTimeFormat() {
-      try {
-        const res = await fetch('/api/config/time-format');
-        if (res.ok) timeFormat = (await res.json()).time_format || '12h';
+        const cfg = await api('GET', '/api/config');
+        amountDisplay = cfg.amount_display || 'amount';
+        timeFormat = cfg.time_format || '12h';
       } catch (_) {}
     }
 
     async function loadAll() {
       try {
-        const [kegsRes] = await Promise.all([fetch('/api/kegs'), loadTaps(), loadAmountDisplay(), loadTimeFormat()]);
-        if (!kegsRes.ok) throw new Error(kegsRes.status);
+        const [kegList] = await Promise.all([api('GET', '/api/kegs'), loadTaps(), loadConfig()]);
         for (const id in kegs) delete kegs[id];
-        for (const k of await kegsRes.json()) kegs[k.id] = k;
+        for (const k of kegList) kegs[k.id] = k;
         render();
       } catch (err) {
-        if (!Object.keys(kegs).length) statusEl.textContent = 'Could not load the scales. Is the server running?';
+        if (!Object.keys(kegs).length) statusEl.textContent = 'Could not load the keg scales. Is the server running?';
       }
-    }
-
-    function connect() {
-      const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-      ws.addEventListener('message', ev => {
-        let msg;
-        try { msg = JSON.parse(ev.data); } catch (_) { return; }
-        if (msg.type === 'keg_removed') {
-          delete kegs[msg.id];
-          render();
-        } else if (msg.type === 'keg' && msg.data?.id) {
-          kegs[msg.data.id] = msg.data;
-          render();
-        }
-      });
-      ws.addEventListener('close', () => setTimeout(connect, 5000));
-      ws.addEventListener('error', () => ws.close());
     }
 
     loadAll();
     setInterval(() => { if (!gestures.active) loadAll(); }, 60000);
     // Keeps the "ago" times current between updates.
     setInterval(render, 15000);
-    connect();
+    liveUpdates(msg => {
+      if (msg.type === 'keg_removed') {
+        delete kegs[msg.id];
+        render();
+      } else if (msg.type === 'keg' && msg.data?.id) {
+        kegs[msg.data.id] = msg.data;
+        render();
+      }
+    });
   </script>
 </body>
 </html>

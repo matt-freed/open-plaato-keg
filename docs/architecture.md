@@ -185,7 +185,7 @@ anything outside a device's own goroutine reaches that device.
 - Each `Conn` records when it was accepted and, on every read that returns
   bytes, when the device was last heard from, so heartbeats count. `Conn.Info`
   returns those with the remote IP (without the port), and
-  `Commander.Connection` looks it up by keg id for the Keg Setup page. This is
+  `Commander.Connection` looks it up by keg id for the Keg Scale Setup page. This is
   separate from the keg's stored `last_seen`, which only a packet of data moves.
 
 **`Commander`** builds Blynk pin writes — tare, empty-keg weight, max volume,
@@ -211,7 +211,7 @@ path and the API never contend for SQLite's lock.
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
 | `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
-| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
 
 There are no foreign keys.
 
@@ -242,14 +242,17 @@ the row (or start a new one), apply each non-transient property through
 `trackPour`, derive `beer_left_unit`, then `INSERT OR REPLACE`. `UpdateKeg` is
 the same without access to the transaction. Because a packet carries only the
 pins that changed, fields it does not mention keep their stored values. The
-first confirmed packet from a new keg id creates its row.
+first confirmed packet from a new keg id creates its row. `UpdateKeg` also
+creates a row it does not find, so the API's callers (`Server.updateKeg` and
+`handleKegOrder`) check the keg exists first and answer 404, rather than let a
+request for an unknown id create a phantom keg.
 
 Two values get special treatment:
 
 - **`last_pour`**, the device's own pin 59, is rejected outside a plausible
   range (`pourRange`, roughly 2 to 48 oz in the keg's unit), which filters out
   spikes such as a fridge compressor starting. It is kept and served, but
-  nothing in the UI shows it any more: the Kegs page's last pour comes from
+  nothing in the UI shows it any more: the Keg Scales page's last pour comes from
   recorded pours.
 - **`beer_left_unit`** is derived from `unit`, `measure_unit` and `keg_mode`
   rather than taken from the device's pin 74, which can go stale after a mode
@@ -361,20 +364,25 @@ Every WebSocket frame carries a `type`: `keg` (with `data`) or `keg_removed`
 
 ## HTTP API and UI — `internal/api`, `web`
 
-A chi router with `Recoverer` and `RealIP` middleware:
+A chi router with `Recoverer` and `RealIP` middleware. The routes follow one
+scheme, set out in a comment in `Handler`: reads are `GET`; a change is `PUT`
+when the body replaces the resource, `PATCH` when it carries only what changes,
+and `DELETE` to remove it, with the bulk forms naming their targets in the
+body; `POST` creates a tap or sends a keg a command. A known path asked for
+with another method is a 405.
 
 | Route | Purpose |
 |---|---|
 | `GET /api/alive` | Health check (used by the Docker healthcheck) |
-| `/api/kegs` | List, connected ids, known ids, ordering |
-| `/api/kegs/{id}` | Get, live connection (`/connection`: remote IP, connected and last-heard times), history (`/log`, `/log/csv`, `/log/clear`, and `/log/rows`, `/log/update`, `/log/delete` for the editor), pours (`/pours`), delete |
-| `/api/kegs/{id}/…` | Device commands: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list; saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `/api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `/api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
-| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `/api/pours/update`, `/api/pours/delete` for several, `/api/pours/{id}/delete` |
-| `/api/config/…` | Home page, time format, display units, amount display, minimum pour, theme |
+| `/api/kegs` | List, connected ids, known ids, ordering (`PUT /order`) |
+| `/api/kegs/{id}` | `GET`, `DELETE`, and `PATCH` for the label and CO₂ capacity, which `handleUpdateKeg` stores here since the device has no pin for them; live connection (`/connection`: remote IP, connected and last-heard times); history (`GET /log`, `/log/csv`, `DELETE /log` to clear it, and `GET`, `PATCH`, `DELETE /log/rows` for the editor); pours (`/pours`) |
+| `/api/kegs/{id}/…` | Device commands, all `POST`: tare, empty keg, calibration, units, mode, sensitivity, … |
+| `/api/taps` | CRUD for the tap list: `POST` creates with a generated id (`handleCreateTap`), `PUT /{id}` replaces an existing tap (`handleReplaceTap`); saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `PUT /api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `PATCH /api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
+| `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `PATCH /api/pours` for All Pours' edits, `DELETE /api/pours` for several, `DELETE /api/pours/{id}` |
+| `/api/config` | Every setting: home page, time format, display units, amount display, minimum pour, theme. `GET` reads them together; `PATCH` changes any of them through `store.UpdateAppConfig`, in one transaction, and answers with the result |
 | `GET /api/system/env` | The configuration variables and their values in effect, from `config.Settings`, which withholds the BarHelper API key. Captured once at startup |
 | `GET /api/system/logs` | The buffered log records after `?after=<seq>`, with `oldest_seq` (below `after`+1 means some were discarded unseen) and `latest_seq` (below `after` means the server restarted), and the live `level` beside the `configured_level` from `LOG_LEVEL` |
-| `POST /api/system/log-level` | Sets the live level (`debug`, `info`, `warn` or `error`) through the `LevelVar` in `api.System`, until restart. The change is logged at info while the more verbose of the two levels is in force |
+| `PUT /api/system/log-level` | Sets the live level (`debug`, `info`, `warn` or `error`) through the `LevelVar` in `api.System`, until restart. The change is logged at info while the more verbose of the two levels is in force |
 | `GET /ws` | WebSocket feed |
 | `/`, `/*` | The embedded UI |
 
@@ -383,8 +391,8 @@ are sent as a press and a release. Edits and deletes publish events so open
 browsers update.
 
 The UI is plain HTML and JavaScript in `web/static`, embedded into the binary by
-`web/embed.go`, with no build step: the Kegs page (`kegs.html`), tap list,
-Keg Setup, history, All Pours, their setup pages, and System (`system.html`),
+`web/embed.go`, with no build step: the Keg Scales page (`kegs.html`), tap list,
+Keg Scale Setup, history, All Pours, their setup pages, and System (`system.html`),
 which shows the server version from `/api/alive`, lists the environment, sets the server's log level, and polls
 `/api/system/logs` every 5 seconds, filtering by level and text in the browser.
 It keeps every record but renders the newest 200 matches, one line each, with
@@ -393,7 +401,7 @@ re-render that adds records above the reader's position scrolls to keep it. A ta
 details; there is no separate beverage library.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
-title from its `heading` attribute, the Tap List, Kegs and History links, the
+title from its `heading` attribute, the Tap List, Keg Scales and History links, the
 Configure menu, and marks the current page. All Pours
 has no link of its own; it is reached from History, which stays marked there. Pages load
 it in `<head>` without `defer`, so the element is defined before the parser
@@ -403,16 +411,27 @@ element's `count` property.
 The pages are styled as one application, in the tap list's look:
 
 - `tokens.css` holds the design tokens every page loads first: the page, tile
-  and text colours, the greys for secondary text, the radii, the fonts and
+  and text colours, the greys, borders and overlays mixed from them, the radii, the fonts and
   `--action`, the accent used for main buttons and selections. The themeable
   ones read the variables from `/theme.css` (see Theme below).
-- `tiles.css` is the tile grid and tile shared by the tap list and the Kegs
+- `tiles.css` is the tile grid and tile shared by the tap list and the Keg Scales
   page: the heading, specs, readings and the keg graphic.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
-  sets its level. The tap list, the Kegs page and the Dashboard Setup preview
+  sets its level. The tap list, the Keg Scales page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
-  list and the Kegs page share.
-- `tile-gestures.js` is the pointer handling for tap list and Kegs page tiles,
+  list and the Keg Scales page share.
+- `common.js` holds the helpers every page loads before its own script:
+  `esc` for HTML, `kegName` and `kegNameWithBeer` for naming a scale
+  ("Keg Scale n" when it has no label), `api` for JSON requests, which throws
+  with the server's `detail` on failure, and `showToast`. Pages use `fetch`
+  directly only where they need a response header, such as `X-Total-Count`.
+  A test in `web/embed_test.go` fails if a page redeclares one of these names.
+- `live.js` is the WebSocket feed, through `liveUpdates(onMessage)`, used by
+  the tap list, the Keg Scales page and Keg Scale Setup. It builds the full `ws://` or
+  `wss://` address, since older browsers reject a relative one, passes each
+  parsed frame to the page, and reconnects five seconds after the socket
+  closes.
+- `tile-gestures.js` is the pointer handling for tap list and Keg Scales page tiles,
   through `attachTileGestures`: dragging to reorder, and opening the tile menu.
   It uses pointer events rather than HTML5 drag and drop, which does not work
   on touch screens. A mouse drags as soon as it moves and opens the menu with a
@@ -424,23 +443,31 @@ The pages are styled as one application, in the tap list's look:
   every tile has the menu.
 - `tile-menu.js` is the menu itself, on every tile, empty ones included: View
   history (`/history.html#keg=`), Edit tap (`/taplist-setup.html#tap=`) and
-  Edit keg (`/keg-setup.html#keg=`). An item with nothing to link to, such as a
+  Edit keg scale (`/keg-setup.html#keg=`). An item with nothing to link to, such as a
   tap with no keg or a scale on no tap, is shown disabled. Nothing on a tile
   shows the menu is there, so the tap list stays clean as a display. One
   opened by touch sits above the finger rather than under it. The edit links
   carry `?from=taplist` or `?from=kegs`, and the two setup pages then show a
-  link back to that screen beside "All taps" or "All scales"
+  link back to that screen beside "All taps" or "All keg scales"
   (`showReturnLinks`). Opened any other way, they show only the list link.
 - The dragging and menu styles are in `tiles.css`.
 - `style.css` styles everything else, used by every page except the tap list:
   layout, tiles for groups of settings, form controls, segmented choices,
-  tables and toasts.
+  tables and toasts. Buttons come from one small set, listed at the top of its
+  Buttons section: plain, `is-primary` for a form's main action, `is-danger`
+  for anything destructive, `is-small`, `is-fullwidth`, `is-static` for a unit
+  label, and `.buttons.has-addons` for a set of choices with `is-selected` on
+  the chosen one. A page may add a layout class (`sensitivity-btn`,
+  `scale-option`, `return-link`) but nothing else; `TestButtonsUseTheDocumentedSet`
+  in `web/embed_test.go` fails otherwise. Choice groups carry `data-choice`
+  and are marked by a page's `select(name, value)`, on Dashboard Setup and
+  Keg Scale Setup alike.
 
-Tap Setup and Keg Setup share one pattern: a list of taps or scales in a
+Tap Setup and Keg Scale Setup share one pattern: a list of taps or scales in a
 single centred column, where choosing one opens its editor as a view of its
 own with a back link to the list. The URL hash records the open item
 (`#tap=<id>`, `#new`, `#keg=<id>`), and each page's `showView` follows it, so
-Back and reload work. Keg Setup lists every known scale with whether it is
+Back and reload work. Keg Scale Setup lists every known scale with whether it is
 connected, polling `/api/kegs/connected` since connections publish no event.
 The open scale's System table adds its IP address, when it connected and when
 it was last heard from, from `/api/kegs/{id}/connection`, refreshed with the
@@ -456,7 +483,7 @@ cards between slots with pointer events, as `tile-gestures.js` does: a mouse
 drags as soon as it moves, a finger holds first, and the page scrolls when the
 pointer nears the top or bottom edge. A card dropped on an occupied slot swaps
 with the tap there, which moves to the dropped card's old slot or the tray;
-`dropTap` sends both changes in one `/api/taps/links` call, redraws at once,
+`dropTap` sends both changes in one `PATCH /api/taps/links` call, redraws at once,
 and redraws again from the taps the server returns. Cards stay links, so a
 click without a drag opens the editor, whose keg dropdown remains the
 keyboard route.
@@ -491,7 +518,7 @@ Pours table below the charts all come from the stored pours in
 logged reading. "Left now" is the keg's current reading, fetched with each
 range, rather than the last point, which on a long range is an average. Each
 row of the table can be deleted.
-Clear history posts to `/api/kegs/{id}/log/clear`, which `handleClearKegLog`
+Clear history sends `DELETE /api/kegs/{id}/log`, which `handleClearKegLog`
 serves with `store.ClearLog`: every reading for that keg goes, in every range,
 and its pours leave the page, while the keg and the other kegs' history stay.
 The pours remain on All Pours. The page asks for confirmation first, since the
@@ -544,13 +571,13 @@ are sent: `handleUpdatePours` decodes each entry as raw fields so an absent
 value is left alone and a null one cleared, validates it, and applies the
 batch with `store.UpdatePours`, answering 409 and changing nothing if a pour
 has gone. Edits and deletes publish no event, as `handleDeletePour` never did,
-so the Kegs page's `latest_pour` catches up at its next reload.
+so the Keg Scales page's `latest_pour` catches up at its next reload.
 
 History's own Pours table pages in the browser, 25 at a time: the page already
 loads every pour of one scale in the range for the chart's markers and its
 figures, so only `renderPours` slices the list.
 
-The Kegs page (`kegs.html`) draws a tile per scale with the scale's label as
+The Keg Scales page (`kegs.html`) draws a tile per scale with the scale's label as
 its heading. A second specs line under the status line shows the keg's
 `latest_pour`, the newest pour still in its history: its size, then its time
 (`pourWhen`: the time of day, with the date in front when it was not today, in
@@ -568,7 +595,7 @@ dimmed. A disconnect publishes a keg update, so the offline badge appears as
 soon as the server notices: at once for a clean close, and within
 `ReadTimeout` (60 seconds) for a scale that drops off the network.
 
-Both the Kegs page and the tap list mark an empty keg with an "Empty" badge in
+Both the Keg Scales page and the tap list mark an empty keg with an "Empty" badge in
 the top row. The rest of the tile is dimmed and its keg graphic greyed, while
 the top row stays at full strength. `isKegEmpty` in `keg-graphic.js` decides:
 a keg is empty with less than a 12 oz glass left, judged on the device-reported
@@ -582,7 +609,7 @@ the tiles above. `keepEmptyInPlace` merges that order back into the full one,
 leaving each empty keg's slot where it was, so a refilled keg returns to its
 old place.
 
-`beer-color.js` is shared by the tap list, the Kegs page and the tap editor. A drink's colour is either an SRM or
+`beer-color.js` is shared by the tap list, the Keg Scales page and the tap editor. A drink's colour is either an SRM or
 one of the named presets in `store.ColorPresets` (clear, pink, red, purple,
 green, blue) for drinks the SRM scale cannot describe; the API rejects both at
 once. The script turns either into a colour for the tap list, which draws
@@ -599,6 +626,22 @@ defaults, which are the tap list's palette, the system font and an amber
 accent, so an unset value leaves the page in its default look. The tap list
 does not use the accent, since each tile takes its beer's colour. The tap list
 title font is also the font of the page title in the header bar.
+
+The four colours are the only ones chosen. `tokens.css` mixes every other
+neutral from them with `color-mix()`: the raised surfaces (`--tile-2`,
+`--tile-3`) from the tile and text, the secondary text (`--soft`, `--muted`,
+`--faint`) from the text and page, and the borders and hover overlays
+(`--line*`, `--overlay*`) from the text over transparent. A light theme
+therefore gets dark greys and darkening overlays with no further settings. The
+mixes sit in an `@supports` block after the default dark values, since a
+custom property cannot fall back by declaring it twice. The pour, warning and
+danger colours, shadows and the CO₂ cylinder drawing stay fixed. Text on the
+accent, such as a primary button's, is `--on-action`: `onColor` picks
+near-black or white for a hex accent by WCAG contrast and `/theme.css` sends it
+as `--on-accent-color`; Dashboard Setup computes the same choice in the browser
+to preview it. History's charts draw through Chart.js on a canvas, which cannot
+read `var()` or `color-mix()`, so its `color` helper resolves a token to
+`rgba()` before handing it over.
 `fontStack` turns a stored family name into a full stack that falls back to the
 system font, and `System` selects that stack with no Google Fonts import.
 `GetAppConfig` runs a stored theme through `dropLegacyThemeDefaults`, which
@@ -616,16 +659,16 @@ same keg boundaries also add `latest_pour` with `store.SetLatestPours`, which
 is not a column either.
 `ConvertPours` converts each pour from its own stored unit and always scales it
 to a pour-sized sub-unit (oz, ml or g), even when following the device.
-BarHelper, the CSV exports and the Keg Setup page all use device units.
+BarHelper, the CSV exports and the Keg Scale Setup page all use device units.
 
 ### Amount display
 
-One app-wide setting, `amount_display` (`store.SetAmountDisplay`), chooses
+One app-wide setting, `amount_display`, chooses
 whether every keg graphic shows the amount left or the percentage left as its
-large figure, on both the tap list and the Kegs page; the Kegs page shows the
+large figure, on both the tap list and the Keg Scales page; the Keg Scales page shows the
 other figure among the tile's readings. CO₂ cylinders always show the amount.
 It is a presentation choice only and is not sent to the device. Both pages
-read it from `/api/config/amount-display` when they load and on their minute
+read it from `/api/config` when they load and on their minute
 reload, so a change reaches an open screen within a minute.
 
 ## BarHelper — `internal/barhelper`
@@ -748,11 +791,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   for that segment.
 - **`hardware_sync` is not answered.** The device's startup request for its
   configuration pins is acknowledged but not replied to.
-- **UI reconnection.** The Keg Setup page does not reconnect its WebSocket;
-  the tap list and the Kegs page do.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
-- **BarHelper time on the Kegs page.** Recording a send publishes no event, so
+- **BarHelper time on the Keg Scales page.** Recording a send publishes no event, so
   the new time appears at the scale's next update or the page's minute reload.
   A keg removed from `BARHELPER_KEG_MONITOR_MAPPING` keeps showing its last
   send time.
@@ -760,4 +801,4 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   in memory, so they are lost on restart, and a burst of debug output can push
   older warnings out.
 - **Kegs without a tap.** The tap list shows taps, so a keg that no tap links to
-  appears only on the Kegs page.
+  appears only on the Keg Scales page.

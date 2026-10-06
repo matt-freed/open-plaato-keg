@@ -45,7 +45,22 @@ func (s *Server) handleGetTap(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tap)
 }
 
-func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
+// handleCreateTap adds a tap, answering 201 with its generated id.
+func (s *Server) handleCreateTap(w http.ResponseWriter, r *http.Request) {
+	s.saveTap(w, r, store.NewID(), http.StatusCreated)
+}
+
+// handleReplaceTap replaces every field of an existing tap.
+func (s *Server) handleReplaceTap(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := s.store.GetTap(id); err != nil {
+		writeStoreError(w, err, "tap")
+		return
+	}
+	s.saveTap(w, r, id, http.StatusOK)
+}
+
+func (s *Server) saveTap(w http.ResponseWriter, r *http.Request, id string, status int) {
 	var req tapRequest
 	if !decodeJSON(w, r, &req) {
 		return
@@ -59,12 +74,6 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_value", "kegged_date: "+err.Error())
 		return
-	}
-
-	id := chi.URLParam(r, "id")
-	// The UI posts "new" for a tap that does not exist yet.
-	if id == "" || id == "new" {
-		id = store.NewID()
 	}
 
 	tap := &store.Tap{
@@ -87,13 +96,13 @@ func (s *Server) handleSaveTap(w http.ResponseWriter, r *http.Request) {
 		var inUse *store.KegInUseError
 		if errors.As(err, &inUse) {
 			writeError(w, http.StatusConflict, "keg_in_use",
-				"that scale is already linked to "+tapDescription(inUse.Tap)+"; unlink it there first")
+				"that keg scale is already linked to "+tapDescription(inUse.Tap)+"; unlink it there first")
 			return
 		}
 		writeStoreError(w, err, "tap")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "id": tap.ID, "tap": tap})
+	writeJSON(w, status, map[string]any{"status": "ok", "id": tap.ID, "tap": tap})
 }
 
 // handleTapOrder saves the order the tap list was dragged into.
@@ -134,7 +143,7 @@ func (s *Server) handleTapLinks(w http.ResponseWriter, r *http.Request) {
 		var inUse *store.KegInUseError
 		if errors.As(err, &inUse) {
 			writeError(w, http.StatusConflict, "keg_in_use",
-				"that scale is already linked to "+tapDescription(inUse.Tap))
+				"that keg scale is already linked to "+tapDescription(inUse.Tap))
 			return
 		}
 		writeStoreError(w, err, "tap")

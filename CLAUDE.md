@@ -81,7 +81,7 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
   summary endpoint is in display units, and pour edits are converted back to
   each pour's own stored unit.
   Everything else stays in the units the device reported — the stored columns,
-  BarHelper, the log and pours CSV exports and every value on the Keg Setup
+  BarHelper, the log and pours CSV exports and every value on the Keg Scale Setup
   page. The converted values
   live in a `display` block that is deliberately absent from `kegColumns`, as
   is `latest_pour`, which the same keg boundaries add.

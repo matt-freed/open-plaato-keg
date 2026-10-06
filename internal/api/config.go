@@ -1,9 +1,12 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/matt-freed/open-plaato-keg/internal/store"
@@ -18,144 +21,69 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, cfg)
 }
 
-func (s *Server) handleGetHomePage(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.store.GetAppConfig()
+// handleUpdateConfig changes any of the settings at once. Each key present is
+// replaced whole, so display_units, min_pour and theme are sent complete; a
+// key left out keeps its stored value. Values are normalized as they are
+// stored, so the response is the configuration as it now stands.
+func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	var fields map[string]json.RawMessage
+	if !decodeJSON(w, r, &fields) {
+		return
+	}
+	if len(fields) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "name at least one setting to change")
+		return
+	}
+
+	var patch store.AppConfig
+	for name, raw := range fields {
+		var dst any
+		switch name {
+		case "home_page":
+			dst = &patch.HomePage
+		case "time_format":
+			dst = &patch.TimeFormat
+		case "display_units":
+			dst = &patch.DisplayUnits
+		case "amount_display":
+			dst = &patch.AmountDisplay
+		case "min_pour":
+			dst = &patch.MinPour
+		case "theme":
+			dst = &patch.Theme
+		default:
+			writeError(w, http.StatusBadRequest, "invalid_value", name+" is not a setting")
+			return
+		}
+		if err := json.Unmarshal(raw, dst); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_value", name+" has an invalid value")
+			return
+		}
+	}
+
+	cfg, err := s.store.UpdateAppConfig(func(c *store.AppConfig) {
+		for name := range fields {
+			switch name {
+			case "home_page":
+				c.HomePage = patch.HomePage
+			case "time_format":
+				c.TimeFormat = patch.TimeFormat
+			case "display_units":
+				c.DisplayUnits = patch.DisplayUnits
+			case "amount_display":
+				c.AmountDisplay = patch.AmountDisplay
+			case "min_pour":
+				c.MinPour = patch.MinPour
+			case "theme":
+				c.Theme = patch.Theme
+			}
+		}
+	})
 	if err != nil {
 		writeStoreError(w, err, "configuration")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"home_page": cfg.HomePage})
-}
-
-func (s *Server) handleSetHomePage(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		HomePage string `json:"home_page"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	page := store.NormalizeHomePage(req.HomePage)
-	if err := s.store.SetHomePage(page); err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "home_page": page})
-}
-
-func (s *Server) handleGetTimeFormat(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.store.GetAppConfig()
-	if err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"time_format": cfg.TimeFormat})
-}
-
-func (s *Server) handleSetTimeFormat(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		TimeFormat string `json:"time_format"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	format := store.NormalizeTimeFormat(req.TimeFormat)
-	if err := s.store.SetTimeFormat(format); err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "time_format": format})
-}
-
-func (s *Server) handleGetAmountDisplay(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.store.GetAppConfig()
-	if err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"amount_display": cfg.AmountDisplay})
-}
-
-func (s *Server) handleSetAmountDisplay(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AmountDisplay string `json:"amount_display"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	display := store.NormalizeAmountDisplay(req.AmountDisplay)
-	if err := s.store.SetAmountDisplay(display); err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "amount_display": display})
-}
-
-func (s *Server) handleGetMinPour(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.store.GetAppConfig()
-	if err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, cfg.MinPour)
-}
-
-func (s *Server) handleSetMinPour(w http.ResponseWriter, r *http.Request) {
-	var req store.MinPour
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	minPour := store.NormalizeMinPour(req)
-	if err := s.store.SetMinPour(minPour); err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "min_pour": minPour})
-}
-
-func (s *Server) handleGetDisplayUnits(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.store.GetAppConfig()
-	if err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, cfg.DisplayUnits)
-}
-
-func (s *Server) handleSetDisplayUnits(w http.ResponseWriter, r *http.Request) {
-	var req store.DisplayUnits
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	units := store.DisplayUnits{
-		System:  store.NormalizeDisplaySystem(req.System),
-		Measure: store.NormalizeDisplayMeasure(req.Measure),
-	}
-	if err := s.store.SetDisplayUnits(units); err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "display_units": units})
-}
-
-func (s *Server) handleGetTheme(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.store.GetAppConfig()
-	if err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, cfg.Theme)
-}
-
-func (s *Server) handleSetTheme(w http.ResponseWriter, r *http.Request) {
-	var theme store.Theme
-	if !decodeJSON(w, r, &theme) {
-		return
-	}
-	if err := s.store.SetTheme(theme); err != nil {
-		writeStoreError(w, err, "configuration")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "theme": theme})
+	writeJSON(w, http.StatusOK, cfg)
 }
 
 // handleThemeCSS renders the stored theme as a stylesheet of custom
@@ -173,6 +101,9 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 	}
 	b.WriteString(":root {\n")
 	writeCSSVar(&b, "--accent-color", theme.AccentColor)
+	if on, ok := onColor(theme.AccentColor); ok {
+		writeCSSVar(&b, "--on-accent-color", on)
+	}
 	writeCSSVar(&b, "--bg-color", theme.BgColor)
 	writeCSSVar(&b, "--card-bg", theme.CardBg)
 	writeCSSVar(&b, "--text-color", theme.TextColor)
@@ -185,6 +116,41 @@ func (s *Server) handleThemeCSS(w http.ResponseWriter, r *http.Request) {
 	// The theme changes from the settings page and must take effect on reload.
 	w.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(w, b.String())
+}
+
+// onColor picks the text colour for a background of the given hex colour:
+// near-black or white, whichever contrasts more by the WCAG measure. It
+// reports false for anything that is not #rgb or #rrggbb, which leaves the
+// stylesheet's default in place.
+func onColor(background string) (string, bool) {
+	hex, ok := strings.CutPrefix(strings.TrimSpace(background), "#")
+	if !ok {
+		return "", false
+	}
+	if len(hex) == 3 {
+		hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
+	}
+	if len(hex) != 6 {
+		return "", false
+	}
+	v, err := strconv.ParseUint(hex, 16, 32)
+	if err != nil {
+		return "", false
+	}
+	channel := func(shift uint) float64 {
+		c := float64((v>>shift)&0xff) / 255
+		if c <= 0.04045 {
+			return c / 12.92
+		}
+		return math.Pow((c+0.055)/1.055, 2.4)
+	}
+	l := 0.2126*channel(16) + 0.7152*channel(8) + 0.0722*channel(0)
+	// Contrast with black is (l+0.05)/0.05 and with white 1.05/(l+0.05);
+	// they are equal where (l+0.05)² = 0.0525.
+	if (l+0.05)*(l+0.05) >= 0.0525 {
+		return "#0c0d11", true
+	}
+	return "#ffffff", true
 }
 
 // systemFontStack is the default UI font, and what "System" selects.

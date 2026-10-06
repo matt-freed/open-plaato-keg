@@ -1,24 +1,61 @@
 /* Design tokens every page shares, so the tap list and the rest of the UI
    read as one application. The page, tile, text, font and accent follow the
-   Dashboard Setup theme from /theme.css; the fallbacks are the defaults. */
+   Dashboard Setup theme from /theme.css; the fallbacks are the defaults.
+
+   Only those four colours are chosen. Every other neutral (the greys,
+   borders, raised surfaces and hover overlays) is mixed from them below, so
+   a light theme gets dark greys and dark overlays without any more settings.
+   The values in this first block are the default dark theme, for browsers
+   without color-mix(). */
 :root {
   --bg:          var(--bg-color, #0c0d11);
   --tile:        var(--card-bg, #16181f);
-  --tile-2:      #1d2029;
-  --line:        rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(255, 255, 255, 0.13);
   --text:        var(--text-color, #eef0f5);
+
+  /* Derived neutrals: raised surfaces, then text from strong to faint. */
+  --tile-2:      #1d2029;
+  --tile-3:      #262a35;
   --soft:        #c3c8d3;
   --muted:       #9097a8;
   --faint:       #5b6172;
+  /* Borders, and overlays that lighten (or, on a light theme, darken)
+     whatever is under them for hover and selection. */
+  --line:        rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --line-hover:  rgba(255, 255, 255, 0.2);
+  --overlay-faint:  rgba(255, 255, 255, 0.04);
+  --overlay:        rgba(255, 255, 255, 0.06);
+  --overlay-strong: rgba(255, 255, 255, 0.13);
+
+  /* Fixed on purpose: they mean something, so they do not follow the theme. */
   --pour:        #5fd08a;
   --warn:        #e8b04b;
   --danger:      #ef6b6b;
   /* Primary actions, selections and levels. Not used on the tap list, where
      each tile takes its beer's colour instead. */
   --action:      var(--accent-color, #f59e0b);
+  /* Text on --action. /theme.css picks black or white for the chosen
+     accent; the fallback suits the default amber. */
+  --on-action:   var(--on-accent-color, #0c0d11);
   --radius:      18px;
   --radius-sm:   10px;
   --sans:        var(--font-family, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
   --title-font:  var(--taplist-title-font, var(--sans));
+}
+
+/* The mixes reproduce the defaults above from the default colours. */
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  :root {
+    --tile-2:      color-mix(in srgb, var(--tile) 97%, var(--text));
+    --tile-3:      color-mix(in srgb, var(--tile) 92%, var(--text));
+    --soft:        color-mix(in srgb, var(--text) 81%, var(--bg));
+    --muted:       color-mix(in srgb, var(--text) 60%, var(--bg));
+    --faint:       color-mix(in srgb, var(--text) 38%, var(--bg));
+    --line:        color-mix(in srgb, var(--text) 7%, transparent);
+    --line-strong: color-mix(in srgb, var(--text) 13%, transparent);
+    --line-hover:  color-mix(in srgb, var(--text) 20%, transparent);
+    --overlay-faint:  color-mix(in srgb, var(--text) 4%, transparent);
+    --overlay:        color-mix(in srgb, var(--text) 6%, transparent);
+    --overlay-strong: color-mix(in srgb, var(--text) 13%, transparent);
+  }
 }

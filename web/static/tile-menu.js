@@ -19,7 +19,7 @@ function showTileMenu(x, y, { tapId, kegId }, { touch = false } = {}) {
   const items = [
     ['View history', kegId && `/history.html#keg=${enc(kegId)}`],
     ['Edit tap', tapId && `/taplist-setup.html${from}#tap=${enc(tapId)}`],
-    ['Edit keg', kegId && `/keg-setup.html${from}#keg=${enc(kegId)}`],
+    ['Edit keg scale', kegId && `/keg-setup.html${from}#keg=${enc(kegId)}`],
   ];
 
   const menu = document.createElement('div');

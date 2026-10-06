@@ -35,7 +35,7 @@ const (
 	DisplayMeasureVolume = "volume"
 )
 
-// Which figure a keg graphic shows large on the Kegs page and the tap list.
+// Which figure a keg graphic shows large on the Keg Scales page and the tap list.
 const (
 	AmountDisplayAmount  = "amount"  // the amount left, in the display units
 	AmountDisplayPercent = "percent" // the percentage left
@@ -156,9 +156,13 @@ const (
 
 // GetAppConfig returns the stored configuration, filling in defaults.
 func (s *Store) GetAppConfig() (AppConfig, error) {
+	return getAppConfig(s.db)
+}
+
+func getAppConfig(q querier) (AppConfig, error) {
 	cfg := DefaultAppConfig()
 
-	rows, err := s.db.Query("SELECT key, value FROM app_config")
+	rows, err := q.Query("SELECT key, value FROM app_config")
 	if err != nil {
 		return cfg, err
 	}
@@ -228,65 +232,93 @@ func minPourTx(q querier) (MinPour, error) {
 	return NormalizeMinPour(m), rows.Err()
 }
 
+// UpdateAppConfig applies a change to the stored configuration and returns
+// the result. The read, the change and every write happen in one transaction,
+// so a change to several settings is applied whole or not at all, and the
+// minimum pour's value is never stored against the wrong unit.
+//
+// Every value is normalized on the way in, so an unrecognised one falls back
+// to its default rather than being stored.
+func (s *Store) UpdateAppConfig(mutate func(*AppConfig)) (AppConfig, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return AppConfig{}, err
+	}
+	defer tx.Rollback()
+
+	cfg, err := getAppConfig(tx)
+	if err != nil {
+		return AppConfig{}, err
+	}
+	mutate(&cfg)
+	cfg = normalizeAppConfig(cfg)
+
+	theme, err := json.Marshal(cfg.Theme)
+	if err != nil {
+		return AppConfig{}, err
+	}
+	for key, value := range map[string]string{
+		configKeyHomePage:           cfg.HomePage,
+		configKeyTimeFormat:         cfg.TimeFormat,
+		configKeyDisplayUnitSystem:  cfg.DisplayUnits.System,
+		configKeyDisplayUnitMeasure: cfg.DisplayUnits.Measure,
+		configKeyAmountDisplay:      cfg.AmountDisplay,
+		configKeyMinPourValue:       strconv.FormatFloat(cfg.MinPour.Value, 'f', -1, 64),
+		configKeyMinPourUnit:        cfg.MinPour.Unit,
+		configKeyTheme:              string(theme),
+	} {
+		if _, err := tx.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)", key, value); err != nil {
+			return AppConfig{}, err
+		}
+	}
+	return cfg, tx.Commit()
+}
+
+func normalizeAppConfig(cfg AppConfig) AppConfig {
+	cfg.HomePage = NormalizeHomePage(cfg.HomePage)
+	cfg.TimeFormat = NormalizeTimeFormat(cfg.TimeFormat)
+	cfg.DisplayUnits = DisplayUnits{
+		System:  NormalizeDisplaySystem(cfg.DisplayUnits.System),
+		Measure: NormalizeDisplayMeasure(cfg.DisplayUnits.Measure),
+	}
+	cfg.AmountDisplay = NormalizeAmountDisplay(cfg.AmountDisplay)
+	cfg.MinPour = NormalizeMinPour(cfg.MinPour)
+	return cfg
+}
+
 // SetHomePage stores which page the UI opens on.
 func (s *Store) SetHomePage(page string) error {
-	return s.setConfig(configKeyHomePage, NormalizeHomePage(page))
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.HomePage = page })
+	return err
 }
 
 // SetTimeFormat stores the clock format.
 func (s *Store) SetTimeFormat(format string) error {
-	return s.setConfig(configKeyTimeFormat, NormalizeTimeFormat(format))
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.TimeFormat = format })
+	return err
 }
 
 // SetDisplayUnits stores how the UI should present readings.
-//
-// The two axes are written separately, so a failure between them leaves one
-// applied. That is harmless for a settings write: the next save fixes it, and
-// neither value affects stored or forwarded data.
 func (s *Store) SetDisplayUnits(u DisplayUnits) error {
-	if err := s.setConfig(configKeyDisplayUnitSystem, NormalizeDisplaySystem(u.System)); err != nil {
-		return err
-	}
-	return s.setConfig(configKeyDisplayUnitMeasure, NormalizeDisplayMeasure(u.Measure))
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.DisplayUnits = u })
+	return err
 }
 
 // SetAmountDisplay stores which figure the keg graphics show large.
 func (s *Store) SetAmountDisplay(display string) error {
-	return s.setConfig(configKeyAmountDisplay, NormalizeAmountDisplay(display))
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.AmountDisplay = display })
+	return err
 }
 
-// SetMinPour stores the minimum pour. Both rows are written in one
-// transaction, since a value read with the wrong unit would be off by a factor
-// of thirty.
+// SetMinPour stores the minimum pour.
 func (s *Store) SetMinPour(m MinPour) error {
-	m = NormalizeMinPour(m)
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	for key, value := range map[string]string{
-		configKeyMinPourValue: strconv.FormatFloat(m.Value, 'f', -1, 64),
-		configKeyMinPourUnit:  m.Unit,
-	} {
-		if _, err := tx.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)", key, value); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.MinPour = m })
+	return err
 }
 
 // SetTheme stores the appearance settings.
 func (s *Store) SetTheme(theme Theme) error {
-	encoded, err := json.Marshal(theme)
-	if err != nil {
-		return err
-	}
-	return s.setConfig(configKeyTheme, string(encoded))
-}
-
-func (s *Store) setConfig(key, value string) error {
-	_, err := s.db.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)", key, value)
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.Theme = theme })
 	return err
 }
 

@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <style>
       .group-head {
         display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap;
@@ -64,7 +65,7 @@
         background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer;
       }
       .log-row:last-child { border-bottom: 0; }
-      .log-row:hover { background: rgba(255, 255, 255, 0.04); }
+      .log-row:hover { background: var(--overlay-faint); }
       .log-row:focus-visible { outline: 2px solid var(--soft); outline-offset: -2px; }
       .log-time { color: var(--muted); white-space: nowrap; }
       .log-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -181,11 +182,6 @@
       let lastSeq = 0;
       let capacity = 1000;
 
-      function esc(v) {
-        return String(v ?? '').replace(/[&<>"']/g, c =>
-          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-      }
-
       // slog names in-between levels "INFO+2" and the like; rank by the base.
       function rank(level) {
         const i = LEVELS.indexOf(String(level).split(/[+-]/)[0]);
@@ -194,9 +190,7 @@
 
       async function loadEnv() {
         try {
-          const res = await fetch('/api/system/env');
-          if (!res.ok) throw new Error(res.status);
-          const { settings } = await res.json();
+          const { settings } = await api('GET', '/api/system/env');
           $('envBody').innerHTML = settings.map(s => {
             let value;
             if (s.redacted) value = 'set <span class="env-tag">hidden</span>';
@@ -342,9 +336,7 @@
       // whether it reached the server.
       async function fetchLogs() {
         try {
-          const res = await fetch(`/api/system/logs?after=${lastSeq}`);
-          if (!res.ok) throw new Error(res.status);
-          const body = await res.json();
+          const body = await api('GET', `/api/system/logs?after=${lastSeq}`);
           capacity = body.capacity;
           showLevel(body.level, body.configured_level);
 
@@ -391,12 +383,7 @@
         const level = e.target.value;
         $('levelError').hidden = true;
         try {
-          const res = await fetch('/api/system/log-level', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ level }),
-          });
-          if (!res.ok) throw new Error(res.status);
+          await api('PUT', '/api/system/log-level', { level });
           e.target.blur();
           // Show what the new level captures.
           $('levelFilter').value = String(rank(level.toUpperCase()));
@@ -418,10 +405,10 @@
       $('search').addEventListener('input', refilter);
 
       async function init() {
-        const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
+        const tf = await api('GET', '/api/config').catch(() => ({}));
         timeFormat = tf.time_format || '12h';
         loadEnv();
-        fetch('/api/alive').then(r => r.json()).then(d => {
+        api('GET', '/api/alive').then(d => {
           if (!d.version) return;
           $('version').textContent = `Open Plaato Keg v${d.version}`;
           $('version').hidden = false;

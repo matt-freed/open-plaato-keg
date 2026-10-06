@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>History</title>
+    <title>History - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
     <style>
@@ -93,7 +94,7 @@
 
       <div class="controls">
         <div class="field">
-          <span class="label">Scale</span>
+          <span class="label">Keg Scale</span>
           <div class="buttons has-addons" id="scaleChoice"></div>
         </div>
         <div class="field">
@@ -264,18 +265,24 @@
     let poursPage = 1;
     let poursView = '';
 
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
-
     const token = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    // The theme stores colours as #rrggbb, which takes a hex alpha suffix.
-    const withAlpha = (hex, a) => /^#[0-9a-f]{6}$/i.test(hex)
-      ? hex + Math.round(a * 255).toString(16).padStart(2, '0') : 'transparent';
 
-    function kegName(keg, index) {
-      return keg.label?.trim() || `Scale ${index + 1}`;
+    // color resolves a colour token to rgba(), with an optional alpha. The
+    // charts draw on a canvas through Chart.js, and neither can read the
+    // var() and color-mix() that tokens.css derives its greys with. The
+    // browser computes the colour, and a one-pixel canvas turns whatever form
+    // it computes to into plain channels.
+    const colorProbe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+    function color(name, alpha = 1) {
+      const el = document.body.appendChild(document.createElement('span'));
+      el.style.color = `var(${name})`;
+      const computed = getComputedStyle(el).color;
+      el.remove();
+      colorProbe.clearRect(0, 0, 1, 1);
+      colorProbe.fillStyle = computed;
+      colorProbe.fillRect(0, 0, 1, 1);
+      const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     function units(keg) {
@@ -445,7 +452,7 @@
         if (x < left || x > right) return;
         const ctx = chart.ctx;
         ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.strokeStyle = color('--text', 0.35);
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(Math.round(x) + 0.5, top);
@@ -578,14 +585,14 @@
 
     function renderCharts(keg, win) {
       destroyCharts();
-      Chart.defaults.color = token('--muted');
-      Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
+      Chart.defaults.color = color('--muted');
+      Chart.defaults.borderColor = color('--text', 0.06);
       Chart.defaults.font.family = token('--sans');
 
       const u = units(keg);
-      const action = token('--action');
-      const pour = token('--pour');
-      const surface = token('--tile');
+      const action = color('--action');
+      const pour = color('--pour');
+      const surface = color('--tile');
       const pct = measure === 'percent';
       const amt = chartAmount(keg);
       $('amountUnitChoice').hidden = pct || u.amount !== 'gal';
@@ -616,7 +623,7 @@
             {
               data: amountPoints,
               borderColor: action,
-              backgroundColor: withAlpha(action, 0.1),
+              backgroundColor: color('--action', 0.1),
               borderWidth: 2,
               borderJoinStyle: 'round',
               borderCapStyle: 'round',
@@ -760,19 +767,16 @@
       const seq = ++loadSeq;
       $('page').classList.add('is-loading');
       try {
-        const [res, pourRes, kegRes] = await Promise.all([
+        const [res, pourList, fresh] = await Promise.all([
+          // fetch rather than api, for the X-Log-Step-Seconds header.
           fetch(`/api/kegs/${encodeURIComponent(id)}/log?${query}`),
-          fetch(`/api/kegs/${encodeURIComponent(id)}/pours?${query}`),
+          api('GET', `/api/kegs/${encodeURIComponent(id)}/pours?${query}`),
           // The keg's current readings, for "Left now"; the list loaded with
           // the page may be stale by now.
-          fetch(`/api/kegs/${encodeURIComponent(id)}`).catch(() => null),
+          api('GET', `/api/kegs/${encodeURIComponent(id)}`).catch(() => null),
         ]);
         if (!res.ok) throw new Error(res.status);
-        if (!pourRes.ok) throw new Error(pourRes.status);
-        const [list, pourList, fresh] = await Promise.all([
-          res.json(), pourRes.json(),
-          kegRes?.ok ? kegRes.json().catch(() => null) : null,
-        ]);
+        const list = await res.json();
         if (seq !== loadSeq) return; // a newer choice has already been made
         entries = list;
         pours = pourList;
@@ -902,21 +906,8 @@
       if (entries.length) renderCharts(kegs.find(k => k.id === readHash().keg), shownWindow);
     });
     // ── Clearing ────────────────────────────────────
-    let toastTimer;
-    function showToast(message, type) {
-      const t = $('toast');
-      t.textContent = message;
-      t.className = `notification toast is-${type}`;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
-
     // The scale as the selector names it: its beer, if a tap draws from it.
-    function displayName(keg) {
-      const name = kegName(keg, kegs.indexOf(keg));
-      const beer = tapsByKeg[keg.id]?.name?.trim();
-      return beer ? `${beer} (${name})` : name;
-    }
+    const displayName = keg => kegNameWithBeer(keg, kegs.indexOf(keg), tapsByKeg[keg.id]);
 
     $('clearBtn').addEventListener('click', async () => {
       const keg = kegs.find(k => k.id === readHash().keg);
@@ -928,8 +919,7 @@
           'not just the one shown, and removes its pours from this page. ' +
           'The pours stay on All Pours. It cannot be undone.')) return;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(keg.id)}/log/clear`, { method: 'POST' });
-        if (!res.ok) throw new Error(res.status);
+        await api('DELETE', `/api/kegs/${encodeURIComponent(keg.id)}/log`);
         showToast('History cleared', 'success');
       } catch (e) {
         showToast('Could not clear the history: ' + e.message, 'danger');
@@ -943,8 +933,7 @@
       const p = pours.find(x => String(x.id) === b.dataset.delete);
       if (!p || !confirm(`Delete this ${pourSize(p)} pour? It is removed everywhere, including All Pours.`)) return;
       try {
-        const res = await fetch(`/api/pours/${encodeURIComponent(p.id)}/delete`, { method: 'POST' });
-        if (!res.ok) throw new Error(res.status);
+        await api('DELETE', `/api/pours/${encodeURIComponent(p.id)}`);
         showToast('Pour deleted', 'success');
       } catch (err) {
         showToast('Could not delete the pour: ' + err.message, 'danger');
@@ -962,29 +951,27 @@
       select('axisChoice', axisScale);
       select('amountUnitChoice', amountUnit);
       try {
-        const [kegsRes, tf, tapList, mp] = await Promise.all([
-          fetch('/api/kegs'),
-          fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
+        const [kegList, cfg, tapList] = await Promise.all([
+          api('GET', '/api/kegs'),
+          // The minimum pour is only for the note under the figures.
+          api('GET', '/api/config').catch(() => ({})),
           // Only for labelling the scales, so a failure just leaves them
           // named by scale.
-          fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
-          // Only for the note under the figures.
-          fetch('/api/config/min-pour').then(r => r.ok ? r.json() : null).catch(() => null),
+          api('GET', '/api/taps').catch(() => []),
         ]);
-        minPour = mp;
-        if (!kegsRes.ok) throw new Error(kegsRes.status);
-        kegs = await kegsRes.json();
-        timeFormat = tf.time_format || '12h';
+        minPour = cfg.min_pour ?? null;
+        kegs = kegList;
+        timeFormat = cfg.time_format || '12h';
         // The first tap, by tap number, that draws from each scale.
         for (const tap of tapList) {
           if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;
         }
       } catch (_) {
-        $('pageStatus').textContent = 'Could not load the scales. Is the server running?';
+        $('pageStatus').textContent = 'Could not load the keg scales. Is the server running?';
         return;
       }
       if (!kegs.length) {
-        $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history appears here.';
+        $('pageStatus').textContent = 'No keg scales yet. Once a Plaato Keg connects, its history appears here.';
         $('downloadBtn').hidden = true;
         $('clearBtn').hidden = true;
         $('editBtn').hidden = true;

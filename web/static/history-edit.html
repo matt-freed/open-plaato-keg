@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit History</title>
+    <title>Edit History - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <style>
       .page-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
       .edit-head { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 1rem; }
@@ -104,21 +105,8 @@
     const selected = new Set();
     let loadSeq = 0;
 
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
-
-    function kegName(keg, index) {
-      return keg.label?.trim() || `Scale ${index + 1}`;
-    }
-
     // The scale as History names it: its beer, if a tap draws from it.
-    function displayName(keg) {
-      const name = kegName(keg, kegs.indexOf(keg));
-      const beer = tapsByKeg[keg.id]?.name?.trim();
-      return beer ? `${beer} (${name})` : name;
-    }
+    const displayName = keg => kegNameWithBeer(keg, kegs.indexOf(keg), tapsByKeg[keg.id]);
 
     function dateOpts(d) {
       return { month: 'short', day: 'numeric',
@@ -134,15 +122,6 @@
       const d = new Date(sec * 1000);
       return d.toLocaleString([], { ...dateOpts(d), ...clockOpts(), second: '2-digit' });
     };
-
-    let toastTimer;
-    function showToast(message, type) {
-      const t = $('toast');
-      t.textContent = message;
-      t.className = `notification toast is-${type}`;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
 
     // ── State in the URL ────────────────────────────
     // #keg=<id>&from=<unix>&to=<unix>, the fixed window History opened this
@@ -265,9 +244,7 @@
       const q = new URLSearchParams({ from: view.from, to: view.to, limit: PAGE_SIZE, ...cursor });
       $('page').classList.add('is-loading');
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/rows?${q}`);
-        if (!res.ok) throw new Error(res.status);
-        const data = await res.json();
+        const data = await api('GET', `/api/kegs/${encodeURIComponent(view.keg)}/log/rows?${q}`);
         if (seq !== loadSeq) return;
         // A delete can empty the page; step back to the one before it.
         if (!data.entries.length && data.has_earlier && !('before' in cursor)) {
@@ -345,15 +322,7 @@
       if (!edits.length || invalid) return;
       $('saveBtn').disabled = true;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entries: edits }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body.detail || res.status);
-        }
+        await api('PATCH', `/api/kegs/${encodeURIComponent(view.keg)}/log/rows`, { entries: edits });
         showToast(edits.length === 1 ? 'Reading saved' : `${edits.length} readings saved`, 'success');
       } catch (err) {
         showToast('Could not save: ' + err.message, 'danger');
@@ -369,13 +338,7 @@
       const what = timestamps.length === 1 ? 'this reading' : `these ${timestamps.length} readings`;
       if (!confirm(`Delete ${what}? Recorded pours are kept. It cannot be undone.`)) return;
       try {
-        const res = await fetch(`/api/kegs/${encodeURIComponent(view.keg)}/log/delete`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timestamps }),
-        });
-        if (!res.ok) throw new Error(res.status);
-        const { deleted } = await res.json();
+        const { deleted } = await api('DELETE', `/api/kegs/${encodeURIComponent(view.keg)}/log/rows`, { timestamps });
         showToast(deleted === 1 ? 'Reading deleted' : `${deleted} readings deleted`, 'success');
       } catch (err) {
         showToast('Could not delete: ' + err.message, 'danger');
@@ -391,24 +354,23 @@
 
     async function init() {
       try {
-        const [kegsRes, tf, tapList] = await Promise.all([
-          fetch('/api/kegs'),
-          fetch('/api/config/time-format').then(r => r.json()).catch(() => ({})),
+        const [kegList, cfg, tapList] = await Promise.all([
+          api('GET', '/api/kegs'),
+          api('GET', '/api/config').catch(() => ({})),
           // Only for naming the scale.
-          fetch('/api/taps').then(r => r.ok ? r.json() : []).catch(() => []),
+          api('GET', '/api/taps').catch(() => []),
         ]);
-        if (!kegsRes.ok) throw new Error(kegsRes.status);
-        kegs = await kegsRes.json();
-        timeFormat = tf.time_format || '12h';
+        kegs = kegList;
+        timeFormat = cfg.time_format || '12h';
         for (const tap of tapList) {
           if (tap.keg_id && !(tap.keg_id in tapsByKeg)) tapsByKeg[tap.keg_id] = tap;
         }
       } catch (_) {
-        $('pageStatus').textContent = 'Could not load the scales. Is the server running?';
+        $('pageStatus').textContent = 'Could not load the keg scales. Is the server running?';
         return;
       }
       if (!kegs.length) {
-        $('pageStatus').textContent = 'No scales yet. Once a Plaato Keg connects, its history can be edited here.';
+        $('pageStatus').textContent = 'No keg scales yet. Once a Plaato Keg connects, its history can be edited here.';
         return;
       }
       show();

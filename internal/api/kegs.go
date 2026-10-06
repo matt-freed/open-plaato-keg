@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -49,11 +50,66 @@ func (s *Server) handleGetKeg(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err, "keg")
 		return
 	}
+	s.writeKeg(w, k)
+}
+
+// writeKeg sends one keg the way the browser reads it: with its connection
+// state, its display block and its latest pour.
+func (s *Server) writeKeg(w http.ResponseWriter, k *store.Keg) {
 	k.Connected = s.commander.Connected(k.ID)
 	units := s.displayUnits()
 	k.SetDisplay(units)
 	s.setLatestPours([]*store.Keg{k}, units)
 	writeJSON(w, http.StatusOK, k)
+}
+
+// handleUpdateKeg changes the settings kept here rather than on the device,
+// which work whether or not the keg is connected. Each key present is
+// changed and the rest are kept: label is text, and co2_capacity a number,
+// or null to clear it. The response is the keg as it now stands.
+func (s *Server) handleUpdateKeg(w http.ResponseWriter, r *http.Request) {
+	var fields map[string]json.RawMessage
+	if !decodeJSON(w, r, &fields) {
+		return
+	}
+	if len(fields) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_value", "name at least one setting to change")
+		return
+	}
+
+	var label *string
+	var co2Capacity *numberOrString
+	for name, raw := range fields {
+		var err error
+		switch name {
+		case "label":
+			label = new(string)
+			err = json.Unmarshal(raw, label)
+		case "co2_capacity":
+			co2Capacity = new(numberOrString)
+			err = json.Unmarshal(raw, co2Capacity)
+		default:
+			writeError(w, http.StatusBadRequest, "invalid_value", name+" cannot be changed")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_value", name+" has an invalid value")
+			return
+		}
+	}
+
+	k, ok := s.updateKeg(w, chi.URLParam(r, "id"), func(k *store.Keg) {
+		if label != nil {
+			k.Label = strings.TrimSpace(*label)
+		}
+		if co2Capacity != nil {
+			k.CO2Capacity = co2Capacity.Ptr()
+		}
+	})
+	if !ok {
+		return
+	}
+	s.writeKeg(w, k)
 }
 
 // connectionResponse describes a keg's live connection. Times are Unix
@@ -139,6 +195,14 @@ func (s *Server) handleKegOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Every id is checked first, so an unknown one changes nothing rather
+	// than creating a phantom keg.
+	for _, id := range req.OrderedIDs {
+		if _, err := s.store.GetKeg(id); err != nil {
+			writeStoreError(w, err, "keg")
+			return
+		}
+	}
 	for position, id := range req.OrderedIDs {
 		if _, err := s.store.UpdateKeg(id, func(k *store.Keg) { k.SortOrder = position }); err != nil {
 			writeStoreError(w, err, "keg")
@@ -159,7 +223,7 @@ type commandRequest struct {
 	Value numberOrString `json:"value"`
 }
 
-// stringCommandRequest is the body for commands taking free text.
+// stringCommandRequest is the body for commands taking a named value.
 type stringCommandRequest struct {
 	Value string `json:"value"`
 }
@@ -204,9 +268,9 @@ func (s *Server) mountKegCommands(r chi.Router) {
 		"high": 4, "4": 4,
 	}, func(id string, v int) error { return s.commander.SetSensitivity(id, v) }))
 
-	// Settings the device has no pin for at all.
-	r.Post("/label", s.handleSetLabel)
-	r.Post("/co2-capacity", s.handleSetCO2Capacity)
+	// Kept here, since the device has no pin for it. The label and CO2
+	// capacity are settings rather than actions, so they are changed through
+	// PATCH /api/kegs/{id} instead.
 	r.Post("/reset-last-pour", s.handleResetLastPour)
 }
 
@@ -265,7 +329,15 @@ func (s *Server) kegEnumCommand(name string, allowed map[string]int, run func(id
 }
 
 // updateKeg applies a change to the stored keg and broadcasts it.
+//
+// store.UpdateKeg creates a keg it does not find, which is right for device
+// traffic but would let a request for an unknown id create a phantom keg, so
+// the keg must already exist.
 func (s *Server) updateKeg(w http.ResponseWriter, id string, mutate func(*store.Keg)) (*store.Keg, bool) {
+	if _, err := s.store.GetKeg(id); err != nil {
+		writeStoreError(w, err, "keg")
+		return nil, false
+	}
 	k, err := s.store.UpdateKeg(id, mutate)
 	if err != nil {
 		writeStoreError(w, err, "keg")
@@ -273,38 +345,6 @@ func (s *Server) updateKeg(w http.ResponseWriter, id string, mutate func(*store.
 	}
 	s.bus.Publish(events.Event{Kind: events.KegUpdated, KegID: id})
 	return k, true
-}
-
-func (s *Server) handleSetLabel(w http.ResponseWriter, r *http.Request) {
-	var req stringCommandRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	label := strings.TrimSpace(req.Value)
-	if _, ok := s.updateKeg(w, chi.URLParam(r, "id"), func(k *store.Keg) { k.Label = label }); !ok {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": "label", "value": label})
-}
-
-func (s *Server) handleSetCO2Capacity(w http.ResponseWriter, r *http.Request) {
-	s.storeNumber(w, r, "co2_capacity", func(k *store.Keg, v *float64) { k.CO2Capacity = v })
-}
-
-func (s *Server) storeNumber(w http.ResponseWriter, r *http.Request, name string, set func(*store.Keg, *float64)) {
-	var req commandRequest
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	value, ok := req.Value.Value()
-	if !ok {
-		writeError(w, http.StatusBadRequest, "missing_value", "value is required and must be a number")
-		return
-	}
-	if _, ok := s.updateKeg(w, chi.URLParam(r, "id"), func(k *store.Keg) { set(k, req.Value.Ptr()) }); !ok {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "command": name, "value": value})
 }
 
 // handleResetLastPour clears the last pour reading, which is otherwise only

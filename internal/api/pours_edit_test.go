@@ -30,7 +30,7 @@ func threePours(t *testing.T, a *testAPI) []store.Pour {
 	if len(pours) != 3 {
 		t.Fatalf("got %d pours, want 3", len(pours))
 	}
-	rec := a.do(http.MethodPost, "/api/pours/update", map[string]any{
+	rec := a.do(http.MethodPatch, "/api/pours", map[string]any{
 		"pours": []map[string]any{{"id": pours[2].ID, "beer_name": "Amber"}},
 	})
 	assertStatus(t, rec, http.StatusOK)
@@ -98,7 +98,7 @@ func TestUpdatePoursConvertsTheAmount(t *testing.T) {
 	pours := threePours(t, a)
 	setUS(t, a)
 
-	rec := a.do(http.MethodPost, "/api/pours/update", map[string]any{
+	rec := a.do(http.MethodPatch, "/api/pours", map[string]any{
 		"pours": []map[string]any{{"id": pours[0].ID, "amount": 16, "abv": 6.2, "tap_number": 3}},
 	})
 	assertStatus(t, rec, http.StatusOK)
@@ -134,13 +134,13 @@ func TestUpdatePoursRejectsBadEdits(t *testing.T) {
 		"long text":      {"id": id, "beer_name": strings.Repeat("x", 201)},
 		"number name":    {"id": id, "beer_name": 5},
 	} {
-		rec := a.do(http.MethodPost, "/api/pours/update", map[string]any{"pours": []any{entry}})
+		rec := a.do(http.MethodPatch, "/api/pours", map[string]any{"pours": []any{entry}})
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: status %d, want 400", name, rec.Code)
 		}
 	}
-	assertStatus(t, a.do(http.MethodPost, "/api/pours/update", map[string]any{"pours": []any{}}), http.StatusBadRequest)
-	assertStatus(t, a.do(http.MethodPost, "/api/pours/update",
+	assertStatus(t, a.do(http.MethodPatch, "/api/pours", map[string]any{"pours": []any{}}), http.StatusBadRequest)
+	assertStatus(t, a.do(http.MethodPatch, "/api/pours",
 		map[string]any{"pours": []any{map[string]any{"id": 9999, "beer_name": "x"}}}), http.StatusConflict)
 }
 
@@ -148,7 +148,7 @@ func TestDeletePoursInBulk(t *testing.T) {
 	a := newTestAPI(t)
 	pours := threePours(t, a)
 
-	rec := a.do(http.MethodPost, "/api/pours/delete", map[string]any{"ids": []int64{pours[0].ID, pours[1].ID}})
+	rec := a.do(http.MethodDelete, "/api/pours", map[string]any{"ids": []int64{pours[0].ID, pours[1].ID}})
 	assertStatus(t, rec, http.StatusOK)
 	var resp struct {
 		Deleted int `json:"deleted"`
@@ -159,5 +159,5 @@ func TestDeletePoursInBulk(t *testing.T) {
 	if resp.Deleted != 2 || len(left) != 1 {
 		t.Errorf("deleted %d, %d left; want 2 and 1", resp.Deleted, len(left))
 	}
-	assertStatus(t, a.do(http.MethodPost, "/api/pours/delete", map[string]any{"ids": []int64{}}), http.StatusBadRequest)
+	assertStatus(t, a.do(http.MethodDelete, "/api/pours", map[string]any{"ids": []int64{}}), http.StatusBadRequest)
 }

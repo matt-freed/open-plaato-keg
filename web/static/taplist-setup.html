@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tap List Setup - Open Plaato</title>
+  <title>Tap Setup - Open Plaato</title>
   <link rel="stylesheet" href="/tokens.css">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/theme.css">
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
+  <script src="/common.js"></script>
 </head>
 <body>
-  <site-header heading="Tap List Setup"></site-header>
+  <site-header heading="Tap Setup"></site-header>
 
   <section class="section">
   <div class="container is-centered">
@@ -39,7 +40,7 @@
         <div class="box">
           <div class="form-head">
             <h2 class="title is-5" id="formTitle">New Tap</h2>
-            <button class="button is-danger is-light is-small" id="deleteBtn" onclick="deleteTap()">Delete Tap</button>
+            <button class="button is-danger is-small" id="deleteBtn" onclick="deleteTap()">Delete Tap</button>
           </div>
 
           <div class="columns">
@@ -133,12 +134,12 @@
           <hr />
 
           <div class="field">
-            <label class="label">Linked Keg Sensor</label>
+            <label class="label">Linked Keg Scale</label>
             <p class="help">The scale that provides live fill and temperature data for this tap. Each scale feeds one tap; to move one here, unlink it from its current tap first, or drag the tap on the list of all taps.</p>
             <div class="control">
               <div class="select is-fullwidth">
                 <select id="linkedKeg">
-                  <option value="">No sensor linked</option>
+                  <option value="">No keg scale linked</option>
                 </select>
               </div>
             </div>
@@ -164,33 +165,11 @@
     let allTaps = [];
     let allKegs = [];
 
-    function showToast(msg, type = 'info') {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.className = `notification toast is-${type}`;
-      setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
-
     // ── Load all data ─────────────────────────────
     async function loadAll() {
-      const [tapsRes, kegsRes] = await Promise.all([
-        fetch('/api/taps'),
-        fetch('/api/kegs'),
-      ]);
-      allTaps = await tapsRes.json();
-      allKegs = await kegsRes.json();
+      [allTaps, allKegs] = await Promise.all([api('GET', '/api/taps'), api('GET', '/api/kegs')]);
       if (!board.active) renderBoard();
       populateDropdowns();
-    }
-
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
-
-    // kegName names a scale as the editor's sensor list does.
-    function kegName(keg) {
-      return keg.label?.trim() || `Scale ${allKegs.indexOf(keg) + 1}`;
     }
 
     // ── Board ─────────────────────────────────────
@@ -211,19 +190,19 @@
       for (const tap of allTaps) {
         const keg = tap.keg_id && allKegs.find(k => k.id === tap.keg_id);
         if (!tap.keg_id) tray.push([tap, '']);
-        else if (!keg) tray.push([tap, 'Scale not found']);
-        else if (onScale.has(keg.id)) tray.push([tap, `Also on ${kegName(keg)}`]);
+        else if (!keg) tray.push([tap, 'Keg scale not found']);
+        else if (onScale.has(keg.id)) tray.push([tap, `Also on ${kegName(keg, allKegs.indexOf(keg))}`]);
         else onScale.set(keg.id, tap);
       }
 
-      const rows = allKegs.map(keg => {
+      const rows = allKegs.map((keg, index) => {
         const tap = onScale.get(keg.id);
         const left = keg.amount_left != null
           ? `${keg.amount_left.toFixed(1)} ${keg.beer_left_unit || ''} left` : 'No reading yet';
         return `
           <div class="board-row">
             <div class="board-scale">
-              <span class="board-scale-name">${esc(kegName(keg))}</span>
+              <span class="board-scale-name">${esc(kegName(keg, index))}</span>
               <span class="board-scale-meta">${esc(left)}</span>
             </div>
             <div class="board-slot" data-slot="${esc(keg.id)}">
@@ -236,8 +215,8 @@
         ${allKegs.length
           ? `<p class="board-help">Drag a tap beside the scale it pours from. Dropping it on a scale that has a tap swaps the two.</p>
              <div class="tap-board">${rows}</div>`
-          : '<p class="board-help">No scales yet. Once a keg connects it appears in <a href="/keg-setup.html">Keg Setup</a>, and its taps can be placed here.</p>'}
-        <h3 class="board-tray-head">Not on a scale</h3>
+          : '<p class="board-help">No keg scales yet. Once a keg scale connects it appears in <a href="/keg-setup.html">Keg Scale Setup</a>, and its taps can be placed here.</p>'}
+        <h3 class="board-tray-head">Not on a keg scale</h3>
         <div class="board-slot board-tray" data-slot="">
           ${tray.map(([tap, note]) => tapCard(tap, note)).join('')
             || '<span class="board-slot-empty">Drop a tap here to unlink it</span>'}
@@ -278,14 +257,7 @@
       renderBoard();
 
       try {
-        const res = await fetch('/api/taps/links', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ links }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.detail || body.error || res.status);
-        allTaps = body.taps;
+        allTaps = (await api('PATCH', '/api/taps/links', { links })).taps;
       } catch (e) {
         allTaps = previous;
         showToast('Could not move the tap: ' + e.message, 'danger');
@@ -322,7 +294,7 @@
     function showReturnLinks() {
       const target = {
         taplist: { href: '/taplist.html', label: '← Tap List' },
-        kegs: { href: '/kegs.html', label: '← Kegs' },
+        kegs: { href: '/kegs.html', label: '← Keg Scales' },
       }[new URLSearchParams(location.search).get('from')];
       for (const link of document.querySelectorAll('.return-link')) {
         link.hidden = !target;
@@ -343,11 +315,11 @@
       // Kegs
       const kegSel = document.getElementById('linkedKeg');
       const prev = kegSel.value;
-      kegSel.innerHTML = '<option value="">No sensor linked</option>';
+      kegSel.innerHTML = '<option value="">No keg scale linked</option>';
       allKegs.forEach((k, index) => {
         const opt = document.createElement('option');
         opt.value = k.id;
-        const label = k.label || `Scale ${index + 1}`;
+        const label = kegName(k, index);
         opt.textContent = `${label} ${k.beer_left_unit || ''} ${k.amount_left != null ? '('+k.amount_left.toFixed(1)+' left)' : ''}`;
         // A scale feeds one tap, so one already linked elsewhere cannot be
         // picked here until it is unlinked from that tap.
@@ -420,15 +392,10 @@
       };
 
       try {
-        const res = await fetch(`/api/taps/${currentTapId}`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || err.error || res.status);
-        }
+        // A new tap's id is only a placeholder until the server assigns one.
+        const exists = allTaps.some(t => t.id === currentTapId);
+        if (exists) await api('PUT', `/api/taps/${encodeURIComponent(currentTapId)}`, body);
+        else await api('POST', '/api/taps', body);
         showToast('Tap saved!', 'success');
         await loadAll();
         backToList();
@@ -442,12 +409,12 @@
       if (!currentTapId) return;
       if (!confirm('Delete this tap? This cannot be undone.')) return;
       try {
-        await fetch(`/api/taps/${currentTapId}/delete`, {method: 'POST'});
+        await api('DELETE', `/api/taps/${encodeURIComponent(currentTapId)}`);
         showToast('Tap deleted', 'success');
         await loadAll();
         backToList();
       } catch (e) {
-        showToast('Delete failed', 'danger');
+        showToast('Delete failed: ' + e.message, 'danger');
       }
     }
 

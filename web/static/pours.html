@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Pours</title>
+    <title>All Pours - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
     <style>
       /* Scale follows the right-aligned ABV, so it needs its own space. */
       .data-table .scale-col { padding-left: 1.25rem; }
@@ -73,7 +74,7 @@
           <div class="select"><select id="beerFilter"></select></div>
         </div>
         <div class="field">
-          <label class="label" for="scaleFilter">Scale</label>
+          <label class="label" for="scaleFilter">Keg Scale</label>
           <div class="select"><select id="scaleFilter"></select></div>
         </div>
       </div>
@@ -155,13 +156,8 @@
     let original = new Map();
     const selected = new Set();
 
-    function esc(v) {
-      return String(v ?? '').replace(/[&<>"']/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    }
-
     const beerOf = p => p.beer_name?.trim() || NO_BEER;
-    const scaleName = (label, kegId) => label?.trim() || `Scale …${kegId.slice(-4)}`;
+    const scaleName = (label, kegId) => label?.trim() || `Keg Scale …${kegId.slice(-4)}`;
     const scaleOf = p => scaleName(p.scale_label, p.keg_id);
     const size = p => p.display ? `${Math.round(p.display.amount)} ${p.display.unit}` : '—';
     const totalsText = list => list?.map(t => `${Math.round(t.amount)} ${t.unit}`).join(' + ') || '—';
@@ -219,7 +215,7 @@
 
       const scales = [...summary.scales];
       if (view.keg && !scales.some(s => s.keg_id === view.keg)) scales.unshift({ keg_id: view.keg, label: '' });
-      $('scaleFilter').innerHTML = '<option value="">All scales</option>' + scales.map(s =>
+      $('scaleFilter').innerHTML = '<option value="">All keg scales</option>' + scales.map(s =>
         `<option value="${esc(s.keg_id)}">${esc(scaleName(s.label, s.keg_id))}</option>`).join('');
       $('scaleFilter').value = view.keg;
     }
@@ -264,7 +260,7 @@
     function renderView(range) {
       $('poursHead').innerHTML = `<tr>
         <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th>
-        <th class="scale-col">Scale</th><th class="num">Took</th><th class="num">Amount</th>
+        <th class="scale-col">Keg Scale</th><th class="num">Took</th><th class="num">Amount</th>
       </tr>`;
       $('poursBody').innerHTML = pours.map(p => `
         <tr>
@@ -273,7 +269,7 @@
           <td>${esc(p.beer_style)}</td>
           <td class="num">${Number.isFinite(p.abv) ? `${p.abv.toFixed(1)}%` : ''}</td>
           <td class="scale-col">${esc(scaleOf(p))}${p.hidden_from_keg
-            ? '<span class="hidden-tag" title="This scale’s history was cleared, so the pour only shows here.">history cleared</span>' : ''}</td>
+            ? '<span class="hidden-tag" title="This keg scale’s history was cleared, so the pour only shows here.">history cleared</span>' : ''}</td>
           <td class="num">${esc(took(p))}</td>
           <td class="num">${esc(size(p))}</td>
         </tr>`).join('');
@@ -290,7 +286,7 @@
       $('poursHead').innerHTML = `<tr>
         <th class="check"><input type="checkbox" id="selectAll" aria-label="Select every pour on this page"></th>
         <th>When</th><th>Beer</th><th>Style</th><th class="num">ABV</th><th class="num">Tap</th>
-        <th>Scale</th><th class="num">Took</th><th class="num">Amount</th>
+        <th>Keg Scale</th><th class="num">Took</th><th class="num">Amount</th>
       </tr>`;
       $('poursBody').innerHTML = pours.map(p => {
         const was = {
@@ -314,7 +310,7 @@
             <td>${text('beer_style', 'Style')}</td>
             <td class="num">${num('abv', 'ABV')}</td>
             <td class="num">${num('tap_number', 'Tap number')}</td>
-            <td>${text('scale_label', 'Scale label')}</td>
+            <td>${text('scale_label', 'Keg scale label')}</td>
             <td class="num">${esc(took(p))}</td>
             <td class="num"><span class="amount-cell">${num('amount', 'Amount', '')}<span class="unit">${esc(p.display?.unit ?? '')}</span></span></td>
           </tr>`;
@@ -437,13 +433,14 @@
       $('page').classList.add('is-loading');
       let sum, list, count;
       try {
-        const [sumRes, res] = await Promise.all([
-          fetch(`/api/pours/summary?${query}`),
+        let res;
+        [sum, res] = await Promise.all([
+          api('GET', `/api/pours/summary?${query}`),
+          // fetch rather than api, for the X-Total-Count header.
           fetch(`/api/pours?${pageQuery}`),
         ]);
-        if (!sumRes.ok) throw new Error(sumRes.status);
         if (!res.ok) throw new Error(res.status);
-        [sum, list] = await Promise.all([sumRes.json(), res.json()]);
+        list = await res.json();
         count = Number(res.headers.get('X-Total-Count')) || 0;
       } catch (_) {
         if (seq !== loadSeq) return;
@@ -469,26 +466,6 @@
       renderFilters(view);
       renderSummary(view);
       renderTable();
-    }
-
-    let toastTimer;
-    function showToast(message, type) {
-      const t = $('toast');
-      t.textContent = message;
-      t.className = `notification toast is-${type}`;
-      clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => t.classList.add('is-hidden'), 3000);
-    }
-
-    async function postJSON(path, body) {
-      const res = await fetch(path, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || res.status);
-      return data;
     }
 
     // ── Controls ────────────────────────────────────
@@ -531,7 +508,7 @@
       if (!edits.length || invalid) return;
       $('saveBtn').disabled = true;
       try {
-        await postJSON('/api/pours/update', { pours: edits });
+        await api('PATCH', '/api/pours', { pours: edits });
         showToast(edits.length === 1 ? 'Pour saved' : `${edits.length} pours saved`, 'success');
       } catch (err) {
         showToast('Could not save: ' + err.message, 'danger');
@@ -547,7 +524,7 @@
       const what = ids.length === 1 ? 'this pour' : `these ${ids.length} pours`;
       if (!confirm(`Delete ${what}? They are removed everywhere, including History. It cannot be undone.`)) return;
       try {
-        const { deleted } = await postJSON('/api/pours/delete', { ids });
+        const { deleted } = await api('DELETE', '/api/pours', { ids });
         showToast(deleted === 1 ? 'Pour deleted' : `${deleted} pours deleted`, 'success');
       } catch (err) {
         showToast('Could not delete: ' + err.message, 'danger');
@@ -562,7 +539,7 @@
     window.addEventListener('hashchange', show);
 
     async function init() {
-      const tf = await fetch('/api/config/time-format').then(r => r.json()).catch(() => ({}));
+      const tf = await api('GET', '/api/config').catch(() => ({}));
       timeFormat = tf.time_format || '12h';
       show();
     }

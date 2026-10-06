@@ -3,12 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Keg Setup - Open Plaato</title>
+    <title>Keg Scale Setup - Open Plaato</title>
     <link rel="stylesheet" href="/tokens.css">
     <link rel="stylesheet" href="/style.css">
     <link rel="stylesheet" href="/theme.css">
     <link rel="stylesheet" href="/site-header.css">
     <script src="/site-header.js"></script>
+    <script src="/common.js"></script>
+    <script src="/live.js"></script>
     <style>
       /* The open scale's name, with whether it is connected. */
       .edit-head { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
@@ -26,17 +28,17 @@
     </style>
   </head>
   <body>
-    <site-header heading="Keg Setup"></site-header>
+    <site-header heading="Keg Scale Setup"></site-header>
 
     <section class="section">
         <div class="container is-centered">
-          <p class="subtitle">Configure and calibrate your scale</p>
+          <p class="subtitle">Configure and calibrate your keg scale</p>
 
           <!-- List view -->
           <div id="listView">
             <div class="box">
               <div class="list-head">
-                <h2 class="title is-5">Scales</h2>
+                <h2 class="title is-5">Keg Scales</h2>
                 <span class="help" id="connectionStatus"></span>
               </div>
               <div id="kegListContainer">
@@ -48,7 +50,7 @@
           <!-- Editor view -->
           <div id="editView" hidden>
           <div class="back-links">
-            <a class="back-link" href="#">← All scales</a>
+            <a class="back-link" href="#">← All keg scales</a>
             <a class="back-link return-link" hidden></a>
           </div>
           <div class="edit-head">
@@ -64,7 +66,7 @@
           <!-- Units Section -->
           <div class="box section-box">
             <h2 class="title is-4">Units & Mode</h2>
-            <p class="help" style="margin-bottom: 1rem;">
+            <p class="help mb-4">
               These are written to the scale itself: they change what it reports, what is
               stored, and what is forwarded to BarHelper. Every value on this page is in the
               scale&rsquo;s own units. To change only how readings are shown in the UI, use
@@ -77,11 +79,11 @@
                   <label class="label">Unit System</label>
                   <p class="help">Metric or US units</p>
                   <div class="control">
-                    <div class="buttons has-addons">
-                      <button class="button unit-btn" id="unitMetric" data-value="metric" onclick="setUnit('metric')">
+                    <div class="buttons has-addons" data-choice="unit">
+                      <button class="button" type="button" data-value="metric" onclick="setUnit('metric')">
                         <span>Metric</span>
                       </button>
-                      <button class="button unit-btn" id="unitUS" data-value="us" onclick="setUnit('us')">
+                      <button class="button" type="button" data-value="us" onclick="setUnit('us')">
                         <span>US</span>
                       </button>
                     </div>
@@ -94,11 +96,11 @@
                   <label class="label">Measure Mode</label>
                   <p class="help">Display by weight or volume</p>
                   <div class="control">
-                    <div class="buttons has-addons">
-                      <button class="button measure-btn" id="measureWeight" data-value="weight" onclick="setMeasureUnit('weight')">
+                    <div class="buttons has-addons" data-choice="measure">
+                      <button class="button" type="button" data-value="weight" onclick="setMeasureUnit('weight')">
                         <span>Weight</span>
                       </button>
-                      <button class="button measure-btn" id="measureVolume" data-value="volume" onclick="setMeasureUnit('volume')">
+                      <button class="button" type="button" data-value="volume" onclick="setMeasureUnit('volume')">
                         <span>Volume</span>
                       </button>
                     </div>
@@ -108,17 +110,17 @@
             </div>
 
             <div class="field">
-              <label class="label">Scale Sensitivity <span class="req">*</span></label>
+              <label class="label">Keg Scale Sensitivity <span class="req">*</span></label>
               <p class="help">Higher = detects smaller pours</p>
               <div class="control">
-                <div class="sensitivity-buttons">
-                  <button class="button sensitivity-btn" id="sens1" data-value="1" onclick="setSensitivity(1)" title="Very Low">▂</button>
-                  <button class="button sensitivity-btn" id="sens2" data-value="2" onclick="setSensitivity(2)" title="Low">▃</button>
-                  <button class="button sensitivity-btn" id="sens3" data-value="3" onclick="setSensitivity(3)" title="Medium">▅</button>
-                  <button class="button sensitivity-btn" id="sens4" data-value="4" onclick="setSensitivity(4)" title="High">█</button>
+                <div class="sensitivity-buttons" data-choice="sensitivity">
+                  <button class="button sensitivity-btn" type="button" data-value="1" onclick="setSensitivity(1)" title="Very Low">▂</button>
+                  <button class="button sensitivity-btn" type="button" data-value="2" onclick="setSensitivity(2)" title="Low">▃</button>
+                  <button class="button sensitivity-btn" type="button" data-value="3" onclick="setSensitivity(3)" title="Medium">▅</button>
+                  <button class="button sensitivity-btn" type="button" data-value="4" onclick="setSensitivity(4)" title="High">█</button>
                 </div>
               </div>
-              <p class="help has-text-warning-dark" style="margin-top: 0.5rem;">
+              <p class="help is-warning">
                 <span class="req">*</span> Sensitivity mode is experimental since the pin feedback is not read. Use at your own discretion.
               </p>
             </div>
@@ -131,10 +133,10 @@
             <div class="columns">
               <div class="column">
                 <div class="field">
-                  <label class="label">Tare Scale</label>
+                  <label class="label">Tare Keg Scale</label>
                   <p class="help">Zero the scale with an empty keg on it</p>
                   <div class="control">
-                    <button class="button is-warning" id="tareBtn" onclick="sendTare()">
+                    <button class="button" type="button" id="tareBtn" onclick="sendTare()">
                       <span>Tare</span>
                     </button>
                   </div>
@@ -146,7 +148,7 @@
                   <label class="label">Set Empty Keg Weight</label>
                   <p class="help">Store the current weight as empty keg reference</p>
                   <div class="control">
-                    <button class="button is-info" id="emptyKegBtn" onclick="sendEmptyKeg()">
+                    <button class="button" type="button" id="emptyKegBtn" onclick="sendEmptyKeg()">
                       <span>Set Empty</span>
                     </button>
                   </div>
@@ -158,7 +160,7 @@
                   <label class="label">Reset Last Pour</label>
                   <p class="help">Clear a spurious last pour reading (e.g. from vibration)</p>
                   <div class="control">
-                    <button class="button is-danger is-light" onclick="resetLastPour()">
+                    <button class="button is-danger" type="button" onclick="resetLastPour()">
                       <span>Reset</span>
                     </button>
                   </div>
@@ -221,12 +223,12 @@
             </div>
           </div>
 
-          <!-- Scale Info Section -->
+          <!-- Keg Scale Info Section -->
           <div class="box section-box">
-            <h2 class="title is-4">Scale Information</h2>
+            <h2 class="title is-4">Keg Scale Information</h2>
 
             <div class="field">
-              <label class="label">Scale Label <span class="req">*</span></label>
+              <label class="label">Keg Scale Label <span class="req">*</span></label>
               <p class="help">Friendly name shown on the dashboard (e.g. "Basement Tap", "Fridge #1")</p>
               <div class="control">
                 <div class="field has-addons">
@@ -241,16 +243,16 @@
             </div>
 
             <div class="field">
-              <label class="label">Forget Saved Scale</label>
+              <label class="label">Forget Saved Keg Scale</label>
               <p class="help">Removes the selected scale's saved record, including the stored 32-digit auth token ID, local settings and all of its history. This cannot be undone. The scale can reconnect and create a fresh record later, with empty history. To keep the scale and only remove its readings, use Clear history on the <a href="/history.html">History</a> page.</p>
               <div class="control">
-                <button class="button is-danger is-light" type="button" onclick="forgetSelectedScale()">
-                  Forget Scale
+                <button class="button is-danger" type="button" onclick="forgetSelectedScale()">
+                  Forget Keg Scale
                 </button>
               </div>
             </div>
 
-            <p class="help" style="margin-bottom: 1rem;">
+            <p class="help mb-4">
               Beverage details and the date kegged are managed from <a href="/taplist-setup.html">Tap Setup</a>.
             </p>
 
@@ -280,18 +282,18 @@
               <label class="label">Keg Mode</label>
               <p class="help">Beer or CO₂ monitoring</p>
               <div class="control">
-                <div class="buttons has-addons">
-                  <button class="button kegmode-btn" id="kegModeBeer" data-value="beer" onclick="setKegMode('beer')">
+                <div class="buttons has-addons" data-choice="kegMode">
+                  <button class="button" type="button" data-value="beer" onclick="setKegMode('beer')">
                     <span>Beer</span>
                   </button>
-                  <button class="button kegmode-btn" id="kegModeCO2" data-value="co2" onclick="setKegMode('co2')">
+                  <button class="button" type="button" data-value="co2" onclick="setKegMode('co2')">
                     <span>CO₂</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            <div id="co2CapacityField" class="field" style="display:none; margin-top:1rem;">
+            <div id="co2CapacityField" class="field" hidden>
               <label class="label">CO₂ Cylinder Capacity</label>
               <p class="help">Total weight of a full CO₂ cylinder (kg or lbs, matching your unit setting). Used to track how much CO₂ is remaining.</p>
               <div class="control">
@@ -317,7 +319,7 @@
 
           <!-- The settings run long, so the way back is at the bottom too. -->
           <div class="buttons">
-            <a class="button" href="#">← All scales</a>
+            <a class="button" href="#">← All keg scales</a>
             <a class="button return-link" hidden></a>
           </div>
           </div>
@@ -340,36 +342,25 @@
       let connInfo = null;
       let timeFormat = "12h";
 
-      function esc(v) {
-        return String(v ?? "").replace(/[&<>"']/g, c =>
-          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-      }
-
-      function kegName(keg) {
-        const index = allKegs.findIndex(k => k.id === keg.id);
-        return keg.label?.trim() || `Scale ${index + 1}`;
-      }
-
       // Every scale the server knows, with whether it is connected now.
       // Settings that go to the scale itself need it connected, but its
       // label, display and record can be changed either way.
       async function loadKegs() {
         try {
-          const [kegsRes, connectedRes, tapsRes] = await Promise.all([
-            fetch("/api/kegs"),
-            fetch("/api/kegs/connected"),
-            fetch("/api/taps"),
+          const [kegList, connected, tapList] = await Promise.all([
+            api("GET", "/api/kegs"),
+            api("GET", "/api/kegs/connected"),
+            // Taps only name the beer; without them the rest of the page still works.
+            api("GET", "/api/taps").catch(() => null),
           ]);
-          if (!kegsRes.ok || !connectedRes.ok) throw new Error("bad response");
-          allKegs = await kegsRes.json();
-          connectedIds = new Set(await connectedRes.json());
-          // Taps only name the beer; without them the rest of the page still works.
-          if (tapsRes.ok) allTaps = await tapsRes.json();
+          allKegs = kegList;
+          connectedIds = new Set(connected);
+          if (tapList) allTaps = tapList;
           renderKegList();
           updateEditHead();
           loadConnection();
         } catch (_) {
-          connectionStatus.textContent = "Could not load the scales";
+          connectionStatus.textContent = "Could not load the keg scales";
           connectionStatus.className = "help is-danger";
         }
       }
@@ -383,10 +374,10 @@
 
         const container = document.getElementById("kegListContainer");
         if (!allKegs.length) {
-          container.innerHTML = '<p class="has-text-grey">No scales yet. Once a Plaato Keg connects, it appears here.</p>';
+          container.innerHTML = '<p class="has-text-grey">No keg scales yet. Once a Plaato Keg connects, it appears here.</p>';
           return;
         }
-        container.innerHTML = allKegs.map(keg => {
+        container.innerHTML = allKegs.map((keg, index) => {
           const online = connectedIds.has(keg.id);
           const left = amountLeft(keg);
           const taps = tapsFor(keg.id);
@@ -394,7 +385,7 @@
           return `
             <a class="list-row" href="#keg=${encodeURIComponent(keg.id)}">
               <span class="list-row-text">
-                <span class="list-row-name">${esc(kegName(keg))}</span>
+                <span class="list-row-name">${esc(kegName(keg, index))}</span>
                 <span class="list-row-meta">${first}${left}</span>
               </span>
               <span class="status-pill${online ? " is-online" : ""}">${online ? "Connected" : "Offline"}</span>
@@ -405,9 +396,9 @@
 
       function updateEditHead() {
         if (!selectedKegId) return;
-        const keg = allKegs.find(k => k.id === selectedKegId);
+        const index = allKegs.findIndex(k => k.id === selectedKegId);
         const online = connectedIds.has(selectedKegId);
-        document.getElementById("editTitle").textContent = keg ? kegName(keg) : "Scale";
+        document.getElementById("editTitle").textContent = index >= 0 ? kegName(allKegs[index], index) : "Keg Scale";
         const pill = document.getElementById("editStatus");
         pill.textContent = online ? "Connected" : "Offline";
         pill.classList.toggle("is-online", online);
@@ -479,7 +470,7 @@
       function showReturnLinks() {
         const target = {
           taplist: { href: "/taplist.html", label: "← Tap List" },
-          kegs: { href: "/kegs.html", label: "← Kegs" },
+          kegs: { href: "/kegs.html", label: "← Keg Scales" },
         }[new URLSearchParams(location.search).get("from")];
         for (const link of document.querySelectorAll(".return-link")) {
           link.hidden = !target;
@@ -503,7 +494,7 @@
           document.getElementById(id).value = "";
         }
         document.getElementById("currentSettings").innerHTML = '<p class="has-text-grey">Loading…</p>';
-        document.getElementById("co2CapacityField").style.display = "none";
+        document.getElementById("co2CapacityField").hidden = true;
         clearActiveButtons();
         updateUnitLabels("1");
       }
@@ -512,8 +503,7 @@
       function loadKegData(kegId) {
         if (!kegId) return;
 
-        fetch(`/api/kegs/${kegId}`)
-          .then((response) => response.json())
+        api("GET", `/api/kegs/${encodeURIComponent(kegId)}`)
           .then((data) => {
             currentKegData = data;
             populateFormFields(data);
@@ -567,9 +557,7 @@
         const id = selectedKegId;
         if (!id) return;
         try {
-          const res = await fetch(`/api/kegs/${encodeURIComponent(id)}/connection`);
-          if (!res.ok) return;
-          const info = await res.json();
+          const info = await api("GET", `/api/kegs/${encodeURIComponent(id)}/connection`);
           if (id !== selectedKegId) return;
           connInfo = info;
           if (currentKegData.id === id) updateSettingsDisplay(currentKegData);
@@ -738,59 +726,40 @@
         document.getElementById("currentSettings").innerHTML = html;
       }
 
+      // Marks the button in a data-choice group whose data-value is value;
+      // a value the group does not have leaves none marked.
+      function select(name, value) {
+        document.querySelectorAll(`[data-choice="${name}"] .button`).forEach(b =>
+          b.classList.toggle("is-selected", b.dataset.value === String(value)));
+      }
+
       function clearActiveButtons() {
-        document.querySelectorAll(".unit-btn, .measure-btn, .kegmode-btn, .sensitivity-btn")
-          .forEach(btn => btn.classList.remove("is-primary", "is-selected"));
+        document.querySelectorAll("[data-choice] .button")
+          .forEach(btn => btn.classList.remove("is-selected"));
       }
 
       function highlightCurrentSettings(data) {
-        clearActiveButtons();
-
         // Unit system: 1 = Metric, 2 = US
-        if (data.unit === 1) {
-          document.getElementById("unitMetric")?.classList.add("is-primary", "is-selected");
-        }
-        if (data.unit === 2) {
-          document.getElementById("unitUS")?.classList.add("is-primary", "is-selected");
-        }
-
+        select("unit", { 1: "metric", 2: "us" }[data.unit]);
         updateUnitLabels(data.unit ?? 1);
 
-        const beerLeftUnit = data.beer_left_unit;
+        // Measure mode follows beer_left_unit: lbs/kg = Weight, gal/litre = Volume
+        select("measure", { lbs: "weight", kg: "weight", gal: "volume", litre: "volume" }[data.beer_left_unit]);
 
-        // Measure mode based on beer_left_unit: lbs/kg = Weight, gal/litre = Volume
-        if (beerLeftUnit === "lbs" || beerLeftUnit === "kg") {
-          document.getElementById("measureWeight")?.classList.add("is-primary", "is-selected");
-        }
-        if (beerLeftUnit === "gal" || beerLeftUnit === "litre") {
-          document.getElementById("measureVolume")?.classList.add("is-primary", "is-selected");
-        }
-
-        // Keg mode
-        if (data.keg_mode === 1) document.getElementById("kegModeBeer")?.classList.add("is-primary", "is-selected");
-        if (data.keg_mode === 2) document.getElementById("kegModeCO2")?.classList.add("is-primary", "is-selected");
+        // Keg mode: 1 = Beer, 2 = CO2
+        select("kegMode", { 1: "beer", 2: "co2" }[data.keg_mode]);
         const co2Field = document.getElementById('co2CapacityField');
-        if (co2Field) co2Field.style.display = data.keg_mode === 2 ? 'block' : 'none';
+        if (co2Field) co2Field.hidden = data.keg_mode !== 2;
         if (data.co2_capacity) {
           const cap = document.getElementById('co2CapacityInput');
           if (cap && document.activeElement !== cap) cap.value = data.co2_capacity;
         }
 
-        // Sensitivity
-        const sensId = `sens${data.sensitivity}`;
-        document.getElementById(sensId)?.classList.add("is-primary", "is-selected");
+        select("sensitivity", data.sensitivity);
       }
 
-      // WebSocket connection for real-time updates
-      const socket = new WebSocket('/ws');
-
-      socket.addEventListener("open", () => {
-        console.log("WebSocket connected for setup page");
-      });
-
-      socket.addEventListener("message", (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type !== "keg") return;
+      liveUpdates(msg => {
+        if (msg.type !== "keg" || !msg.data?.id) return;
         const data = msg.data;
         const i = allKegs.findIndex(k => k.id === data.id);
         if (i >= 0) {
@@ -807,17 +776,8 @@
         }
       });
 
-      socket.addEventListener("error", (error) => {
-        console.error("WebSocket error:", error);
-      });
-
-      socket.addEventListener("close", () => {
-        console.log("WebSocket closed");
-      });
-
-      fetch("/api/config/time-format")
-        .then(r => r.json())
-        .then(tf => { timeFormat = tf.time_format || "12h"; })
+      api("GET", "/api/config")
+        .then(cfg => { timeFormat = cfg.time_format || "12h"; })
         .catch(() => {});
 
       showReturnLinks();
@@ -828,41 +788,26 @@
       function getSelectedKeg() {
         const kegId = selectedKegId;
         if (!kegId) {
-          showToast("Please select a keg first", "warning");
+          showToast("Please select a keg scale first", "warning");
           return null;
         }
         return kegId;
       }
 
-      function showToast(message, type = "info") {
-        const toast = document.getElementById("toast");
-        toast.textContent = message;
-        toast.className = `notification toast is-${type}`;
-        setTimeout(() => {
-          toast.classList.add("is-hidden");
-        }, 3000);
+      // Sends the open scale a command, answering with the command's name.
+      function postCommand(kegId, command, body = {}) {
+        return api("POST", `/api/kegs/${encodeURIComponent(kegId)}/${command}`, body);
       }
 
-      function sendCommand(endpoint, body = {}) {
+      async function sendCommand(endpoint, body = {}) {
         const kegId = getSelectedKeg();
         if (!kegId) return;
-
-        fetch(`/api/kegs/${kegId}/${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.status === "ok") {
-              showToast(`Command sent: ${data.command}`, "success");
-            } else {
-              showToast(`Error: ${data.error}`, "danger");
-            }
-          })
-          .catch((err) => {
-            showToast(`Error: ${err.message}`, "danger");
-          });
+        try {
+          const data = await postCommand(kegId, endpoint, body);
+          showToast(`Command sent: ${data.command}`, "success");
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+        }
       }
 
       // Calibration commands with auto-release after 1 second
@@ -878,8 +823,9 @@
         sendCommand("reset-last-pour");
       }
 
-      // Helper function to send command, wait 1s, then send release
-      function sendCommandWithRelease(command, releaseCommand, buttonId) {
+      // Momentary commands: the press, then a second later the release the
+      // device needs before it will act on the button again.
+      async function sendCommandWithRelease(command, releaseCommand, buttonId) {
         const kegId = getSelectedKeg();
         if (!kegId) return;
 
@@ -888,46 +834,18 @@
         button.disabled = true;
         button.innerHTML = '<span>Working...</span>';
 
-        fetch(`/api/kegs/${kegId}/${command}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.status === "ok") {
-              showToast(`Command sent: ${data.command}`, "success");
-              // Wait 1 second then send release
-              setTimeout(() => {
-                fetch(`/api/kegs/${kegId}/${releaseCommand}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({}),
-                })
-                  .then((response) => response.json())
-                  .then((releaseData) => {
-                    if (releaseData.status === "ok") {
-                      showToast(`${data.command} completed`, "success");
-                    }
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                  })
-                  .catch(() => {
-                    button.disabled = false;
-                    button.innerHTML = originalText;
-                  });
-              }, 1000);
-            } else {
-              showToast(`Error: ${data.error}`, "danger");
-              button.disabled = false;
-              button.innerHTML = originalText;
-            }
-          })
-          .catch((err) => {
-            showToast(`Error: ${err.message}`, "danger");
-            button.disabled = false;
-            button.innerHTML = originalText;
-          });
+        try {
+          const data = await postCommand(kegId, command);
+          showToast(`Command sent: ${data.command}`, "success");
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await postCommand(kegId, releaseCommand);
+          showToast(`${data.command} completed`, "success");
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+        } finally {
+          button.disabled = false;
+          button.innerHTML = originalText;
+        }
       }
 
       function sendKnownWeight() {
@@ -956,38 +874,42 @@
       }
 
       function sendKegLabel() {
-        const value = document.getElementById("kegLabel").value;
-        sendCommand("label", { value });
+        const label = document.getElementById("kegLabel").value;
+        saveKeg({ label }, "Label saved");
       }
 
-      function forgetSelectedScale() {
+      // Saves settings kept on the server rather than the device, so they
+      // work whether or not the scale is connected.
+      async function saveKeg(changes, message) {
+        const kegId = getSelectedKeg();
+        if (!kegId) return;
+        try {
+          await api("PATCH", `/api/kegs/${encodeURIComponent(kegId)}`, changes);
+          showToast(message, "success");
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+        }
+      }
+
+      async function forgetSelectedScale() {
         const kegId = selectedKegId;
         if (!kegId) {
-          showToast("Please select a scale first", "warning");
+          showToast("Please select a keg scale first", "warning");
           return;
         }
 
-        if (!confirm(`Forget this saved scale record?\n\n${kegId}\n\nThis removes the stored scale ID, local settings and all of its history from the server. This cannot be undone.`)) {
+        if (!confirm(`Forget this saved keg scale record?\n\n${kegId}\n\nThis removes the stored scale ID, local settings and all of its history from the server. This cannot be undone.`)) {
           return;
         }
 
-        fetch(`/api/kegs/${encodeURIComponent(kegId)}/delete`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({})
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            if (data.status === "ok") {
-              showToast("Scale record removed", "success");
-              loadKegs().then(backToList);
-            } else {
-              showToast(`Error: ${data.error || "Failed to forget scale"}`, "danger");
-            }
-          })
-          .catch((err) => {
-            showToast(`Error: ${err.message}`, "danger");
-          });
+        try {
+          await api("DELETE", `/api/kegs/${encodeURIComponent(kegId)}`);
+        } catch (err) {
+          showToast(`Error: ${err.message}`, "danger");
+          return;
+        }
+        showToast("Keg scale record removed", "success");
+        loadKegs().then(backToList);
       }
 
       // Settings commands
@@ -1011,25 +933,13 @@
 
       function setKegMode(value) {
         sendCommand("keg-mode", { value });
-        document.getElementById('co2CapacityField').style.display = value === 'co2' ? 'block' : 'none';
+        document.getElementById('co2CapacityField').hidden = value !== 'co2';
       }
 
       function saveCO2Capacity() {
-        const kegId = selectedKegId;
-        if (!kegId) { showToast('Select a keg first', 'warning'); return; }
         const value = document.getElementById('co2CapacityInput').value.trim();
         if (!value) { showToast('Enter a capacity value', 'warning'); return; }
-        fetch(`/api/kegs/${kegId}/co2-capacity`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value }),
-        })
-          .then(r => r.json())
-          .then(data => {
-            if (data.status === 'ok') showToast('CO₂ capacity saved', 'success');
-            else showToast(`Error: ${data.error}`, 'danger');
-          })
-          .catch(err => showToast(`Error: ${err.message}`, 'danger'));
+        saveKeg({ co2_capacity: value }, 'CO₂ capacity saved');
       }
 
       function setSensitivity(level) {

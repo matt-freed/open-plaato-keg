@@ -39,7 +39,7 @@ func newConn(nc net.Conn, now time.Time) *Conn {
 // heard records that the device sent something.
 func (c *Conn) heard(now time.Time) { c.lastHeard.Store(now.UnixNano()) }
 
-// ConnInfo describes a live connection, for the Keg Setup page.
+// ConnInfo describes a live connection, for the Keg Scale Setup page.
 type ConnInfo struct {
 	// RemoteIP is the device's address, without the port, which changes on
 	// every connection.

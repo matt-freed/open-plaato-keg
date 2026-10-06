@@ -12,7 +12,7 @@ var pages = []string{
 	"kegs.html", "taplist.html", "taplist-setup.html", "history.html", "history-edit.html", "pours.html",
 	"dashboard-setup.html", "keg-setup.html", "system.html",
 	"style.css", "site-header.css", "site-header.js",
-	"tokens.css", "tiles.css", "keg-graphic.js",
+	"tokens.css", "tiles.css", "keg-graphic.js", "live.js", "common.js",
 }
 
 func TestPagesArePresent(t *testing.T) {
@@ -286,13 +286,134 @@ func TestWebSocketPagesHandleTaggedMessages(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		body := string(data)
-		// Pages may pass "/ws" directly or build an absolute ws:// URL from it.
-		if !strings.Contains(body, "new WebSocket(") || !strings.Contains(body, "/ws") {
-			t.Errorf("%s does not open the websocket", name)
+		// Pages share live.js rather than opening their own socket, so they
+		// all reconnect the same way.
+		if !strings.Contains(body, `<script src="/live.js">`) || !strings.Contains(body, "liveUpdates(") {
+			t.Errorf("%s does not open the websocket through live.js", name)
 			continue
+		}
+		if strings.Contains(body, "new WebSocket(") {
+			t.Errorf("%s opens its own websocket instead of using live.js", name)
 		}
 		if !strings.Contains(body, `'keg'`) && !strings.Contains(body, `"keg"`) {
 			t.Errorf("%s does not dispatch on the keg message type", name)
+		}
+	}
+}
+
+// Older browsers reject a relative WebSocket URL, and a page left open across
+// a server restart must pick the feed back up.
+func TestLiveUpdatesReconnectsToAbsoluteURL(t *testing.T) {
+	data, err := fs.ReadFile(Static(), "live.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	for _, want := range []string{"new WebSocket(url)", "'wss' : 'ws'}://${location.host}/ws`", "setTimeout(connect"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("live.js is missing %q", want)
+		}
+	}
+}
+
+// sharedHelpers are the names common.js declares for every page.
+var sharedHelpers = []string{"esc", "kegName", "kegNameWithBeer", "api", "showToast"}
+
+// Every page loads common.js before its own script and leaves its helpers to
+// it. A page that declared one again with let or const would stop with a
+// SyntaxError, and a function of the same name would silently replace it.
+func TestPagesUseCommonHelpers(t *testing.T) {
+	static := Static()
+	redeclared := regexp.MustCompile(`(?m)\b(?:function|const|let|var)\s+(` +
+		strings.Join(sharedHelpers, "|") + `)\b`)
+	for _, name := range pages {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body := string(data)
+		load := strings.Index(body, `<script src="/common.js"></script>`)
+		if load < 0 {
+			t.Errorf("%s does not load common.js", name)
+			continue
+		}
+		if inline := strings.Index(body, "<script>"); inline >= 0 && inline < load {
+			t.Errorf("%s runs its own script before common.js loads", name)
+		}
+		for _, m := range redeclared.FindAllStringSubmatch(body, -1) {
+			t.Errorf("%s declares its own %s; use the one in common.js", name, m[1])
+		}
+	}
+}
+
+// Every page's browser title is its heading followed by the application name,
+// so tabs and bookmarks read the same as the header bar.
+func TestPageTitlesMatchHeadings(t *testing.T) {
+	static := Static()
+	title := regexp.MustCompile(`<title>([^<]*)</title>`)
+	heading := regexp.MustCompile(`<site-header heading="([^"]*)">`)
+	for _, name := range pages {
+		if !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		tm, hm := title.FindSubmatch(data), heading.FindSubmatch(data)
+		if tm == nil || hm == nil {
+			t.Errorf("%s is missing its <title> or <site-header heading>", name)
+			continue
+		}
+		if want := string(hm[1]) + " - Open Plaato"; string(tm[1]) != want {
+			t.Errorf("%s title = %q, want %q", name, tm[1], want)
+		}
+	}
+}
+
+// buttonClasses is the button set documented at the top of the Buttons
+// section in style.css: the variants, then the layout classes a page may add.
+var buttonClasses = map[string]bool{
+	"button": true, "is-primary": true, "is-danger": true, "is-small": true,
+	"is-fullwidth": true, "is-static": true, "is-selected": true,
+	"sensitivity-btn": true, "scale-option": true, "return-link": true,
+}
+
+// A button uses only the documented set, so a class that promises a look
+// style.css does not give it (is-info, is-warning, ...) cannot creep back.
+func TestButtonsUseTheDocumentedSet(t *testing.T) {
+	static := Static()
+	classAttr := regexp.MustCompile(`class="([^"$]*)"`)
+	entries, err := fs.ReadDir(static, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".html") && !strings.HasSuffix(name, ".js") {
+			continue
+		}
+		data, err := fs.ReadFile(static, name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, m := range classAttr.FindAllStringSubmatch(string(data), -1) {
+			classes := strings.Fields(m[1])
+			isButton := false
+			for _, c := range classes {
+				isButton = isButton || c == "button"
+			}
+			if !isButton {
+				continue
+			}
+			for _, c := range classes {
+				if !buttonClasses[c] {
+					t.Errorf("%s: button class %q is not in the documented set (class=%q)", name, c, m[1])
+				}
+			}
 		}
 	}
 }
