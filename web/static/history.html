@@ -712,8 +712,11 @@
         r.append(key, strong, document.createTextNode(label));
         tip.append(r);
       };
+      // null * mult is 0, so a reading with no amount is checked first rather
+      // than shown as an empty keg.
       row(token('--action'), false,
-        `${fmt(e.amount_left * amt.mult, amt.digits)} ${amt.unit}`.trim() +
+        (Number.isFinite(e.amount_left)
+          ? `${fmt(e.amount_left * amt.mult, amt.digits)} ${amt.unit}`.trim() : '—') +
           (Number.isFinite(e.percent_of_beer_left) ? ` · ${Math.round(e.percent_of_beer_left)}%` : ''),
         'Left');
       row('#8fb3ff', false, `${deg(e.keg_temperature)}${u.temp}`, 'Temperature');
