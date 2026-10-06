@@ -285,6 +285,7 @@
                 <button class="button" type="button" data-value="ml">ml</button>
               </div>
             </div>
+            <p class="help is-danger" id="minPourError" hidden>Enter a number, 0 or more. Nothing is saved until then.</p>
             <p class="help">
               A pour is one pouring window reported by the scale, sized by how much the
               amount left fell. Windows smaller than this are ignored, which filters out
@@ -462,8 +463,9 @@
         if (name === 'timeFormat') return { time_format: choice('timeFormat') };
         if (name === 'amountDisplay') return { amount_display: choice('amountDisplay') };
         if (name === 'minPourUnit') {
-          const value = Number($('minPourValue').value);
-          return { min_pour: { value: Number.isFinite(value) && value > 0 ? value : 0, unit: choice('minPourUnit') } };
+          // A box mid-edit keeps the stored value, so switching units never
+          // saves a minimum nobody entered.
+          return { min_pour: { value: minPourInput() ?? savedMinPour, unit: choice('minPourUnit') } };
         }
         return { display_units: { system: choice('unitSystem'), measure: choice('unitMeasure') } };
       }
@@ -483,16 +485,45 @@
       });
 
       // The minimum pour saves once typing pauses, like the hex colour boxes.
+      // Only a number of 0 or more is saved: Number('') is 0, so an emptied
+      // box would otherwise turn the minimum off. 0 typed on purpose is kept.
       let minPourTimer;
+      let savedMinPour = MIN_POUR_DEFAULT;
+
+      function minPourInput() {
+        const text = $('minPourValue').value.trim();
+        const value = Number(text);
+        return text !== '' && Number.isFinite(value) && value >= 0 ? value : null;
+      }
+
+      function showMinPourValid(valid) {
+        $('minPourValue').classList.toggle('is-invalid', !valid);
+        $('minPourError').hidden = valid;
+      }
+
       $('minPourValue').addEventListener('input', () => {
         clearTimeout(minPourTimer);
-        minPourTimer = setTimeout(() => savePreference('minPourUnit'), 600);
+        const value = minPourInput();
+        showMinPourValid(value !== null);
+        if (value === null) return;
+        minPourTimer = setTimeout(() => {
+          savedMinPour = value;
+          savePreference('minPourUnit');
+        }, 600);
+      });
+      // Leaving the box invalid puts back what is stored, so the page never
+      // shows a value that is not in effect.
+      $('minPourValue').addEventListener('change', () => {
+        if (minPourInput() !== null) return;
+        $('minPourValue').value = savedMinPour;
+        showMinPourValid(true);
       });
 
       $('resetPreferences').addEventListener('click', async () => {
         if (!confirm('Restore the default home page, time format, display units, keg graphic figure and minimum pour?')) return;
         for (const [name, value] of Object.entries(PREFERENCE_DEFAULTS)) select(name, value);
-        $('minPourValue').value = MIN_POUR_DEFAULT;
+        $('minPourValue').value = savedMinPour = MIN_POUR_DEFAULT;
+        showMinPourValid(true);
         clearTimeout(minPourTimer);
         showPreviewAmount();
         await saveConfig(Object.assign({},
@@ -517,7 +548,7 @@
           select('unitMeasure', cfg.display_units?.measure || PREFERENCE_DEFAULTS.unitMeasure);
           select('amountDisplay', cfg.amount_display || PREFERENCE_DEFAULTS.amountDisplay);
           select('minPourUnit', cfg.min_pour?.unit || PREFERENCE_DEFAULTS.minPourUnit);
-          $('minPourValue').value = cfg.min_pour?.value ?? MIN_POUR_DEFAULT;
+          $('minPourValue').value = savedMinPour = cfg.min_pour?.value ?? MIN_POUR_DEFAULT;
 
           const t = cfg.theme || {};
           for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);

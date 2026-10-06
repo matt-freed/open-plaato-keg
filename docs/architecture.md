@@ -329,6 +329,9 @@ Scale jitter outside a pouring window can never become a pour. The minimum
 pour (`MinPour`, default 4 oz, entered in oz or ml on Dashboard Setup) is read
 by `minPourTx` when a pour ends and converted into the keg's unit by
 `MinPour.In`. It is applied once, so changing it only affects future pours.
+Dashboard Setup saves only a number of 0 or more; while the box is empty or
+invalid it is marked and nothing is saved, and switching between oz and ml
+keeps the stored value. 0 turns the minimum off.
 
 `insertPour` copies the beer's name, style, ABV and tap number from the first
 tap by tap number that draws from the keg, plus the keg's label, so editing the

@@ -423,6 +423,7 @@ hr {
 .edit-table .select select { padding: 0.3rem 2rem 0.3rem 0.5rem; font-size: 0.88rem; }
 .edit-table .is-changed { border-color: var(--action); box-shadow: 0 0 0 1px var(--action); }
 .edit-table .is-invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.input.is-invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
 .edit-table tr.is-selected td { background: color-mix(in srgb, var(--action) 8%, transparent); }
 
 /* ─── Lists of things to open ───────────────── */
