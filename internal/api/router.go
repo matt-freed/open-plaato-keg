@@ -4,9 +4,11 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
+	"math"
 	"mime"
 	"net/http"
 	"path"
@@ -241,6 +243,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	defer r.Body.Close()
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err := dec.Decode(dst); err != nil {
+		var bad *invalidNumberError
+		if errors.As(err, &bad) {
+			writeError(w, http.StatusBadRequest, "invalid_value", bad.Error())
+			return false
+		}
 		writeError(w, http.StatusBadRequest, "invalid_body", "the request body is not valid JSON")
 		return false
 	}
@@ -252,7 +259,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 // ---------------------------------------------------------------------------
 
 // numberOrString accepts a value that may be sent as a JSON number or as a
-// string, which is what the browser sends from a text input.
+// string, which is what the browser sends from a text input. Only a finite
+// number is accepted: strconv.ParseFloat also reads "NaN" and "Inf", which
+// would otherwise be stored or written to a keg as they are.
 type numberOrString struct {
 	set   bool
 	value float64
@@ -271,8 +280,19 @@ func (n *numberOrString) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return &invalidNumberError{text: text}
+	}
 	n.set, n.value = true, f
 	return nil
+}
+
+// invalidNumberError rejects a value that parses but is not a finite number,
+// so the response can say so rather than call the body malformed.
+type invalidNumberError struct{ text string }
+
+func (e *invalidNumberError) Error() string {
+	return fmt.Sprintf("%q is not a finite number", e.text)
 }
 
 // Value returns the parsed number and whether one was supplied.

@@ -234,7 +234,8 @@ are changed with `PATCH /api/kegs/{id}`.
 | `/api/kegs/{id}/keg-mode` | `{"value": "beer"\|"co2"}` | |
 | `/api/kegs/{id}/sensitivity` | `{"value": "very_low"\|"low"\|"medium"\|"high"}` | |
 
-Numeric values may be sent as JSON numbers or as strings.
+Numeric values may be sent as JSON numbers or as strings, and must be finite:
+`"NaN"` and `"Inf"` are rejected with a 400.
 
 ### Taps
 

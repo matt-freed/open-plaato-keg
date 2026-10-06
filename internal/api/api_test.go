@@ -1005,3 +1005,45 @@ func TestThemeCSSOnAccent(t *testing.T) {
 		t.Errorf("a named accent should leave the default text colour:\n%s", body)
 	}
 }
+
+// strconv.ParseFloat reads "NaN" and "Inf", so a numeric value sent as a
+// string must be checked for being finite before it is written to a keg or
+// stored.
+func TestNonFiniteValuesAreRejected(t *testing.T) {
+	a := newTestAPI(t)
+	a.storeKeg("keg-1", "vw\x0051\x001.000")
+
+	for _, v := range []string{"NaN", "nan", "Inf", "+Inf", "-Infinity", "infinity"} {
+		rec := a.do(http.MethodPost, "/api/kegs/keg-1/max-keg-volume", map[string]any{"value": v})
+		assertStatus(t, rec, http.StatusBadRequest)
+		var body errorResponse
+		a.decode(rec, &body)
+		if body.Error != "invalid_value" {
+			t.Errorf("command value %q: error = %q, want invalid_value", v, body.Error)
+		}
+	}
+
+	// A finite value sent as a string still parses, and only fails here
+	// because the keg is not connected.
+	rec := a.do(http.MethodPost, "/api/kegs/keg-1/max-keg-volume", map[string]any{"value": "19"})
+	assertStatus(t, rec, http.StatusServiceUnavailable)
+
+	rec = a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Odd", "abv": "NaN"})
+	assertStatus(t, rec, http.StatusBadRequest)
+	rec = a.do(http.MethodGet, "/api/taps", nil)
+	var taps []store.Tap
+	a.decode(rec, &taps)
+	if len(taps) != 0 {
+		t.Errorf("taps = %+v, want none saved with a NaN ABV", taps)
+	}
+
+	rec = a.do(http.MethodPatch, "/api/kegs/keg-1", map[string]any{"co2_capacity": "Inf"})
+	assertStatus(t, rec, http.StatusBadRequest)
+	k, err := a.store.GetKeg("keg-1")
+	if err != nil {
+		t.Fatalf("GetKeg: %v", err)
+	}
+	if k.CO2Capacity != nil {
+		t.Errorf("CO2Capacity = %v, want it left unset", *k.CO2Capacity)
+	}
+}
