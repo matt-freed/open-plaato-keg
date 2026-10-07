@@ -412,7 +412,8 @@ Show more for the next 200; a row clicked open stays open across polls, and a
 re-render that adds records above the reader's position scrolls to keep it. A tap holds all of its drink's
 details; there is no separate beverage library.
 Every page links `favicon.svg`, a keg two-thirds full in the accent colour,
-as its tab icon.
+as its tab icon, and `apple-touch-icon.png`, a 180px square render of the same
+keg, for iOS home screens, which take neither SVG nor transparency.
 Every page shares one header bar, the `<site-header>` custom element in
 `site-header.js` with its styles in `site-header.css`. It renders the page
 title from its `heading` attribute, the Tap List, Keg Scales and History links, the
