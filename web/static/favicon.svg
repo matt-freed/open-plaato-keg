@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#16181f"/>
+  <!-- steel body -->
+  <rect x="14" y="17" width="36" height="38" rx="6" fill="#434957"/>
+  <clipPath id="b"><rect x="16.5" y="19" width="31" height="34" rx="4"/></clipPath>
+  <rect x="16.5" y="19" width="31" height="34" rx="4" fill="#2a2e38"/>
+  <g clip-path="url(#b)">
+    <rect x="16" y="29" width="32" height="25" fill="#f59e0b"/>
+    <rect x="16" y="29" width="32" height="2" fill="#fde7b0"/>
+  </g>
+  <!-- rubber top with two hand grips -->
+  <path fill="#9097a8" fill-rule="evenodd" d="M15 20 V12 Q15 8 19 8 H27 Q29 8 29 10 V14 H35 V10 Q35 8 37 8 H45 Q49 8 49 12 V20 Z
+    M20 11.5 H25 V15.5 H20 Z M39 11.5 H44 V15.5 H39 Z"/>
+  <!-- foot ring -->
+  <rect x="12" y="52" width="40" height="5" rx="2" fill="#9097a8"/>
+</svg>
