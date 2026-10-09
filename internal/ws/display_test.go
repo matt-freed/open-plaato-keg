@@ -87,8 +87,12 @@ func TestBroadcastCarriesDisplayBlock(t *testing.T) {
 }
 
 // pourOn plays one half-litre pouring window on a keg stored by metricKeg.
+// The window lasts well under a second, so the minimum duration is off.
 func pourOn(t *testing.T, st *store.Store, id string) {
 	t.Helper()
+	if err := st.SetMinPourSeconds(0); err != nil {
+		t.Fatal(err)
+	}
 	for _, body := range []string{"vw\x0049\x00255", "vw\x0051\x009.500", "vw\x0049\x000"} {
 		frames := []blynk.Frame{{Cmd: blynk.CmdHardware, MsgID: 1, Body: []byte(body)}}
 		if _, err := st.ApplyPacket(id, plaato.Decode(frames, false)); err != nil {

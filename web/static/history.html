@@ -257,6 +257,7 @@
     let pours = [];
     let pourPoints = [];
     let minPour = null;
+    let minPourSeconds = null;
     let charts = [];
     let hoverTime = null;
     let loadSeq = 0;
@@ -418,7 +419,10 @@
         stat(temps.length ? `${deg(Math.min(...temps))}–${deg(Math.max(...temps))}` : '—', u.temp, 'Temp range'),
       ].join('');
       $('statsNote').textContent = minPour
-        ? `A pour is one pouring window reported by the scale, ${minPour.value} ${minPour.unit} or more. Smaller ones are ignored.`
+        ? `A pour is one pouring window reported by the scale, ${minPour.value} ${minPour.unit} or more`
+          + (minPourSeconds
+            ? ` and lasting ${minPourSeconds} s or more. Smaller or shorter ones are ignored.`
+            : '. Smaller ones are ignored.')
         : 'A pour is one pouring window reported by the scale.';
     }
 
@@ -968,13 +972,14 @@
       try {
         const [kegList, cfg, tapList] = await Promise.all([
           api('GET', '/api/kegs'),
-          // The minimum pour is only for the note under the figures.
+          // The pour minimums are only for the note under the figures.
           api('GET', '/api/config').catch(() => ({})),
           // Only for labelling the scales, so a failure just leaves them
           // named by scale.
           api('GET', '/api/taps').catch(() => []),
         ]);
         minPour = cfg.min_pour ?? null;
+        minPourSeconds = cfg.min_pour_seconds ?? null;
         kegs = kegList;
         timeFormat = cfg.time_format || '12h';
         // The first tap, by tap number, that draws from each scale.

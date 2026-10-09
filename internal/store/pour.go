@@ -21,7 +21,8 @@ import (
 // closed. Scale jitter outside a window can therefore never become a pour.
 //
 // A window is recorded only if the keg is in beer mode, both amounts are
-// known, and the size is between the configured minimum and maxPourGal.
+// known, it lasted at least the configured minimum duration, and the size is
+// between the configured minimum and maxPourGal.
 
 // maxPourGal caps a plausible pour at 128 US fl oz, converted into the keg's
 // own unit when checked. Anything larger is a lifted keg or a vibration spike
@@ -88,9 +89,15 @@ func trackPour(tx *sql.Tx, k *Keg, wasPouring bool, prevAmount *float64, now tim
 		unit := k.DeriveBeerLeftUnit()
 		amount := *startAmount - *k.AmountLeft
 
-		minPour, err := minPourTx(tx)
+		minPour, minSeconds, err := pourMinimumsTx(tx)
 		if err != nil {
 			return err
+		}
+		// Window times are whole seconds, so this is accurate to within one.
+		if seconds := now.Unix() - *startedAt; seconds < int64(minSeconds) {
+			slog.Debug("pouring window too short to record as a pour",
+				"keg", k.ID, "seconds", seconds, "min_seconds", minSeconds)
+			return nil
 		}
 		lo, hi := minPour.In(unit), units.ConvertAmount(maxPourGal, "gal", unit)
 		if amount < lo || amount <= 0 || amount > hi {

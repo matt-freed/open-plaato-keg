@@ -164,7 +164,7 @@ redirects to whichever page is set as home — the tap list unless you change it
 | `/pours.html` | **All Pours** — linked from History. Every pour from every scale, newest first, 100 at a time with Newer and Older, with its time, beer, style, ABV, scale, how long it took and amount, over 24 hours to all time. Filter by beer or scale; a summary of everything matching gives the count, the total and a per-beer breakdown. The matching pours download as CSV. Edit turns the page's rows into inputs: beer, style, ABV, tap number, scale label and amount (in the display units, stored in the scale's own) can be corrected and saved together, and ticked pours deleted at once; that is the only place pours are deleted on this page. |
 | `/taplist-setup.html` | **Tap Setup** — a list of your taps; choose one, or add a new one, to open the tap editor on its own view (the URL keeps the open tap, so Back and reload work). The editor covers the tap number, beer details including colour (an SRM, or a named colour such as clear for sparkling water), the date kegged (picked from a calendar and kept on the tap), and the keg the tap draws from. |
 | `/system.html` | **System** — the server version, the configuration variables in effect, with defaults marked and the BarHelper API key hidden, and the server's recent logs: the last 1,000 records, newest first, one line each (click a line to show it in full), 200 at a time with Show more, filtered by minimum level and text, refreshed every 5 seconds, with a spinner while it refreshes and the time of the last update. Kept in memory only, so a restart clears them. The server log level can be changed here, for example to debug while chasing a problem; it returns to `LOG_LEVEL` on restart. |
-| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, 12- or 24-hour times, display units, and whether keg graphics show the amount or the percentage left, and the minimum pour. Each change saves as it is made, and the page previews colours and fonts on itself as you choose them; screens already open pick a change up when they reload. |
+| `/dashboard-setup.html` | **Dashboard Setup** — appearance and preferences for every page: page, card and text colours and the font, an accent colour, separate tap list title and body faces, which page is home, 12- or 24-hour times, display units, and whether keg graphics show the amount or the percentage left, and the minimum pour and minimum pour time. Each change saves as it is made, and the page previews colours and fonts on itself as you choose them; screens already open pick a change up when they reload. |
 
 ## API
 
@@ -199,9 +199,9 @@ name their targets in the body. `POST` creates a tap or sends a keg a command.
 
 A pour is one pouring window reported by the scale: it starts when `is_pouring`
 turns on and ends when it turns off (or the scale disconnects), and its size is
-how much the amount left fell in between. It is recorded only if it is at least
-the minimum pour set at that moment and no more than 128 fl oz, so scale jitter
-never counts. Each pour keeps its own copy of the beer's name, style, ABV, tap
+how much the amount left fell in between. It is recorded only if it lasted at
+least the minimum pour time and is at least the minimum pour set at that moment
+and no more than 128 fl oz, so scale jitter and a knock on the tap never count. Each pour keeps its own copy of the beer's name, style, ABV, tap
 number and scale label, and pours are never pruned.
 
 | Method | Path | Description |
@@ -282,6 +282,7 @@ A tap body takes these fields, all optional:
 | `display_units` | `{"system": "device"\|"metric"\|"us", "measure": "device"\|"weight"\|"volume"}` | How the UI presents readings. Display only: storage and BarHelper stay in the scale's own units |
 | `amount_display` | `"amount"\|"percent"` | Which figure every keg graphic shows large on the tap list and the Keg Scales page. CO₂ cylinders always show the amount |
 | `min_pour` | `{"value": 4, "unit": "oz"\|"ml"}` | The smallest pouring window recorded as a pour; default 4 oz. Changing it only affects future pours |
+| `min_pour_seconds` | A whole number, e.g. `5` | The shortest pouring window recorded as a pour, in seconds; default 5, and 0 turns it off. Windows are timed to the whole second. Changing it only affects future pours |
 | `theme` | A theme object | Colours and fonts |
 
 An unrecognised value of a known key, such as a `home_page` of `"garage"`,

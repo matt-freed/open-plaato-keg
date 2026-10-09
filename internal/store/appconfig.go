@@ -59,6 +59,17 @@ type MinPour struct {
 // DefaultMinPour is a small taster, and below any real glass.
 var DefaultMinPour = MinPour{Value: 4, Unit: MinPourUnitOz}
 
+// DefaultMinPourSeconds is the shortest pouring window, in seconds, that
+// counts as a pour. Filling even a taster takes longer than this, while a
+// knock on the tap or the keg settling is over sooner.
+const DefaultMinPourSeconds = 5
+
+// NormalizeMinPourSeconds maps any input onto a usable minimum duration: a
+// negative one becomes zero, which turns the minimum off.
+func NormalizeMinPourSeconds(seconds int) int {
+	return max(seconds, 0)
+}
+
 // In returns the minimum in a remaining-beer unit such as "lbs" or "litre".
 // Weight units pick up the same litre-per-kilogram assumption as every other
 // conversion in package units.
@@ -122,7 +133,10 @@ type AppConfig struct {
 	// AmountDisplay applies to every keg. A CO2 scale always shows its amount.
 	AmountDisplay string  `json:"amount_display"`
 	MinPour       MinPour `json:"min_pour"`
-	Theme         Theme   `json:"theme"`
+	// MinPourSeconds is the shortest pouring window recorded as a pour. Like
+	// MinPour it is applied when a pour ends, so it affects future pours only.
+	MinPourSeconds int   `json:"min_pour_seconds"`
+	Theme          Theme `json:"theme"`
 }
 
 // DefaultAppConfig is what a fresh installation starts with.
@@ -134,8 +148,9 @@ func DefaultAppConfig() AppConfig {
 			System:  DisplaySystemDevice,
 			Measure: DisplayMeasureDevice,
 		},
-		AmountDisplay: AmountDisplayAmount,
-		MinPour:       DefaultMinPour,
+		AmountDisplay:  AmountDisplayAmount,
+		MinPour:        DefaultMinPour,
+		MinPourSeconds: DefaultMinPourSeconds,
 	}
 }
 
@@ -152,6 +167,8 @@ const (
 
 	configKeyMinPourValue = "min_pour_value"
 	configKeyMinPourUnit  = "min_pour_unit"
+
+	configKeyMinPourSeconds = "min_pour_seconds"
 )
 
 // GetAppConfig returns the stored configuration, filling in defaults.
@@ -190,6 +207,10 @@ func getAppConfig(q querier) (AppConfig, error) {
 			}
 		case configKeyMinPourUnit:
 			cfg.MinPour.Unit = value
+		case configKeyMinPourSeconds:
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.MinPourSeconds = v
+			}
 		case configKeyTheme:
 			var theme Theme
 			if err := json.Unmarshal([]byte(value), &theme); err == nil {
@@ -201,24 +222,25 @@ func getAppConfig(q querier) (AppConfig, error) {
 		return cfg, err
 	}
 	cfg.MinPour = NormalizeMinPour(cfg.MinPour)
+	cfg.MinPourSeconds = NormalizeMinPourSeconds(cfg.MinPourSeconds)
 	return cfg, nil
 }
 
-// minPourTx reads the minimum pour inside a transaction. The store holds a
-// single connection, so trackPour cannot call GetAppConfig while its
-// transaction is open.
-func minPourTx(q querier) (MinPour, error) {
-	m := DefaultMinPour
-	rows, err := q.Query("SELECT key, value FROM app_config WHERE key IN (?, ?)",
-		configKeyMinPourValue, configKeyMinPourUnit)
+// pourMinimumsTx reads the minimum pour and the minimum pour duration inside
+// a transaction. The store holds a single connection, so trackPour cannot
+// call GetAppConfig while its transaction is open.
+func pourMinimumsTx(q querier) (MinPour, int, error) {
+	m, seconds := DefaultMinPour, DefaultMinPourSeconds
+	rows, err := q.Query("SELECT key, value FROM app_config WHERE key IN (?, ?, ?)",
+		configKeyMinPourValue, configKeyMinPourUnit, configKeyMinPourSeconds)
 	if err != nil {
-		return m, err
+		return m, seconds, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var key, value string
 		if err := rows.Scan(&key, &value); err != nil {
-			return m, err
+			return m, seconds, err
 		}
 		switch key {
 		case configKeyMinPourValue:
@@ -227,9 +249,13 @@ func minPourTx(q querier) (MinPour, error) {
 			}
 		case configKeyMinPourUnit:
 			m.Unit = value
+		case configKeyMinPourSeconds:
+			if v, err := strconv.Atoi(value); err == nil {
+				seconds = v
+			}
 		}
 	}
-	return NormalizeMinPour(m), rows.Err()
+	return NormalizeMinPour(m), NormalizeMinPourSeconds(seconds), rows.Err()
 }
 
 // UpdateAppConfig applies a change to the stored configuration and returns
@@ -265,6 +291,7 @@ func (s *Store) UpdateAppConfig(mutate func(*AppConfig)) (AppConfig, error) {
 		configKeyAmountDisplay:      cfg.AmountDisplay,
 		configKeyMinPourValue:       strconv.FormatFloat(cfg.MinPour.Value, 'f', -1, 64),
 		configKeyMinPourUnit:        cfg.MinPour.Unit,
+		configKeyMinPourSeconds:     strconv.Itoa(cfg.MinPourSeconds),
 		configKeyTheme:              string(theme),
 	} {
 		if _, err := tx.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)", key, value); err != nil {
@@ -283,6 +310,7 @@ func normalizeAppConfig(cfg AppConfig) AppConfig {
 	}
 	cfg.AmountDisplay = NormalizeAmountDisplay(cfg.AmountDisplay)
 	cfg.MinPour = NormalizeMinPour(cfg.MinPour)
+	cfg.MinPourSeconds = NormalizeMinPourSeconds(cfg.MinPourSeconds)
 	return cfg
 }
 
@@ -313,6 +341,12 @@ func (s *Store) SetAmountDisplay(display string) error {
 // SetMinPour stores the minimum pour.
 func (s *Store) SetMinPour(m MinPour) error {
 	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.MinPour = m })
+	return err
+}
+
+// SetMinPourSeconds stores the minimum pour duration, in seconds.
+func (s *Store) SetMinPourSeconds(seconds int) error {
+	_, err := s.UpdateAppConfig(func(c *AppConfig) { c.MinPourSeconds = seconds })
 	return err
 }
 

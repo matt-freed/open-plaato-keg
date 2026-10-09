@@ -10,7 +10,11 @@ import (
 )
 
 // pourFrom plays one 0.5 litre pour on a metric-volume keg holding 10 litres.
+// The window lasts well under a second, so the minimum duration is off.
 func pourFrom(a *testAPI, id string) {
+	if err := a.store.SetMinPourSeconds(0); err != nil {
+		a.t.Fatal(err)
+	}
 	metricVolumeKeg(a, id)
 	a.storeKeg(id, "vw\x0049\x00255")
 	a.storeKeg(id, "vw\x0051\x009.500")
@@ -131,6 +135,28 @@ func TestMinPourEndpoint(t *testing.T) {
 	assertStatus(t, a.patchConfig("min_pour", map[string]any{"value": 60, "unit": "ml"}), http.StatusOK)
 	if cfg := a.getConfig(); cfg.MinPour != (store.MinPour{Value: 60, Unit: store.MinPourUnitMl}) {
 		t.Errorf("config MinPour = %+v, want 60 ml", cfg.MinPour)
+	}
+}
+
+func TestMinPourSecondsEndpoint(t *testing.T) {
+	a := newTestAPI(t)
+
+	if got := a.getConfig().MinPourSeconds; got != store.DefaultMinPourSeconds {
+		t.Errorf("default = %d, want %d", got, store.DefaultMinPourSeconds)
+	}
+	assertStatus(t, a.patchConfig("min_pour_seconds", 8), http.StatusOK)
+	if got := a.getConfig().MinPourSeconds; got != 8 {
+		t.Errorf("MinPourSeconds = %d, want 8", got)
+	}
+	assertStatus(t, a.patchConfig("min_pour_seconds", -2), http.StatusOK)
+	if got := a.getConfig().MinPourSeconds; got != 0 {
+		t.Errorf("-2 normalised to %d, want 0", got)
+	}
+	// Window times are whole seconds, so a fraction is a wrong type.
+	for _, v := range []any{2.5, "5"} {
+		if rec := a.patchConfig("min_pour_seconds", v); rec.Code != http.StatusBadRequest {
+			t.Errorf("min_pour_seconds %v: status = %d, want 400", v, rec.Code)
+		}
 	}
 }
 

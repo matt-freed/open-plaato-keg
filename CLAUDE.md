@@ -88,7 +88,7 @@ Changing any of these breaks real kegs, and the tests exist to catch that.
 - Every WebSocket frame carries a `type`.
 - A pour is one `is_pouring` window, sized from the amount left before it
   opened to the amount left when it closed, and recorded once by `trackPour`
-  only if it clears the minimum pour then. Never re-derive pours from
+  only if it clears the minimum pour and minimum pour time then. Never re-derive pours from
   `keg_log`, and never re-filter stored pours by the current minimum. Each pour
   keeps its own copy of the beer details and is never pruned. A stored pour may
   be corrected by hand on All Pours; such an edit is not checked against the

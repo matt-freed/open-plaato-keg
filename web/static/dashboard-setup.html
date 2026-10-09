@@ -294,6 +294,19 @@
               bumps and drips. Changing it only affects future pours.
             </p>
           </div>
+          <div class="field">
+            <label class="label" for="minPourSeconds">Minimum pour time</label>
+            <div class="min-pour-row">
+              <input type="number" class="input" id="minPourSeconds" min="0" step="1" value="5" inputmode="numeric">
+              <span>seconds</span>
+            </div>
+            <p class="help is-danger" id="minPourSecondsError" hidden>Enter a whole number, 0 or more. Nothing is saved until then.</p>
+            <p class="help">
+              Pouring windows shorter than this are ignored too, which filters out a knock on
+              the tap or the keg settling. Times are counted in whole seconds; 0 turns this
+              off. Changing it only affects future pours.
+            </p>
+          </div>
         </div>
         </div>
       </div>
@@ -319,6 +332,7 @@
         amountDisplay: 'amount', minPourUnit: 'oz',
       };
       const MIN_POUR_DEFAULT = 4;
+      const MIN_POUR_SECONDS_DEFAULT = 5;
 
       const $ = id => document.getElementById(id);
       // The colour fields: theme key, colour picker, hex text box.
@@ -521,14 +535,49 @@
         showMinPourValid(true);
       });
 
+      // The minimum pour time saves the same way, but only as a whole number:
+      // pouring windows are timed in whole seconds.
+      let minPourSecondsTimer;
+      let savedMinPourSeconds = MIN_POUR_SECONDS_DEFAULT;
+
+      function minPourSecondsInput() {
+        const text = $('minPourSeconds').value.trim();
+        const value = Number(text);
+        return text !== '' && Number.isInteger(value) && value >= 0 ? value : null;
+      }
+
+      function showMinPourSecondsValid(valid) {
+        $('minPourSeconds').classList.toggle('is-invalid', !valid);
+        $('minPourSecondsError').hidden = valid;
+      }
+
+      $('minPourSeconds').addEventListener('input', () => {
+        clearTimeout(minPourSecondsTimer);
+        const value = minPourSecondsInput();
+        showMinPourSecondsValid(value !== null);
+        if (value === null) return;
+        minPourSecondsTimer = setTimeout(() => {
+          savedMinPourSeconds = value;
+          saveConfig({ min_pour_seconds: value });
+        }, 600);
+      });
+      $('minPourSeconds').addEventListener('change', () => {
+        if (minPourSecondsInput() !== null) return;
+        $('minPourSeconds').value = savedMinPourSeconds;
+        showMinPourSecondsValid(true);
+      });
+
       $('resetPreferences').addEventListener('click', async () => {
-        if (!confirm('Restore the default home page, time format, display units, keg graphic figure and minimum pour?')) return;
+        if (!confirm('Restore the default home page, time format, display units, keg graphic figure, minimum pour and minimum pour time?')) return;
         for (const [name, value] of Object.entries(PREFERENCE_DEFAULTS)) select(name, value);
         $('minPourValue').value = savedMinPour = MIN_POUR_DEFAULT;
         showMinPourValid(true);
         clearTimeout(minPourTimer);
+        $('minPourSeconds').value = savedMinPourSeconds = MIN_POUR_SECONDS_DEFAULT;
+        showMinPourSecondsValid(true);
+        clearTimeout(minPourSecondsTimer);
         showPreviewAmount();
-        await saveConfig(Object.assign({},
+        await saveConfig(Object.assign({ min_pour_seconds: MIN_POUR_SECONDS_DEFAULT },
           ...['homePage', 'timeFormat', 'unitSystem', 'amountDisplay', 'minPourUnit'].map(preferenceChange)));
       });
 
@@ -551,6 +600,7 @@
           select('amountDisplay', cfg.amount_display || PREFERENCE_DEFAULTS.amountDisplay);
           select('minPourUnit', cfg.min_pour?.unit || PREFERENCE_DEFAULTS.minPourUnit);
           $('minPourValue').value = savedMinPour = cfg.min_pour?.value ?? MIN_POUR_DEFAULT;
+          $('minPourSeconds').value = savedMinPourSeconds = cfg.min_pour_seconds ?? MIN_POUR_SECONDS_DEFAULT;
 
           const t = cfg.theme || {};
           for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);

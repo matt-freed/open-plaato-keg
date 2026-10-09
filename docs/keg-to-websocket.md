@@ -95,8 +95,8 @@ In one transaction: `SELECT` the keg row, apply the `amount_left` setter from
 `UpdateKeg` leave it alone), run `trackPour` (`pour.go`), derive
 `beer_left_unit`, then `INSERT OR REPLACE` and `COMMIT`. `trackPour` notes the
 start of a pouring window when `is_pouring` turns on and, when it turns off,
-inserts a `pours` row in the same transaction if the drop clears the minimum
-pour. A plain amount reading like this one, outside a pouring window, never
+inserts a `pours` row in the same transaction if the window lasted the
+minimum pour time and the drop clears the minimum pour. A plain amount reading like this one, outside a pouring window, never
 creates a pour. No WebSocket frame announces a new pour; the History and All
 Pours pages read pours when they load. The store has a single SQLite connection, so
 this queues behind any API query already running.

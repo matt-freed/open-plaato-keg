@@ -49,6 +49,8 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			dst = &patch.AmountDisplay
 		case "min_pour":
 			dst = &patch.MinPour
+		case "min_pour_seconds":
+			dst = &patch.MinPourSeconds
 		case "theme":
 			dst = &patch.Theme
 		default:
@@ -74,6 +76,8 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 				c.AmountDisplay = patch.AmountDisplay
 			case "min_pour":
 				c.MinPour = patch.MinPour
+			case "min_pour_seconds":
+				c.MinPourSeconds = patch.MinPourSeconds
 			case "theme":
 				c.Theme = patch.Theme
 			}

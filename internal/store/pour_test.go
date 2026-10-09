@@ -12,9 +12,14 @@ import (
 )
 
 // kegIn puts a keg into beer mode with the given unit system (1 metric, 2 US)
-// and measure (1 weight, 2 volume), holding amount.
+// and measure (1 weight, 2 volume), holding amount. Tests replay a pouring
+// window in well under a second, so it also turns the minimum duration off;
+// the tests of that minimum set it again.
 func kegIn(t *testing.T, s *Store, id string, unit, measure int, amount float64) {
 	t.Helper()
+	if err := s.SetMinPourSeconds(0); err != nil {
+		t.Fatal(err)
+	}
 	apply(t, s, id,
 		fmt.Sprintf("vw\x0071\x00%d", unit),
 		fmt.Sprintf("vw\x0075\x00%d", measure),
@@ -146,6 +151,64 @@ func TestChangingTheMinimumOnlyAffectsFuturePours(t *testing.T) {
 	pourDown(t, s, id, 17.70) // another 150 ml, now below the minimum
 	if n := len(allPours(t, s)); n != 1 {
 		t.Errorf("got %d pours, want the new 150 ml window dropped", n)
+	}
+}
+
+func TestPourShorterThanTheMinimumDurationIsDropped(t *testing.T) {
+	s := newTestStore(t)
+	const id = "keg-1"
+	kegIn(t, s, id, 1, 2, 18.0)
+	if err := s.SetMinPourSeconds(DefaultMinPourSeconds); err != nil {
+		t.Fatal(err)
+	}
+	pourDown(t, s, id, 17.6) // 0.4 litre, well over the minimum amount
+	if n := len(allPours(t, s)); n != 0 {
+		t.Errorf("got %d pours, want the sub-second window dropped", n)
+	}
+}
+
+func TestPourLastingTheMinimumDurationIsRecorded(t *testing.T) {
+	s := newTestStore(t)
+	const id = "keg-1"
+	kegIn(t, s, id, 1, 2, 18.0)
+	if err := s.SetMinPourSeconds(DefaultMinPourSeconds); err != nil {
+		t.Fatal(err)
+	}
+	apply(t, s, id, "vw\x0049\x00255")
+	// Backdate the open window rather than wait for it.
+	if _, err := s.UpdateKeg(id, func(k *Keg) {
+		*k.PourStartedAt -= DefaultMinPourSeconds
+	}); err != nil {
+		t.Fatal(err)
+	}
+	apply(t, s, id, "vw\x0051\x0017.600")
+	apply(t, s, id, "vw\x0049\x000")
+
+	pours := allPours(t, s)
+	if len(pours) != 1 || !nearly(pours[0].Amount, 0.4) {
+		t.Fatalf("pours = %+v, want one of 0.4", pours)
+	}
+	if d := pours[0].EndedAt - pours[0].StartedAt; d < DefaultMinPourSeconds {
+		t.Errorf("pour lasted %ds, want at least %d", d, DefaultMinPourSeconds)
+	}
+}
+
+func TestMinPourSecondsDefaultsAndNormalizes(t *testing.T) {
+	s := newTestStore(t)
+	if cfg, _ := s.GetAppConfig(); cfg.MinPourSeconds != DefaultMinPourSeconds {
+		t.Errorf("default MinPourSeconds = %d, want %d", cfg.MinPourSeconds, DefaultMinPourSeconds)
+	}
+	if err := s.SetMinPourSeconds(12); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := s.GetAppConfig(); cfg.MinPourSeconds != 12 {
+		t.Errorf("MinPourSeconds = %d, want 12", cfg.MinPourSeconds)
+	}
+	if err := s.SetMinPourSeconds(-3); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := s.GetAppConfig(); cfg.MinPourSeconds != 0 {
+		t.Errorf("MinPourSeconds = %d after -3, want 0", cfg.MinPourSeconds)
 	}
 }
 

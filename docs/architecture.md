@@ -218,7 +218,7 @@ path and the API never contend for SQLite's lock.
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
 | `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
-| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour, minimum pour time. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
 
 There are no foreign keys.
 
@@ -319,19 +319,23 @@ keg's pouring flag and amount from before the change:
   `SetPouring(false)`. The size is the start amount minus the amount left after
   the packet, in the keg's `beer_left_unit`. The firmware sends its settled
   amount before it clears pin 49.
-- **Recorded** only if the keg is in beer mode, both amounts are known, and the
+- **Recorded** only if the keg is in beer mode, both amounts are known, the
+  window lasted at least the minimum pour time, and the
   size is at least the minimum pour and at most `maxPourGal` (128 US fl oz,
   converted into the keg's unit). The cap catches a lifted keg or a vibration
   spike while still allowing a pitcher. Anything else is logged at debug level
   and dropped.
 
 Scale jitter outside a pouring window can never become a pour. The minimum
-pour (`MinPour`, default 4 oz, entered in oz or ml on Dashboard Setup) is read
-by `minPourTx` when a pour ends and converted into the keg's unit by
-`MinPour.In`. It is applied once, so changing it only affects future pours.
-Dashboard Setup saves only a number of 0 or more; while the box is empty or
-invalid it is marked and nothing is saved, and switching between oz and ml
-keeps the stored value. 0 turns the minimum off.
+pour (`MinPour`, default 4 oz, entered in oz or ml on Dashboard Setup) and the
+minimum pour time (`MinPourSeconds`, default 5 s) are read by `pourMinimumsTx`
+when a pour ends; the amount is converted into the keg's unit by
+`MinPour.In`. The duration is `pour_started_at` to the end, both whole Unix
+seconds, so it is accurate to within a second. Both are applied once, so
+changing them only affects future pours. Dashboard Setup saves only a number
+of 0 or more (a whole number for the time); while a box is empty or invalid it
+is marked and nothing is saved, and switching between oz and ml keeps the
+stored value. 0 turns either minimum off.
 
 `insertPour` copies the beer's name, style, ABV and tap number from the first
 tap by tap number that draws from the keg, plus the keg's label, so editing the
@@ -347,7 +351,7 @@ everywhere, and `DeletePours` several in one transaction.
 `PourEdit` sets. An amount arrives in the display units' pour-sized sub-unit
 and `pourAmountToStored`, the inverse of `pourDisplay`, puts it back into the
 pour's own unit. A hand edit is a correction, so it is not checked against the
-minimum or maximum pour.
+minimum or maximum pour or the minimum pour time.
 
 ## Live updates — `internal/events` and `internal/ws`
 
@@ -391,7 +395,7 @@ with another method is a 405.
 | `/api/kegs/{id}/…` | Device commands, all `POST`: tare, empty keg, calibration, units, mode, sensitivity, … |
 | `/api/taps` | CRUD for the tap list: `POST` creates with a generated id (`handleCreateTap`), `PUT /{id}` replaces an existing tap (`handleReplaceTap`); saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `PUT /api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `PATCH /api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `PATCH /api/pours` for All Pours' edits, `DELETE /api/pours` for several, `DELETE /api/pours/{id}` |
-| `/api/config` | Every setting: home page, time format, display units, amount display, minimum pour, theme. `GET` reads them together; `PATCH` changes any of them through `store.UpdateAppConfig`, in one transaction, and answers with the result |
+| `/api/config` | Every setting: home page, time format, display units, amount display, minimum pour, minimum pour time, theme. `GET` reads them together; `PATCH` changes any of them through `store.UpdateAppConfig`, in one transaction, and answers with the result |
 | `GET /api/system/env` | The configuration variables and their values in effect, from `config.Settings`, which withholds the BarHelper API key. Captured once at startup |
 | `GET /api/system/logs` | The buffered log records after `?after=<seq>`, with `oldest_seq` (below `after`+1 means some were discarded unseen) and `latest_seq` (below `after` means the server restarted), and the live `level` beside the `configured_level` from `LOG_LEVEL` |
 | `PUT /api/system/log-level` | Sets the live level (`debug`, `info`, `warn` or `error`) through the `LevelVar` in `api.System`, until restart. The change is logged at info while the more verbose of the two levels is in force |

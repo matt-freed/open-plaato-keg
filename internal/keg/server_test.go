@@ -575,6 +575,11 @@ func TestReplayCaptureWithoutAMinimumPour(t *testing.T) {
 	if err := h.store.SetMinPour(store.MinPour{Value: 0, Unit: store.MinPourUnitOz}); err != nil {
 		t.Fatal(err)
 	}
+	// The replay runs far faster than the recording, so no window would
+	// last the minimum duration.
+	if err := h.store.SetMinPourSeconds(0); err != nil {
+		t.Fatal(err)
+	}
 	replayCapture(t, h)
 
 	pours, err := h.store.ListPours(time.Time{}, time.Now().Add(time.Minute))
