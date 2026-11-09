@@ -37,7 +37,8 @@
       .is-loading .section-box { opacity: 0.45; transition: opacity 0.15s; }
       .hidden-tag { margin-left: 0.4rem; font-size: 0.7rem; color: var(--faint); }
 
-      /* Edit mode: its toolbar sits above the table it acts on. */
+      /* The Edit button, and in edit mode its toolbar, sit above the table they act on. */
+      .view-bar { display: flex; justify-content: flex-end; margin-bottom: 0.75rem; }
       .edit-bar { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
       .edit-bar .buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0; }
       .edit-table .input.is-text { width: 9rem; }
@@ -54,7 +55,6 @@
       <div class="page-top">
         <a class="back-link" href="/history.html">&larr; History</a>
         <div class="buttons">
-          <button class="button is-small" type="button" id="editBtn">Edit</button>
           <a class="button is-small" id="downloadBtn" href="/api/pours/csv?range=30d" download>&#8595; Download CSV</a>
         </div>
       </div>
@@ -96,6 +96,9 @@
         </div>
 
         <div class="box section-box">
+          <div class="view-bar" id="viewBar">
+            <button class="button is-small" type="button" id="editBtn">Edit</button>
+          </div>
           <div class="edit-bar" id="editBar" hidden>
             <div class="buttons">
               <button class="button is-small is-danger" type="button" id="deleteBtn" disabled>Delete selected</button>
@@ -400,7 +403,7 @@
 
     function renderTable() {
       const { range, page } = readHash();
-      $('editBtn').hidden = editing;
+      $('viewBar').hidden = editing;
       $('editBar').hidden = !editing;
       $('editNote').hidden = !editing;
       $('poursTable').classList.toggle('edit-table', editing);
