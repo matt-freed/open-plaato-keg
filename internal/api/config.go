@@ -22,7 +22,8 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleUpdateConfig changes any of the settings at once. Each key present is
-// replaced whole, so display_units, min_pour and theme are sent complete; a
+// replaced whole, so display_units, min_pour, theme and taplist_hidden_fields are sent
+// complete; a
 // key left out keeps its stored value. Values are normalized as they are
 // stored, so the response is the configuration as it now stands.
 func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +54,8 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			dst = &patch.MinPourSeconds
 		case "theme":
 			dst = &patch.Theme
+		case "taplist_hidden_fields":
+			dst = &patch.TapListHidden
 		default:
 			writeError(w, http.StatusBadRequest, "invalid_value", name+" is not a setting")
 			return
@@ -80,6 +83,8 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 				c.MinPourSeconds = patch.MinPourSeconds
 			case "theme":
 				c.Theme = patch.Theme
+			case "taplist_hidden_fields":
+				c.TapListHidden = patch.TapListHidden
 			}
 		}
 	})

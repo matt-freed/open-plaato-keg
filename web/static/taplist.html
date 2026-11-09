@@ -68,6 +68,9 @@
     // Which figure each keg graphic shows large: one setting for every scale,
     // chosen on Dashboard Setup.
     let amountDisplay = 'amount';
+    // The tile fields hidden on Dashboard Setup, by their config keys.
+    let hidden = new Set();
+    const shows = field => !hidden.has(field);
 
     // ── Formatting ─────────────────────────────────
     const UNIT_LABELS = { litre: 'L' };
@@ -170,30 +173,35 @@
       const pct = !tap.keg_id ? 100
         : Number.isFinite(rawPct) ? Math.max(0, Math.min(100, rawPct)) : null;
 
-      tile.classList.toggle('is-pouring', keg?.is_pouring === true);
+      // A hidden pouring field drops the highlight along with the badge. The
+      // Empty badge is hidden separately, since is-empty also picks the section.
+      tile.classList.toggle('is-pouring', keg?.is_pouring === true && shows('pouring'));
       tile.classList.toggle('is-empty', isKegEmpty(keg));
+      tile.classList.toggle('hide-empty', !shows('empty'));
+      tile.classList.toggle('hide-meta', !['keg_name', 'pouring', 'empty'].some(shows));
 
       tile.querySelector('.keg-name').textContent =
-        keg ? kegName(keg, Object.keys(kegs).indexOf(keg.id)) : '';
+        keg && shows('keg_name') ? kegName(keg, Object.keys(kegs).indexOf(keg.id)) : '';
       tile.querySelector('.beer').textContent = tap.name || 'Unnamed beer';
 
       const specs = [
-        tap.style && `<span class="style">${esc(tap.style)}</span>`,
-        trimNum(tap.abv) && `<span>${trimNum(tap.abv)}% ABV</span>`,
-        trimNum(tap.ibu) && `<span>${trimNum(tap.ibu)} IBU</span>`,
+        shows('style') && tap.style && `<span class="style">${esc(tap.style)}</span>`,
+        shows('abv') && trimNum(tap.abv) && `<span>${trimNum(tap.abv)}% ABV</span>`,
+        shows('ibu') && trimNum(tap.ibu) && `<span>${trimNum(tap.ibu)} IBU</span>`,
       ].filter(Boolean).join('');
       tile.querySelector('.specs').innerHTML = specs;
 
       const desc = tile.querySelector('.desc');
-      desc.textContent = tap.description || '';
-      desc.title = tap.description || '';
+      const description = shows('description') ? tap.description || '' : '';
+      desc.textContent = description;
+      desc.title = description;
 
       // A tap with no keg linked shows no temperature at all, so the kegged
       // date moves into its place.
       let readings = '';
       if (tap.keg_id && !keg) {
         readings = '<span class="no-keg">Waiting for the keg scale…</span>';
-      } else if (keg) {
+      } else if (keg && shows('temperature')) {
         readings = `
           <div class="reading temp">
             <span class="reading-value">${num(roundTemp(temp), 0) ?? '—'}<small>${esc(tempUnit)}</small></span>
@@ -201,7 +209,7 @@
           </div>`;
       }
       // The kegged date belongs to the tap, so it shows with or without a keg.
-      const age = kegAge(tap.kegged_date);
+      const age = shows('kegged') && kegAge(tap.kegged_date);
       if (age) {
         readings += `
           <div class="reading age">
@@ -213,7 +221,7 @@
 
       // A CO₂ cylinder always shows its amount, as it does on the Kegs page.
       const showPercent = amountDisplay === 'percent' && keg?.keg_mode !== 2;
-      tile.querySelector('.keg-amount').innerHTML = !keg ? ''
+      tile.querySelector('.keg-amount').innerHTML = !keg || !shows('amount') ? ''
         : showPercent ? `${num(Number.isFinite(rawPct) ? pct : null, 1) ?? '—'}<small>%</small>`
         : `${num(amount, 2) ?? '—'}<small>${esc(unit)}</small>`;
       tile.querySelector('.liquid').style.transform = kegLevelTransform(pct);
@@ -315,16 +323,18 @@
     }
 
     // ── Data ───────────────────────────────────────
-    // A failed read keeps the current choice rather than flipping every tile.
-    async function loadAmountDisplay() {
+    // A failed read keeps the current choices rather than flipping every tile.
+    async function loadSettings() {
       try {
-        amountDisplay = (await api('GET', '/api/config')).amount_display || 'amount';
+        const cfg = await api('GET', '/api/config');
+        amountDisplay = cfg.amount_display || 'amount';
+        hidden = new Set(cfg.taplist_hidden_fields || []);
       } catch (_) {}
     }
 
     async function loadAll() {
       try {
-        const settings = loadAmountDisplay();
+        const settings = loadSettings();
         const [nextTaps, kegList] = await Promise.all([api('GET', '/api/taps'), api('GET', '/api/kegs')]);
         taps = nextTaps;
         for (const id in kegs) delete kegs[id];

@@ -97,6 +97,10 @@
   background: currentColor;
 }
 .tile.is-empty .empty { display: inline-flex; }
+/* Fields hidden on Dashboard Setup. A hidden Empty badge leaves the tile in
+   the Empty section, and a top row with nothing left to show goes. */
+.tile.hide-empty .empty { display: none; }
+.tile.hide-meta .tile-meta { display: none; }
 /* The tile recedes so the taps still pouring stand out, but the top row with
    its badges stays at full strength. */
 .tile.is-empty :is(.beer, .specs, .desc, .readings, .tile-keg) { opacity: 0.4; }
@@ -217,6 +221,8 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   margin-top: auto;
   padding-top: 1.1rem;
 }
+/* Nothing to read, as when Dashboard Setup hides both readings. */
+.readings:empty { display: none; }
 .reading { display: flex; flex-direction: column; gap: 0.15rem; }
 /* Secondary to the beer and the amount left, so kept small and soft. */
 .reading-value {
