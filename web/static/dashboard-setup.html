@@ -26,6 +26,9 @@
         background: var(--bg); cursor: pointer;
       }
       .color-row input[type="text"] { max-width: 120px; font-variant-numeric: tabular-nums; }
+      .field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.6rem 1.5rem; }
+      .field-grid label { display: flex; align-items: center; gap: 0.55rem; cursor: pointer; }
+      .field-grid input[type="checkbox"] { width: 1.05rem; height: 1.05rem; accent-color: var(--action); flex-shrink: 0; }
 
       /* A section of the page: its heading, with the button that restores
          that section's defaults. */
@@ -80,18 +83,9 @@
             <div class="tile-info">
               <div class="tile-meta"><span class="keg-name">Kegerator 1</span></div>
               <h2 class="beer">Pale Ale</h2>
-              <div class="specs"><span class="style">American Pale Ale</span><span>5.4% ABV</span><span>32 IBU</span></div>
-              <p class="desc">Bright citrus, soft malt, and a clean finish.</p>
-              <div class="readings">
-                <div class="reading">
-                  <span class="reading-value">38<small>°F</small></span>
-                  <span class="reading-label">Temp</span>
-                </div>
-                <div class="reading">
-                  <span class="reading-value">12 days</span>
-                  <span class="reading-label">Kegged Sep 20</span>
-                </div>
-              </div>
+              <div class="specs"></div>
+              <p class="desc"></p>
+              <div class="readings"></div>
             </div>
             <div class="tile-keg">
               <div id="pvKeg"></div>
@@ -206,6 +200,28 @@
             </div>
             <p class="help">Used for brewery, description, and tasting notes on the tap list.</p>
           </div>
+        </div>
+
+        <div class="box section-box">
+          <h2 class="title is-4">Tap list fields</h2>
+          <div class="field-grid" id="tapListFields">
+            <label><input type="checkbox" value="keg_name" checked> Keg scale name</label>
+            <label><input type="checkbox" value="style" checked> Style</label>
+            <label><input type="checkbox" value="abv" checked> ABV</label>
+            <label><input type="checkbox" value="ibu" checked> IBU</label>
+            <label><input type="checkbox" value="description" checked> Description</label>
+            <label><input type="checkbox" value="temperature" checked> Temperature</label>
+            <label><input type="checkbox" value="kegged" checked> Kegged date</label>
+            <label><input type="checkbox" value="amount" checked> Amount under the keg</label>
+            <label><input type="checkbox" value="pouring" checked> Pouring indicator</label>
+            <label><input type="checkbox" value="empty" checked> Empty badge</label>
+          </div>
+          <p class="help">
+            What each tap list tile shows. The beer name and keg graphic always show.
+            The pouring indicator is the Pouring badge and the tile&rsquo;s glow while
+            beer flows. Neither it nor the Empty badge is in the preview; a keg that runs
+            empty still moves to the Empty section with its badge hidden.
+          </p>
         </div>
 
         </div>
@@ -453,13 +469,56 @@
       }
 
       $('resetAppearance').addEventListener('click', () => {
-        if (!confirm('Restore the default colors and fonts?')) return;
+        if (!confirm('Restore the default colors, fonts and tap list fields?')) return;
         for (const [key] of COLORS) setColor(key, DEFAULTS[key]);
         for (const [key, id] of FONTS) $(id).value = DEFAULTS[key];
+        setHiddenFields([]);
         applyAppearance();
         clearTimeout(themeTimer);
         // An empty theme is the defaults, so nothing is pinned to today's.
-        saveConfig({ theme: {} });
+        saveConfig({ theme: {}, taplist_hidden_fields: [] });
+      });
+
+      // ── Tap list fields ────────────────────────────────
+      // Stored as the fields to hide, so a field added later shows by default.
+      const fieldBoxes = () => [...$('tapListFields').querySelectorAll('input[type="checkbox"]')];
+      const hiddenFields = () => fieldBoxes().filter(b => !b.checked).map(b => b.value);
+      const shows = field => !hiddenFields().includes(field);
+
+      function setHiddenFields(hidden) {
+        for (const box of fieldBoxes()) box.checked = !hidden.includes(box.value);
+        applyFields();
+      }
+
+      // Redraws the preview tile's fields the way the tap list's updateTile
+      // builds them, from fixed sample values.
+      function applyFields() {
+        const tile = $('pvTile');
+        tile.querySelector('.keg-name').textContent = shows('keg_name') ? 'Kegerator 1' : '';
+        tile.classList.toggle('hide-meta', !shows('keg_name'));
+        tile.querySelector('.specs').innerHTML = [
+          shows('style') && '<span class="style">American Pale Ale</span>',
+          shows('abv') && '<span>5.4% ABV</span>',
+          shows('ibu') && '<span>32 IBU</span>',
+        ].filter(Boolean).join('');
+        tile.querySelector('.desc').textContent =
+          shows('description') ? 'Bright citrus, soft malt, and a clean finish.' : '';
+        tile.querySelector('.readings').innerHTML = [
+          shows('temperature') && `<div class="reading">
+            <span class="reading-value">38<small>°F</small></span>
+            <span class="reading-label">Temp</span>
+          </div>`,
+          shows('kegged') && `<div class="reading">
+            <span class="reading-value">12 days</span>
+            <span class="reading-label">Kegged Sep 20</span>
+          </div>`,
+        ].filter(Boolean).join('');
+        showPreviewAmount();
+      }
+
+      $('tapListFields').addEventListener('change', () => {
+        applyFields();
+        saveConfig({ taplist_hidden_fields: hiddenFields() });
       });
 
       // ── Preferences ─────────────────────────────────────
@@ -583,7 +642,8 @@
 
       // The preview keg is drawn 65% full, so either figure matches it.
       function showPreviewAmount() {
-        document.querySelector('#pvTile .keg-amount').innerHTML = choice('amountDisplay') === 'percent'
+        document.querySelector('#pvTile .keg-amount').innerHTML = !shows('amount') ? ''
+          : choice('amountDisplay') === 'percent'
           ? '65.0<small>%</small>'
           : '3.20<small>gal</small>';
       }
@@ -602,6 +662,8 @@
           $('minPourValue').value = savedMinPour = cfg.min_pour?.value ?? MIN_POUR_DEFAULT;
           $('minPourSeconds').value = savedMinPourSeconds = cfg.min_pour_seconds ?? MIN_POUR_SECONDS_DEFAULT;
 
+          setHiddenFields(cfg.taplist_hidden_fields || []);
+
           const t = cfg.theme || {};
           for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);
           for (const [key, id] of FONTS) {
@@ -611,7 +673,7 @@
           showToast('Could not load the current settings', 'danger');
         }
         applyAppearance();
-        showPreviewAmount();
+        applyFields();
       }
 
       $('pvKeg').innerHTML = kegSvg();

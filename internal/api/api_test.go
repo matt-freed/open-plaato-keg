@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -738,7 +740,7 @@ func TestPatchConfig(t *testing.T) {
 	if got.Theme.AccentColor != "#ff0000" || got.TimeFormat != store.TimeFormat12h {
 		t.Errorf("response = %+v, want the untouched settings kept", got)
 	}
-	if stored := a.getConfig(); stored != got {
+	if stored := a.getConfig(); !reflect.DeepEqual(stored, got) {
 		t.Errorf("stored = %+v, want what the PATCH returned", stored)
 	}
 
@@ -752,7 +754,7 @@ func TestPatchConfig(t *testing.T) {
 		}
 	}
 	// A rejected PATCH changes nothing, including the valid keys beside it.
-	if stored := a.getConfig(); stored != got {
+	if stored := a.getConfig(); !reflect.DeepEqual(stored, got) {
 		t.Errorf("after rejected PATCHes config = %+v, want it unchanged", stored)
 	}
 }
@@ -887,6 +889,33 @@ func TestAmountDisplay(t *testing.T) {
 	a.patchConfig("amount_display", "sideways")
 	if cfg, _ := a.store.GetAppConfig(); cfg.AmountDisplay != store.AmountDisplayAmount {
 		t.Errorf("AmountDisplay = %q after an unknown value, want the default", cfg.AmountDisplay)
+	}
+}
+
+// The hidden tap list fields default to none. Unknown keys and repeats are
+// dropped, and an empty list shows every field again.
+func TestTapListHiddenFields(t *testing.T) {
+	a := newTestAPI(t)
+
+	if rec := a.do(http.MethodGet, "/api/config", nil); !strings.Contains(rec.Body.String(), `"taplist_hidden_fields":[]`) {
+		t.Errorf("default config = %s, want an empty taplist_hidden_fields array", rec.Body.String())
+	}
+
+	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu"})
+	assertStatus(t, rec, http.StatusOK)
+	cfg, _ := a.store.GetAppConfig()
+	if want := []string{"description", "ibu"}; !slices.Equal(cfg.TapListHidden, want) {
+		t.Errorf("TapListHidden = %q, want %q", cfg.TapListHidden, want)
+	}
+
+	assertStatus(t, a.patchConfig("taplist_hidden_fields", "ibu"), http.StatusBadRequest)
+	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 2 {
+		t.Errorf("TapListHidden = %q after a rejected change, want it unchanged", cfg.TapListHidden)
+	}
+
+	assertStatus(t, a.patchConfig("taplist_hidden_fields", []string{}), http.StatusOK)
+	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 0 {
+		t.Errorf("TapListHidden = %q after clearing, want none", cfg.TapListHidden)
 	}
 }
 

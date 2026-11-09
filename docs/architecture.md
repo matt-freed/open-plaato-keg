@@ -218,7 +218,7 @@ path and the API never contend for SQLite's lock.
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
 | `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
-| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour, minimum pour time. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
+| `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour, minimum pour time, hidden tap list fields. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
 
 There are no foreign keys.
 
@@ -699,6 +699,19 @@ other figure among the tile's readings. CO₂ cylinders always show the amount.
 It is a presentation choice only and is not sent to the device. Both pages
 read it from `/api/config` when they load and on their minute
 reload, so a change reaches an open screen within a minute.
+
+### Tap list fields
+
+`taplist_hidden_fields` lists the tap list tile fields Dashboard Setup has
+switched off; the beer name and keg graphic have no key, so they always show.
+The hidden fields are stored rather than the shown ones, so a field added later
+shows by default. `store.NormalizeTapListHidden` drops unknown keys and
+repeats. The tap list reads the setting with `amount_display` in
+`loadSettings`, on load and on the minute reload, and `updateTile` leaves each
+hidden field out. Hiding `pouring` keeps `is-pouring` off the tile, which
+removes the badge and the glow together. Hiding `empty` hides only the badge,
+since `is-empty` also decides which section the tile is in. Presentation only:
+nothing is sent to the device.
 
 ## BarHelper — `internal/barhelper`
 

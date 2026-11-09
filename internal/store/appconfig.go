@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -125,6 +126,43 @@ type Theme struct {
 	TapListBodyFont  string `json:"taplist_body_font,omitempty"`
 }
 
+// Tap list tile fields that can be hidden. The beer name and the keg graphic
+// always show, so they have no key.
+const (
+	TapListFieldKegName     = "keg_name"
+	TapListFieldPouring     = "pouring" // the badge and the tile's pouring highlight
+	TapListFieldEmpty       = "empty"   // the badge only; the tile still moves to Empty
+	TapListFieldStyle       = "style"
+	TapListFieldABV         = "abv"
+	TapListFieldIBU         = "ibu"
+	TapListFieldDescription = "description"
+	TapListFieldTemperature = "temperature"
+	TapListFieldKegged      = "kegged"
+	TapListFieldAmount      = "amount" // the figure under the keg graphic
+)
+
+// TapListFields lists every field a tap list tile can hide.
+var TapListFields = []string{
+	TapListFieldKegName, TapListFieldPouring, TapListFieldEmpty,
+	TapListFieldStyle, TapListFieldABV, TapListFieldIBU,
+	TapListFieldDescription, TapListFieldTemperature, TapListFieldKegged,
+	TapListFieldAmount,
+}
+
+// NormalizeTapListHidden keeps only known field keys, once each and sorted.
+// It never returns nil, so the setting is always a JSON array.
+func NormalizeTapListHidden(fields []string) []string {
+	out := []string{}
+	for _, f := range fields {
+		f = strings.ToLower(strings.TrimSpace(f))
+		if slices.Contains(TapListFields, f) && !slices.Contains(out, f) {
+			out = append(out, f)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
 // AppConfig is the user-editable application configuration.
 type AppConfig struct {
 	HomePage     string       `json:"home_page"`
@@ -137,6 +175,10 @@ type AppConfig struct {
 	// MinPour it is applied when a pour ends, so it affects future pours only.
 	MinPourSeconds int   `json:"min_pour_seconds"`
 	Theme          Theme `json:"theme"`
+	// TapListHidden names the tap list tile fields that are hidden. Storing
+	// the hidden ones, not the shown ones, means a field added later shows
+	// by default.
+	TapListHidden []string `json:"taplist_hidden_fields"`
 }
 
 // DefaultAppConfig is what a fresh installation starts with.
@@ -151,6 +193,7 @@ func DefaultAppConfig() AppConfig {
 		AmountDisplay:  AmountDisplayAmount,
 		MinPour:        DefaultMinPour,
 		MinPourSeconds: DefaultMinPourSeconds,
+		TapListHidden:  []string{},
 	}
 }
 
@@ -169,6 +212,9 @@ const (
 	configKeyMinPourUnit  = "min_pour_unit"
 
 	configKeyMinPourSeconds = "min_pour_seconds"
+
+	// One JSON row, like the theme: a list of keys from a closed set.
+	configKeyTapListHidden = "taplist_hidden_fields"
 )
 
 // GetAppConfig returns the stored configuration, filling in defaults.
@@ -216,6 +262,11 @@ func getAppConfig(q querier) (AppConfig, error) {
 			if err := json.Unmarshal([]byte(value), &theme); err == nil {
 				cfg.Theme = theme
 			}
+		case configKeyTapListHidden:
+			var hidden []string
+			if err := json.Unmarshal([]byte(value), &hidden); err == nil {
+				cfg.TapListHidden = hidden
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -223,6 +274,7 @@ func getAppConfig(q querier) (AppConfig, error) {
 	}
 	cfg.MinPour = NormalizeMinPour(cfg.MinPour)
 	cfg.MinPourSeconds = NormalizeMinPourSeconds(cfg.MinPourSeconds)
+	cfg.TapListHidden = NormalizeTapListHidden(cfg.TapListHidden)
 	return cfg, nil
 }
 
@@ -283,6 +335,10 @@ func (s *Store) UpdateAppConfig(mutate func(*AppConfig)) (AppConfig, error) {
 	if err != nil {
 		return AppConfig{}, err
 	}
+	hidden, err := json.Marshal(cfg.TapListHidden)
+	if err != nil {
+		return AppConfig{}, err
+	}
 	for key, value := range map[string]string{
 		configKeyHomePage:           cfg.HomePage,
 		configKeyTimeFormat:         cfg.TimeFormat,
@@ -293,6 +349,7 @@ func (s *Store) UpdateAppConfig(mutate func(*AppConfig)) (AppConfig, error) {
 		configKeyMinPourUnit:        cfg.MinPour.Unit,
 		configKeyMinPourSeconds:     strconv.Itoa(cfg.MinPourSeconds),
 		configKeyTheme:              string(theme),
+		configKeyTapListHidden:      string(hidden),
 	} {
 		if _, err := tx.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)", key, value); err != nil {
 			return AppConfig{}, err
@@ -311,6 +368,7 @@ func normalizeAppConfig(cfg AppConfig) AppConfig {
 	cfg.AmountDisplay = NormalizeAmountDisplay(cfg.AmountDisplay)
 	cfg.MinPour = NormalizeMinPour(cfg.MinPour)
 	cfg.MinPourSeconds = NormalizeMinPourSeconds(cfg.MinPourSeconds)
+	cfg.TapListHidden = NormalizeTapListHidden(cfg.TapListHidden)
 	return cfg
 }
 
