@@ -432,13 +432,16 @@ browser's full screen for the page, through the Fullscreen API and its
 turns its icon back; it is left out where the browser has no page full screen.
 Only the tap list sets it.
 
-`/taplist.html?kiosk` is the tap list as a display. An inline script in its
-`<head>` puts the `kiosk` class on `<html>` before the header renders, and
+Kiosk mode is the tap list as a display. The page is a kiosk while it is full
+screen, and always at `/taplist.html?kiosk`; `syncKiosk` follows
+`fullscreenchange` and puts the `kiosk` class on `<html>` or takes it off. For
+the URL, an inline script in `<head>` adds the class before the header renders.
 `site-header.css` then hides the navigation, leaving the title, beer count and
-full-screen button. The page skips `attachTileGestures`, so tiles cannot be
-dragged or opened, leaves the Empty section out, holds a screen wake lock
-(asked for again on `visibilitychange`), and adds `cursor-idle` to hide the
-cursor after three seconds without movement.
+full-screen button, and hides the cursor once `cursor-idle` marks it still for
+three seconds. `attachTileGestures` takes an `enabled` check, which the tap
+list fails in a kiosk, so tiles cannot be dragged or opened; `render` leaves
+the Empty section out; and `holdWakeLock` holds a screen wake lock, asked for
+again on `visibilitychange` and released when the kiosk ends.
 
 The pages are styled as one application, in the tap list's look:
 
@@ -848,7 +851,8 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   configuration pins is acknowledged but not replied to.
 - **Full screen is not kept.** Browsers enter full screen only from a click,
   so the tap list cannot enter it by itself, and it ends when the page reloads
-  or the viewer presses Esc. A display that must come back after a restart
+  or the viewer presses Esc, which also ends a kiosk started from the button.
+  `?kiosk` survives both but not the browser's own address bar. A display that must come back after a restart
   needs the browser's own kiosk mode. The kiosk wake lock needs a secure
   context, HTTPS or `localhost`, so a screen reaching the server over plain
   HTTP on the LAN follows the device's sleep settings.
