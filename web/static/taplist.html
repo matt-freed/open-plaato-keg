@@ -12,6 +12,14 @@
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
   <script src="/common.js"></script>
+  <script>
+    // /taplist.html?kiosk is the read-only display: no navigation, no
+    // rearranging, no Empty section, the screen kept awake and an idle cursor
+    // hidden. The class goes on before the header renders, so its links
+    // never flash up.
+    const KIOSK = new URLSearchParams(location.search).has('kiosk');
+    if (KIOSK) document.documentElement.classList.add('kiosk');
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -39,7 +47,7 @@
 </head>
 <body>
 
-  <site-header heading="Tap List"></site-header>
+  <site-header heading="Tap List" fullscreen></site-header>
 
   <main>
     <p class="status" id="status">Loading taps…</p>
@@ -237,11 +245,11 @@
         grid.replaceChildren();
         emptyGrid.replaceChildren();
         emptySection.hidden = true;
-        statusEl.innerHTML =
-          'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
+        // A kiosk has no way to reach the setup pages, so it is not offered one.
+        statusEl.innerHTML = KIOSK ? 'Nothing on tap yet.'
+          : 'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
         return;
       }
-      statusEl.textContent = '';
 
       const existing = new Map([...grid.children, ...emptyGrid.children].map(t => [t.dataset.tapId, t]));
       const full = [], empty = [];
@@ -253,10 +261,13 @@
       }
       existing.forEach(t => t.remove());
 
+      // A kiosk leaves empty kegs off the display altogether.
+      const shownEmpty = KIOSK ? [] : empty;
       placeTiles(grid, full);
-      placeTiles(emptyGrid, empty);
-      emptySection.hidden = !empty.length;
+      placeTiles(emptyGrid, shownEmpty);
+      emptySection.hidden = !shownEmpty.length;
       showBeerCount(full.length);
+      statusEl.textContent = KIOSK && !full.length ? 'Nothing on tap right now.' : '';
     }
 
     // The count beside the title is the beers that can be poured, so taps in
@@ -292,9 +303,10 @@
 
     // ── Drag to rearrange, and the tile menu ──────
     // Only tiles in the main grid can be dragged; empty ones keep their place.
-    // A tap whose keg has not loaded has no keg to link to yet.
+    // A tap whose keg has not loaded has no keg to link to yet. A kiosk is
+    // read-only, so it has neither; its stand-in is never mid-drag.
     let renderPending = false;
-    const gestures = attachTileGestures({
+    const gestures = KIOSK ? { active: false } : attachTileGestures({
       root: document.querySelector('main'),
       grid,
       idOf: tile => tile.dataset.tapId,
@@ -344,6 +356,32 @@
       } catch (_) {
         if (!taps.length) statusEl.textContent = 'Could not load the tap list. Is the server running?';
       }
+    }
+
+    // ── Kiosk ──────────────────────────────────────
+    if (KIOSK) {
+      // Keeps the screen from dimming or sleeping. The browser drops the lock
+      // whenever the page is hidden, so it is asked for again on return. It
+      // needs a secure context, HTTPS or localhost; elsewhere, and in browsers
+      // without it, the screen follows the device's own settings.
+      const requestWakeLock = async () => {
+        try { await navigator.wakeLock?.request('screen'); } catch (_) {}
+      };
+      requestWakeLock();
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') requestWakeLock();
+      });
+
+      // The cursor hides once the mouse has been still for a few seconds and
+      // comes back as soon as it moves.
+      const CURSOR_IDLE_MS = 3000;
+      const root = document.documentElement;
+      let idleTimer = setTimeout(() => root.classList.add('cursor-idle'), CURSOR_IDLE_MS);
+      document.addEventListener('pointermove', () => {
+        root.classList.remove('cursor-idle');
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => root.classList.add('cursor-idle'), CURSOR_IDLE_MS);
+      });
     }
 
     loadAll();

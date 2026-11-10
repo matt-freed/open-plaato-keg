@@ -23,6 +23,8 @@ site-header { display: block; }
 }
 .site-header-count { color: var(--text); font-size: 0.95rem; }
 
+.site-header-actions { display: flex; align-items: center; gap: 0.25rem; }
+
 .site-nav { display: flex; gap: 0.25rem; align-items: center; }
 .site-nav a, .site-nav button {
   font: inherit;
@@ -64,6 +66,36 @@ site-header { display: block; }
    a lighter fill to show. */
 .site-menu-list a:hover,
 .site-menu-list [aria-current="page"] { background: var(--overlay); }
+
+/* The full-screen toggle from the `fullscreen` attribute: an icon button in
+   the same style as the navigation's. */
+.site-fullscreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.4rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.site-fullscreen:hover { background: var(--tile-2); }
+.site-fullscreen svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* A kiosk display keeps its title and count but none of the links away from
+   it, and loses the cursor once the mouse has been still a while. */
+.kiosk .site-nav { display: none; }
+.kiosk.cursor-idle, .kiosk.cursor-idle * { cursor: none !important; }
 
 @media (max-width: 640px) {
   .site-header { flex-wrap: wrap; }

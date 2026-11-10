@@ -7,6 +7,15 @@
 //
 // The span beside the title shows supporting text, such as the tap list's
 // beer count; set it through the element's `count` property.
+//
+// A `fullscreen` attribute adds a button after the navigation that puts the
+// whole page into the browser's full screen and takes it out again. Browsers
+// only allow that from a click, so a page cannot enter full screen by itself,
+// and it ends when the page reloads. Where the browser has no full screen for
+// pages, such as Safari on an iPhone, the button is left out.
+//
+// On a page whose <html> carries the `kiosk` class, site-header.css hides the
+// navigation and leaves the title, the count and the full-screen button.
 (() => {
   const LINKS = [
     ['/taplist.html', 'Tap List'],
@@ -29,6 +38,46 @@
     return a;
   }
 
+  // Expand and collapse arrows, drawn in the text colour.
+  const ENTER_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+  const EXIT_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>';
+
+  // Older Safari, on iPads among others, only has the webkit-prefixed names.
+  const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+
+  // fullscreenButton returns the full-screen toggle, or null where the
+  // browser cannot show a page full screen.
+  function fullscreenButton() {
+    if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled) return null;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'site-fullscreen';
+
+    // Follows the browser's state rather than the clicks, so leaving with
+    // Esc or a swipe also turns the icon back.
+    const sync = () => {
+      const on = Boolean(fullscreenElement());
+      button.innerHTML = on ? EXIT_ICON : ENTER_ICON;
+      button.title = on ? 'Exit full screen' : 'Full screen';
+      button.setAttribute('aria-label', button.title);
+    };
+    document.addEventListener('fullscreenchange', sync);
+    document.addEventListener('webkitfullscreenchange', sync);
+    sync();
+
+    button.addEventListener('click', () => {
+      const el = document.documentElement;
+      const call = fullscreenElement()
+        ? (document.exitFullscreen || document.webkitExitFullscreen).call(document)
+        : (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      // The prefixed calls return nothing; the standard ones reject when the
+      // browser refuses, which leaves the page as it was.
+      Promise.resolve(call).catch(() => {});
+    });
+    return button;
+  }
+
   class SiteHeader extends HTMLElement {
     connectedCallback() {
       if (this.bar) return;
@@ -40,12 +89,14 @@
           <h1></h1>
           <span class="site-header-count"></span>
         </div>
-        <nav class="site-nav">
-          <div class="site-menu">
-            <button type="button" aria-haspopup="true" aria-expanded="false">Configure ▾</button>
-            <div class="site-menu-list"></div>
-          </div>
-        </nav>`;
+        <div class="site-header-actions">
+          <nav class="site-nav">
+            <div class="site-menu">
+              <button type="button" aria-haspopup="true" aria-expanded="false">Configure ▾</button>
+              <div class="site-menu-list"></div>
+            </div>
+          </nav>
+        </div>`;
       this.bar.querySelector('h1').textContent = this.getAttribute('heading') || document.title;
 
       const nav = this.bar.querySelector('.site-nav');
@@ -64,6 +115,11 @@
         menu.classList.remove('is-open');
         toggle.setAttribute('aria-expanded', 'false');
       });
+
+      if (this.hasAttribute('fullscreen')) {
+        const button = fullscreenButton();
+        if (button) this.bar.querySelector('.site-header-actions').append(button);
+      }
 
       this.replaceChildren(this.bar);
     }
