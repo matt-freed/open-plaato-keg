@@ -18,14 +18,16 @@ const LONG_PRESS_MS = 350;
 //   menuFor(tile)  the { tapId, kegId } its menu links to, or null for none
 //   onReorder(ids) the grid's ids after a drop that changed their order
 //   onEnd()        after every drag, for renders held back while it ran
+//   enabled()      optional; while it returns false, presses and right-clicks
+//                  are left alone, so the tiles are read-only
 // It returns an object whose active property is true while a drag runs, when
 // the pages must not rebuild the grid under the pointer.
-function attachTileGestures({ root, grid, idOf, menuFor, onReorder, onEnd }) {
+function attachTileGestures({ root, grid, idOf, menuFor, onReorder, onEnd, enabled = () => true }) {
   let press = null;
   let drag = null;
 
   root.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || drag) return;
+    if (e.button !== 0 || drag || !enabled()) return;
     const tile = e.target.closest('.tile');
     if (!tile) return;
     const draggable = tile.parentElement === grid;
@@ -89,7 +91,7 @@ function attachTileGestures({ root, grid, idOf, menuFor, onReorder, onEnd }) {
     // A touch press and hold opens the menu itself, and the browser's own
     // event for it arrives later, mid-press.
     if (press || drag) { e.preventDefault(); return; }
-    if (e.shiftKey) return;
+    if (e.shiftKey || !enabled()) return;
     const tile = e.target.closest('.tile');
     const ids = tile && menuFor(tile);
     if (!ids) return;

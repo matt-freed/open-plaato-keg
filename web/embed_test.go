@@ -354,7 +354,7 @@ func TestPagesUseCommonHelpers(t *testing.T) {
 func TestPageTitlesMatchHeadings(t *testing.T) {
 	static := Static()
 	title := regexp.MustCompile(`<title>([^<]*)</title>`)
-	heading := regexp.MustCompile(`<site-header heading="([^"]*)">`)
+	heading := regexp.MustCompile(`<site-header heading="([^"]*)"[^>]*>`)
 	for _, name := range pages {
 		if !strings.HasSuffix(name, ".html") {
 			continue

@@ -12,6 +12,16 @@
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
   <script src="/common.js"></script>
+  <script>
+    // Kiosk mode is the read-only display: no navigation, no rearranging, no
+    // Empty section, the screen kept awake and an idle cursor hidden. The page
+    // is in it while it is full screen, and always at /taplist.html?kiosk,
+    // which stays a kiosk after full screen ends. The class goes on before
+    // the header renders, so a kiosk URL never flashes the links up.
+    const KIOSK_URL = new URLSearchParams(location.search).has('kiosk');
+    if (KIOSK_URL) document.documentElement.classList.add('kiosk');
+    const isKiosk = () => document.documentElement.classList.contains('kiosk');
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -39,7 +49,7 @@
 </head>
 <body>
 
-  <site-header heading="Tap List"></site-header>
+  <site-header heading="Tap List" fullscreen></site-header>
 
   <main>
     <p class="status" id="status">Loading taps…</p>
@@ -237,11 +247,11 @@
         grid.replaceChildren();
         emptyGrid.replaceChildren();
         emptySection.hidden = true;
-        statusEl.innerHTML =
-          'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
+        // A kiosk has no way to reach the setup pages, so it is not offered one.
+        statusEl.innerHTML = isKiosk() ? 'Nothing on tap yet.'
+          : 'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
         return;
       }
-      statusEl.textContent = '';
 
       const existing = new Map([...grid.children, ...emptyGrid.children].map(t => [t.dataset.tapId, t]));
       const full = [], empty = [];
@@ -253,10 +263,13 @@
       }
       existing.forEach(t => t.remove());
 
+      // A kiosk leaves empty kegs off the display altogether.
+      const shownEmpty = isKiosk() ? [] : empty;
       placeTiles(grid, full);
-      placeTiles(emptyGrid, empty);
-      emptySection.hidden = !empty.length;
+      placeTiles(emptyGrid, shownEmpty);
+      emptySection.hidden = !shownEmpty.length;
       showBeerCount(full.length);
+      statusEl.textContent = isKiosk() && !full.length ? 'Nothing on tap right now.' : '';
     }
 
     // The count beside the title is the beers that can be poured, so taps in
@@ -292,7 +305,8 @@
 
     // ── Drag to rearrange, and the tile menu ──────
     // Only tiles in the main grid can be dragged; empty ones keep their place.
-    // A tap whose keg has not loaded has no keg to link to yet.
+    // A tap whose keg has not loaded has no keg to link to yet. A kiosk is
+    // read-only, so it has neither.
     let renderPending = false;
     const gestures = attachTileGestures({
       root: document.querySelector('main'),
@@ -309,6 +323,7 @@
           render();
         }
       },
+      enabled: () => !isKiosk(),
     });
 
     async function saveOrder(order) {
@@ -332,6 +347,10 @@
       } catch (_) {}
     }
 
+    // Whether the taps have loaded, so that a kiosk switch before then leaves
+    // "Loading taps…" in place rather than rendering an empty list.
+    let loaded = false;
+
     async function loadAll() {
       try {
         const settings = loadSettings();
@@ -340,11 +359,59 @@
         for (const id in kegs) delete kegs[id];
         for (const k of kegList) kegs[k.id] = k;
         await settings;
+        loaded = true;
         render();
       } catch (_) {
         if (!taps.length) statusEl.textContent = 'Could not load the tap list. Is the server running?';
       }
     }
+
+    // ── Kiosk ──────────────────────────────────────
+    // Keeps the screen from dimming or sleeping while the page is a kiosk. The
+    // browser drops the lock whenever the page is hidden, so it is asked for
+    // again on return. It needs a secure context, HTTPS or localhost;
+    // elsewhere, and in browsers without it, the screen follows the device's
+    // own settings.
+    let wakeLock = null;
+    async function holdWakeLock(on) {
+      try {
+        if (!on) {
+          await wakeLock?.release();
+          wakeLock = null;
+        } else if (!wakeLock || wakeLock.released) {
+          wakeLock = await navigator.wakeLock?.request('screen') ?? null;
+        }
+      } catch (_) {}
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && isKiosk()) holdWakeLock(true);
+    });
+
+    // Full screen turns kiosk mode on, and leaving it, with the button, Esc or
+    // a swipe, turns it off again, unless the URL asked for a kiosk.
+    function syncKiosk() {
+      const on = KIOSK_URL || Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      if (on === isKiosk()) return;
+      document.documentElement.classList.toggle('kiosk', on);
+      holdWakeLock(on);
+      // Puts the Empty section back, or takes it away.
+      if (loaded) render();
+    }
+    document.addEventListener('fullscreenchange', syncKiosk);
+    document.addEventListener('webkitfullscreenchange', syncKiosk);
+    if (KIOSK_URL) holdWakeLock(true);
+
+    // The cursor hides once the mouse has been still for a few seconds and
+    // comes back as soon as it moves. site-header.css only hides it in a kiosk.
+    const CURSOR_IDLE_MS = 3000;
+    let idleTimer;
+    function cursorMoved() {
+      document.documentElement.classList.remove('cursor-idle');
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => document.documentElement.classList.add('cursor-idle'), CURSOR_IDLE_MS);
+    }
+    document.addEventListener('pointermove', cursorMoved);
+    cursorMoved();
 
     loadAll();
     setInterval(() => { if (!gestures.active) loadAll(); }, 60000);

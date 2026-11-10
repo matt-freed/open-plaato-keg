@@ -426,6 +426,22 @@ has no link of its own; it is reached from History, which stays marked there. Pa
 it in `<head>` without `defer`, so the element is defined before the parser
 reaches it. The tap list sets the beer count beside its title through the
 element's `count` property; it counts only the taps above the Empty section.
+A `fullscreen` attribute adds a button after the navigation that toggles the
+browser's full screen for the page, through the Fullscreen API and its
+`webkit`-prefixed names, and follows `fullscreenchange` so leaving with Esc
+turns its icon back; it is left out where the browser has no page full screen.
+Only the tap list sets it.
+
+Kiosk mode is the tap list as a display. The page is a kiosk while it is full
+screen, and always at `/taplist.html?kiosk`; `syncKiosk` follows
+`fullscreenchange` and puts the `kiosk` class on `<html>` or takes it off. For
+the URL, an inline script in `<head>` adds the class before the header renders.
+`site-header.css` then hides the navigation, leaving the title, beer count and
+full-screen button, and hides the cursor once `cursor-idle` marks it still for
+three seconds. `attachTileGestures` takes an `enabled` check, which the tap
+list fails in a kiosk, so tiles cannot be dragged or opened; `render` leaves
+the Empty section out; and `holdWakeLock` holds a screen wake lock, asked for
+again on `visibilitychange` and released when the kiosk ends.
 
 The pages are styled as one application, in the tap list's look:
 
@@ -833,6 +849,13 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
   for that segment.
 - **`hardware_sync` is not answered.** The device's startup request for its
   configuration pins is acknowledged but not replied to.
+- **Full screen is not kept.** Browsers enter full screen only from a click,
+  so the tap list cannot enter it by itself, and it ends when the page reloads
+  or the viewer presses Esc, which also ends a kiosk started from the button.
+  `?kiosk` survives both but not the browser's own address bar. A display that must come back after a restart
+  needs the browser's own kiosk mode. The kiosk wake lock needs a secure
+  context, HTTPS or `localhost`, so a screen reaching the server over plain
+  HTTP on the LAN follows the device's sleep settings.
 - **Tap order across screens.** A drag-and-drop reorder publishes no event, so
   other open tap lists pick up the new order only at their next minute reload.
 - **BarHelper time on the Keg Scales page.** Recording a send publishes no event, so
