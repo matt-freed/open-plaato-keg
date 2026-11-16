@@ -132,6 +132,15 @@ CREATE TABLE IF NOT EXISTS taps (
     keg_id          TEXT NOT NULL DEFAULT ''
 );
 
+-- A tap's picture for the tap list, at most one per tap. Kept out of taps
+-- because SaveTap replaces the whole taps row, which would drop it.
+CREATE TABLE IF NOT EXISTS tap_images (
+    tap_id          TEXT PRIMARY KEY,
+    content_type    TEXT    NOT NULL,
+    data            BLOB    NOT NULL,
+    updated_at      INTEGER NOT NULL   -- unix milliseconds; versions the image URL
+);
+
 
 CREATE TABLE IF NOT EXISTS app_config (
     key   TEXT PRIMARY KEY,

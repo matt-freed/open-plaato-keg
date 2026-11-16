@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/url"
+	"time"
 )
 
 // Tap is one configured tap on the tap list.
@@ -32,6 +34,10 @@ type Tap struct {
 	KeggedDate string `json:"kegged_date"`
 	// KegID links the tap to a keg, so the tap list can show what is left.
 	KegID string `json:"keg_id"`
+	// Image is the URL of the tap's picture, or "" when it has none. It is
+	// read from tap_images and never written through SaveTap; the version in
+	// the query string changes whenever the picture does, so it can be cached.
+	Image string `json:"image"`
 }
 
 // ColorPresets are the named colours offered beside SRM, for drinks the SRM
@@ -55,20 +61,37 @@ const DefaultTapColor = "#c9a849"
 const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, srm, color_preset, color,
 	description, tasting_notes, kegged_date, keg_id`
 
+// tapSelect reads a tap with its picture's version, which scanTap expects.
+const tapSelect = `SELECT t.id, t.tap_number, t.name, t.brewery, t.style, t.abv, t.ibu, t.srm,
+	t.color_preset, t.color, t.description, t.tasting_notes, t.kegged_date, t.keg_id,
+	i.updated_at
+	FROM taps t LEFT JOIN tap_images i ON i.tap_id = t.id`
+
 func scanTap(row interface{ Scan(...any) error }) (*Tap, error) {
 	t := &Tap{}
+	var imageVersion *int64
 	err := row.Scan(&t.ID, &t.TapNumber, &t.Name, &t.Brewery, &t.Style, &t.ABV, &t.IBU,
-		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID)
+		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID,
+		&imageVersion)
 	if err != nil {
 		return nil, err
+	}
+	if imageVersion != nil {
+		t.Image = TapImageURL(t.ID, *imageVersion)
 	}
 	return t, nil
 }
 
+// TapImageURL is where the API serves a tap's picture, versioned so a
+// replaced picture gets a new URL.
+func TapImageURL(tapID string, version int64) string {
+	return fmt.Sprintf("/api/taps/%s/image?v=%d", url.PathEscape(tapID), version)
+}
+
 // ListTaps returns every tap, ordered by tap number with unnumbered taps last.
 func (s *Store) ListTaps() ([]*Tap, error) {
-	rows, err := s.db.Query(`SELECT ` + tapColumns + ` FROM taps
-		ORDER BY tap_number IS NULL, tap_number, name`)
+	rows, err := s.db.Query(tapSelect + `
+		ORDER BY t.tap_number IS NULL, t.tap_number, t.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +110,7 @@ func (s *Store) ListTaps() ([]*Tap, error) {
 
 // GetTap returns one tap, or ErrNotFound.
 func (s *Store) GetTap(id string) (*Tap, error) {
-	t, err := scanTap(s.db.QueryRow(`SELECT `+tapColumns+` FROM taps WHERE id = ?`, id))
+	t, err := scanTap(s.db.QueryRow(tapSelect+` WHERE t.id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -220,9 +243,78 @@ func (s *Store) OrderTaps(ids []string) error {
 	return tx.Commit()
 }
 
-// DeleteTap removes a tap.
+// DeleteTap removes a tap and its picture.
 func (s *Store) DeleteTap(id string) error {
-	_, err := s.db.Exec("DELETE FROM taps WHERE id = ?", id)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM tap_images WHERE tap_id = ?", id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM taps WHERE id = ?", id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// TapImage is a tap's picture as stored.
+type TapImage struct {
+	ContentType string
+	Data        []byte
+	// UpdatedAt is when it was stored, in unix milliseconds.
+	UpdatedAt int64
+}
+
+// SetTapImage stores a tap's picture, replacing any it had. An unknown tap is
+// ErrNotFound. The caller checks that the bytes are an image.
+func (s *Store) SetTapImage(tapID, contentType string, data []byte) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var exists int
+	err = tx.QueryRow("SELECT 1 FROM taps WHERE id = ?", tapID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+
+	// Kept strictly increasing, so two saves within a millisecond still give
+	// the picture a new URL.
+	version := time.Now().UnixMilli()
+	var previous int64
+	err = tx.QueryRow("SELECT updated_at FROM tap_images WHERE tap_id = ?", tapID).Scan(&previous)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	version = max(version, previous+1)
+
+	if _, err := tx.Exec(`INSERT OR REPLACE INTO tap_images (tap_id, content_type, data, updated_at)
+		VALUES (?, ?, ?, ?)`, tapID, contentType, data, version); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// GetTapImage returns a tap's picture, or ErrNotFound when it has none.
+func (s *Store) GetTapImage(tapID string) (*TapImage, error) {
+	img := &TapImage{}
+	err := s.db.QueryRow("SELECT content_type, data, updated_at FROM tap_images WHERE tap_id = ?", tapID).
+		Scan(&img.ContentType, &img.Data, &img.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return img, err
+}
+
+// DeleteTapImage removes a tap's picture. A tap with none is left as it is.
+func (s *Store) DeleteTapImage(tapID string) error {
+	_, err := s.db.Exec("DELETE FROM tap_images WHERE tap_id = ?", tapID)
 	return err
 }
 

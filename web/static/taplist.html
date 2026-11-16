@@ -145,6 +145,7 @@
       tile.className = 'tile';
       tile.dataset.tapId = tap.id;
       tile.innerHTML = `
+        <div class="tile-image"><img alt="" draggable="false"></div>
         <div class="tile-info">
           <div class="tile-meta">
             <span class="keg-name"></span>
@@ -168,6 +169,15 @@
     function updateTile(tile, tap, keg) {
       tile.style.setProperty('--accent', beerColor(tap));
       tile.classList.toggle('is-clear', isClear(tap));
+
+      // Set only when it changes, so a keg update does not reload the picture.
+      // The URL is versioned, so a replaced picture is a new one.
+      const img = tile.querySelector('.tile-image img');
+      if ((img.getAttribute('src') ?? '') !== (tap.image || '')) {
+        if (tap.image) img.src = tap.image;
+        else img.removeAttribute('src');
+      }
+      tile.classList.toggle('no-image', !tap.image);
 
       // Readings arrive converted into the chosen display units; the raw
       // fields are only a fallback for a keg that has no display block.
@@ -252,6 +262,12 @@
           : 'Nothing on tap yet. Add taps in <a href="/taplist-setup.html">Tap Setup</a>.';
         return;
       }
+
+      // Pictures take a column, so the grid narrows to two across; with none
+      // to show the tap list is exactly as it was without them.
+      const imagesOn = shows('image') && taps.some(t => t.image);
+      grid.classList.toggle('has-images', imagesOn);
+      emptyGrid.classList.toggle('has-images', imagesOn);
 
       const existing = new Map([...grid.children, ...emptyGrid.children].map(t => [t.dataset.tapId, t]));
       const full = [], empty = [];

@@ -12,6 +12,22 @@
   <link rel="stylesheet" href="/site-header.css">
   <script src="/site-header.js"></script>
   <script src="/common.js"></script>
+  <style>
+    .image-field { display: flex; align-items: flex-start; gap: 1rem; }
+    .image-preview {
+      flex-shrink: 0;
+      width: 120px;
+      aspect-ratio: 3 / 4;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--tile) center / cover no-repeat;
+    }
+    .image-preview.is-empty {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--faint); font-size: 0.8rem;
+    }
+    .image-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+  </style>
 </head>
 <body>
   <site-header heading="Tap Setup"></site-header>
@@ -114,6 +130,21 @@
             <label class="label">Colour</label>
             <div id="colorField"></div>
             <p class="help">The tap list fills the keg in this colour.</p>
+          </div>
+
+          <div class="field">
+            <label class="label">Image</label>
+            <div class="image-field">
+              <div class="image-preview is-empty" id="imagePreview">No image</div>
+              <div class="image-actions">
+                <label class="button is-small">
+                  Choose image…
+                  <input type="file" id="imageInput" accept="image/*" hidden />
+                </label>
+                <button class="button is-small" type="button" id="imageRemove" hidden>Remove image</button>
+                <p class="help">Portrait, about 3:4. Shown on the left of the tap list tile, cropped to fit.</p>
+              </div>
+            </div>
           </div>
 
           <div class="field">
@@ -375,6 +406,7 @@
       document.getElementById('kegDate').value      = tap.kegged_date || '';
 
       color.set(tap);
+      image.set(tap.image);
     }
 
     // ── Save ──────────────────────────────────────
@@ -404,8 +436,18 @@
       try {
         // A new tap's id is only a placeholder until the server assigns one.
         const exists = allTaps.some(t => t.id === currentTapId);
-        if (exists) await api('PUT', `/api/taps/${encodeURIComponent(currentTapId)}`, body);
-        else await api('POST', '/api/taps', body);
+        const saved = exists
+          ? await api('PUT', `/api/taps/${encodeURIComponent(currentTapId)}`, body)
+          : await api('POST', '/api/taps', body);
+        try {
+          await image.save(saved.id);
+        } catch (e) {
+          // The tap itself is stored; only its picture is not.
+          showToast('Tap saved, but the image was not: ' + e.message, 'warning');
+          await loadAll();
+          location.hash = 'tap=' + encodeURIComponent(saved.id);
+          return;
+        }
         showToast('Tap saved!', 'success');
         await loadAll();
         backToList();
@@ -427,6 +469,79 @@
         showToast('Delete failed: ' + e.message, 'danger');
       }
     }
+
+    // ── Image ─────────────────────────────────────
+    // The picture is chosen in the form but only sent once the tap is saved,
+    // since a new tap has no id until then. A chosen file is shrunk here, so
+    // a phone photo does not fill the database.
+    const IMAGE_MAX_W = 900, IMAGE_MAX_H = 1200;
+
+    const image = (() => {
+      const preview = document.getElementById('imagePreview');
+      const input = document.getElementById('imageInput');
+      const removeBtn = document.getElementById('imageRemove');
+      // pending: a Blob to upload, null to delete, undefined for no change.
+      let pending, objectURL, hasStored = false;
+
+      function show(src) {
+        if (objectURL && src !== objectURL) { URL.revokeObjectURL(objectURL); objectURL = null; }
+        // A tap's picture URL is the server's own path, and an object URL is
+        // the browser's, so neither can carry a quote out of url("…").
+        preview.style.backgroundImage = src ? `url("${src}")` : '';
+        preview.classList.toggle('is-empty', !src);
+        preview.textContent = src ? '' : 'No image';
+        removeBtn.hidden = !src;
+      }
+
+      async function shrink(file) {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, IMAGE_MAX_W / bitmap.width, IMAGE_MAX_H / bitmap.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        return new Promise((resolve, reject) => canvas.toBlob(
+          b => b ? resolve(b) : reject(new Error('the image could not be converted')),
+          'image/jpeg', 0.85));
+      }
+
+      input.addEventListener('change', async () => {
+        const file = input.files[0];
+        input.value = '';
+        if (!file) return;
+        try {
+          pending = await shrink(file);
+        } catch (_) {
+          showToast('That file could not be read as an image', 'danger');
+          return;
+        }
+        if (objectURL) URL.revokeObjectURL(objectURL);
+        objectURL = URL.createObjectURL(pending);
+        show(objectURL);
+      });
+
+      removeBtn.addEventListener('click', () => {
+        pending = hasStored ? null : undefined;
+        show('');
+      });
+
+      return {
+        // set shows a tap's stored picture and forgets any unsaved change.
+        set(url) {
+          pending = undefined;
+          hasStored = Boolean(url);
+          show(url || '');
+        },
+        // save sends the unsaved change, if any, for the tap with this id.
+        async save(id) {
+          const path = `/api/taps/${encodeURIComponent(id)}/image`;
+          if (pending) await api('PUT', path, pending);
+          else if (pending === null) await api('DELETE', path);
+          pending = undefined;
+        },
+      };
+    })();
 
     const color = colorPicker(document.getElementById('colorField'));
     const board = attachTapBoard({ root: document.getElementById('tapListContainer'), onDrop: dropTap });

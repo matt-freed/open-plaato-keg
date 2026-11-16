@@ -218,6 +218,7 @@ path and the API never contend for SQLite's lock.
 | `keg_log` | History of four readings, keyed by `(keg_id, ts)` |
 | `pours` | One row per detected pour, with a copy of the tap's beer at the time; never pruned |
 | `taps` | Tap list entries, optionally linked to a keg (at most one tap per keg, checked by `SaveTap` and `LinkTaps`) and to a display device |
+| `tap_images` | At most one picture per tap, as the uploaded bytes, their sniffed type and an `updated_at` in milliseconds. Kept out of `taps` because `SaveTap` replaces the whole tap row. `ListTaps` and `GetTap` join it to fill the tap's `image` URL, versioned by `updated_at` so the browser can cache it indefinitely; `DeleteTap` removes it with the tap |
 | `app_config` | Key/value settings: theme, display units, amount display, home page, time format, minimum pour, minimum pour time, hidden tap list fields. Written only through `UpdateAppConfig`, which reads, changes and rewrites them in one transaction |
 
 There are no foreign keys.
@@ -393,7 +394,7 @@ with another method is a 405.
 | `/api/kegs` | List, connected ids, known ids, ordering (`PUT /order`) |
 | `/api/kegs/{id}` | `GET`, `DELETE`, and `PATCH` for the label and CO₂ capacity, which `handleUpdateKeg` stores here since the device has no pin for them; live connection (`/connection`: remote IP, connected and last-heard times); history (`GET /log`, `/log/csv`, `DELETE /log` to clear it, and `GET`, `PATCH`, `DELETE /log/rows` for the editor); pours (`/pours`) |
 | `/api/kegs/{id}/…` | Device commands, all `POST`: tare, empty keg, calibration, units, mode, sensitivity, … |
-| `/api/taps` | CRUD for the tap list: `POST` creates with a generated id (`handleCreateTap`), `PUT /{id}` replaces an existing tap (`handleReplaceTap`); saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `PUT /api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `PATCH /api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps |
+| `/api/taps` | CRUD for the tap list: `POST` creates with a generated id (`handleCreateTap`), `PUT /{id}` replaces an existing tap (`handleReplaceTap`); saving a tap with a keg another tap uses is a 409, from `store.KegInUseError`; `PUT /api/taps/order` saves a drag-and-drop order through `store.OrderTaps`, which renumbers taps in one transaction; `PATCH /api/taps/links` saves a drop on the Tap Setup board through `store.LinkTaps`, which applies every link before checking the kegs named, so two taps can swap kegs in one transaction, and answers 409 if a keg would end up on two taps; `GET`, `PUT` and `DELETE /api/taps/{id}/image` serve, store and remove the tap's picture (`handlePutTapImage` takes the raw bytes, up to 4 MB, and accepts only JPEG, PNG, WebP or GIF by their content, not the request's `Content-Type`) |
 | `/api/pours` | Every pour from every keg (`?range=` 24h, 7d, 30d, 90d, 1y or all, `?beer=`, `?keg=`, paged with `?limit=&offset=` and counted in `X-Total-Count`), `/api/pours/summary` for the figures and filter choices, `/api/pours/csv` in device units, `PATCH /api/pours` for All Pours' edits, `DELETE /api/pours` for several, `DELETE /api/pours/{id}` |
 | `/api/config` | Every setting: home page, time format, display units, amount display, minimum pour, minimum pour time, theme. `GET` reads them together; `PATCH` changes any of them through `store.UpdateAppConfig`, in one transaction, and answers with the result |
 | `GET /api/system/env` | The configuration variables and their values in effect, from `config.Settings`, which withholds the BarHelper API key. Captured once at startup |
@@ -450,7 +451,14 @@ The pages are styled as one application, in the tap list's look:
   `--action`, the accent used for main buttons and selections. The themeable
   ones read the variables from `/theme.css` (see Theme below).
 - `tiles.css` is the tile grid and tile shared by the tap list and the Keg Scales
-  page: the heading, specs, readings and the keg graphic.
+  page: the heading, specs, readings and the keg graphic. A `has-images` class
+  on the grid, which only the tap list sets, adds each tap's picture on the
+  left of its tile (a panel in the beer's colour for a tap without one) and
+  caps the grid at two across instead of three. The tap list sets it when the
+  `image` field is not hidden and at least one tap has a picture, so with no
+  pictures the tap list is unchanged. Tap Setup shrinks a chosen picture to at
+  most 900×1200 as a JPEG in the browser and uploads it after the tap is saved,
+  since a new tap has no id until then.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
   sets its level. The tap list, the Keg Scales page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
@@ -833,6 +841,9 @@ corrects) rather than stalling the keg ingest path. CI runs the tests with
 - **Shutdown mid-pour.** For the reason below, a pour in progress at shutdown is
   not ended. Its start is stored, so it ends, and is recorded, when the keg
   reconnects and reports the flag off.
+- **Tap pictures are not pushed.** Tap changes do not go over the WebSocket,
+  so a picture added, replaced or removed in Tap Setup reaches an open tap list
+  at its next minute's reload, as other tap edits do.
 - **Amount settling after the flag.** A pour is sized from the amount left when
   the flag clears. Firmware that cleared pin 49 before sending its settled
   reading would under-report the pour.
