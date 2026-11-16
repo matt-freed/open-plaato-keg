@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -198,4 +199,85 @@ func tapDescription(t *store.Tap) string {
 		desc += " (" + t.Name + ")"
 	}
 	return desc
+}
+
+// maxTapImageBytes caps an uploaded tap picture. Tap Setup shrinks a picture
+// well below this before sending it; the cap is for other clients.
+const maxTapImageBytes = 4 << 20
+
+// tapImageTypes are the picture formats every browser can show.
+var tapImageTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+	"image/gif":  true,
+}
+
+// handleGetTapImage serves a tap's picture. Its URL carries a version that
+// changes with the picture, so the browser may keep it indefinitely.
+func (s *Server) handleGetTapImage(w http.ResponseWriter, r *http.Request) {
+	img, err := s.store.GetTapImage(chi.URLParam(r, "id"))
+	if err != nil {
+		writeStoreError(w, err, "tap image")
+		return
+	}
+	w.Header().Set("Content-Type", img.ContentType)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Write(img.Data)
+}
+
+// handlePutTapImage stores the request body as a tap's picture, replacing any
+// it had, and answers with the tap and its new image URL. The format is read
+// from the bytes, not the request's Content-Type.
+func (s *Server) handlePutTapImage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := s.store.GetTap(id); err != nil {
+		writeStoreError(w, err, "tap")
+		return
+	}
+
+	defer r.Body.Close()
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxTapImageBytes))
+	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, http.StatusRequestEntityTooLarge, "too_large",
+				fmt.Sprintf("the image must be at most %d MB", maxTapImageBytes>>20))
+			return
+		}
+		writeError(w, http.StatusBadRequest, "invalid_body", "the image could not be read")
+		return
+	}
+	contentType := http.DetectContentType(data)
+	if !tapImageTypes[contentType] {
+		writeError(w, http.StatusBadRequest, "invalid_value", "the image must be a JPEG, PNG, WebP or GIF")
+		return
+	}
+
+	if err := s.store.SetTapImage(id, contentType, data); err != nil {
+		writeStoreError(w, err, "tap")
+		return
+	}
+	tap, err := s.store.GetTap(id)
+	if err != nil {
+		writeStoreError(w, err, "tap")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "tap": tap})
+}
+
+// handleDeleteTapImage removes a tap's picture. A tap with none is not an
+// error, so a repeated delete succeeds.
+func (s *Server) handleDeleteTapImage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := s.store.GetTap(id); err != nil {
+		writeStoreError(w, err, "tap")
+		return
+	}
+	if err := s.store.DeleteTapImage(id); err != nil {
+		writeStoreError(w, err, "tap image")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

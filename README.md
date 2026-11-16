@@ -247,6 +247,9 @@ Numeric values may be sent as JSON numbers or as strings, and must be finite:
 | `PUT` | `/api/taps/{id}` | Replace one: a field left out is cleared. An unknown id is a 404 |
 | `DELETE` | `/api/taps/{id}` | Delete one |
 | `PUT` | `/api/taps/order` | `{"ordered_ids": [...]}` — renumber the named taps 1..n in that order; an unknown id changes nothing and is a 404 |
+| `GET` | `/api/taps/{id}/image` | The tap's picture; 404 when it has none |
+| `PUT` | `/api/taps/{id}/image` | Store the request body, the raw image bytes, as the tap's picture, replacing any it had. JPEG, PNG, WebP or GIF, judged by content, up to 4 MB (413 above). Returns the tap |
+| `DELETE` | `/api/taps/{id}/image` | Remove the tap's picture |
 | `PATCH` | `/api/taps/links` | `{"links": [{"tap_id": …, "keg_id": …}]}` — change which keg each named tap draws from, together, so two taps can swap kegs. Returns every tap |
 
 Creating or replacing a tap with a `keg_id` another tap already uses is a 409
@@ -266,6 +269,10 @@ A tap body takes these fields, all optional:
 | `kegged_date` | string | When the beer was kegged, as `YYYY-MM-DD` or `DD.MM.YYYY`; stored as `YYYY-MM-DD`. Anything that is not a real date is a 400; empty means none |
 | `keg_id` | string | The keg this tap draws from, so the card can show what is left. A keg feeds at most one tap |
 
+A tap read back also has `image`: the URL of its picture, or `""` when it has
+none. It changes whenever the picture does. It is set through
+`/api/taps/{id}/image`, and ignored in a tap body.
+
 ### Settings
 
 | Method | Path | Description |
@@ -284,7 +291,7 @@ A tap body takes these fields, all optional:
 | `min_pour` | `{"value": 4, "unit": "oz"\|"ml"}` | The smallest pouring window recorded as a pour; default 4 oz. Changing it only affects future pours |
 | `min_pour_seconds` | A whole number, e.g. `5` | The shortest pouring window recorded as a pour, in seconds; default 5, and 0 turns it off. Windows are timed to the whole second. Changing it only affects future pours |
 | `theme` | A theme object | Colours and fonts |
-| `taplist_hidden_fields` | An array, e.g. `["ibu", "temperature"]` | Tap list tile fields to hide, from `keg_name`, `pouring` (the badge and the tile's glow), `empty` (the badge only; the tile still moves to Empty), `style`, `abv`, `ibu`, `description`, `temperature`, `kegged` and `amount` (the figure under the keg). Unknown keys and repeats are dropped; default `[]` shows everything. Display only |
+| `taplist_hidden_fields` | An array, e.g. `["ibu", "temperature"]` | Tap list tile fields to hide, from `keg_name`, `pouring` (the badge and the tile's glow), `empty` (the badge only; the tile still moves to Empty), `style`, `abv`, `ibu`, `description`, `temperature`, `kegged`, `amount` (the figure under the keg) and `image` (the tap's picture; while shown, and at least one tap has one, the tap list is at most two tiles across). Unknown keys and repeats are dropped; default `[]` shows everything. Display only |
 
 An unrecognised value of a known key, such as a `home_page` of `"garage"`,
 falls back to that setting's default rather than being rejected. The theme accepts `accent_color`, `bg_color`, `card_bg`,

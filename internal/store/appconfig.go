@@ -139,6 +139,7 @@ const (
 	TapListFieldTemperature = "temperature"
 	TapListFieldKegged      = "kegged"
 	TapListFieldAmount      = "amount" // the figure under the keg graphic
+	TapListFieldImage       = "image"  // the tap's picture, when any tap has one
 )
 
 // TapListFields lists every field a tap list tile can hide.
@@ -146,7 +147,7 @@ var TapListFields = []string{
 	TapListFieldKegName, TapListFieldPouring, TapListFieldEmpty,
 	TapListFieldStyle, TapListFieldABV, TapListFieldIBU,
 	TapListFieldDescription, TapListFieldTemperature, TapListFieldKegged,
-	TapListFieldAmount,
+	TapListFieldAmount, TapListFieldImage,
 }
 
 // NormalizeTapListHidden keeps only known field keys, once each and sorted.

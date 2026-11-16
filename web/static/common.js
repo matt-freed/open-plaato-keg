@@ -27,13 +27,17 @@ function kegNameWithBeer(keg, index, tap) {
 }
 
 // api sends a request and returns the parsed JSON response, or null for an
-// empty one. A body is sent as JSON. A failed request throws an Error whose
+// empty one. A body is sent as JSON, except a Blob, such as a picture, which
+// is sent as it is. A failed request throws an Error whose
 // message is the server's explanation when it gave one, otherwise the status.
 //
 // Reads that need a response header, such as X-Total-Count, use fetch.
 async function api(method, path, body) {
   const init = { method };
-  if (body !== undefined) {
+  if (body instanceof Blob) {
+    init.headers = { 'Content-Type': body.type || 'application/octet-stream' };
+    init.body = body;
+  } else if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }

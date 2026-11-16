@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -366,5 +367,77 @@ func TestLinkTapsWithLegacyDuplicate(t *testing.T) {
 	}
 	if err := s.LinkTaps([]TapLink{{"b", ""}}); err != nil {
 		t.Errorf("unlinking a duplicate: %v", err)
+	}
+}
+
+func TestTapImage(t *testing.T) {
+	s := newTestStore(t)
+	tap := &Tap{ID: "t1", Name: "Stout"}
+	if err := s.SaveTap(tap); err != nil {
+		t.Fatalf("SaveTap: %v", err)
+	}
+
+	if got, _ := s.GetTap("t1"); got.Image != "" {
+		t.Errorf("Image = %q before any picture, want empty", got.Image)
+	}
+	if _, err := s.GetTapImage("t1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetTapImage with no picture = %v, want ErrNotFound", err)
+	}
+	if err := s.SetTapImage("nope", "image/png", []byte("x")); !errors.Is(err, ErrNotFound) {
+		t.Errorf("SetTapImage on an unknown tap = %v, want ErrNotFound", err)
+	}
+
+	if err := s.SetTapImage("t1", "image/png", []byte("one")); err != nil {
+		t.Fatalf("SetTapImage: %v", err)
+	}
+	got, _ := s.GetTap("t1")
+	first := got.Image
+	if !strings.HasPrefix(first, "/api/taps/t1/image?v=") {
+		t.Fatalf("Image = %q, want the versioned image URL", first)
+	}
+	taps, _ := s.ListTaps()
+	if len(taps) != 1 || taps[0].Image != first {
+		t.Errorf("ListTaps image = %+v, want %q", taps, first)
+	}
+
+	// Replacing the picture gives it a new URL, even within the millisecond.
+	if err := s.SetTapImage("t1", "image/jpeg", []byte("two")); err != nil {
+		t.Fatalf("SetTapImage: %v", err)
+	}
+	img, err := s.GetTapImage("t1")
+	if err != nil || img.ContentType != "image/jpeg" || string(img.Data) != "two" {
+		t.Fatalf("GetTapImage = %+v, %v", img, err)
+	}
+	got, _ = s.GetTap("t1")
+	if got.Image == first {
+		t.Errorf("Image = %q, want a new version after replacing", got.Image)
+	}
+
+	// Saving the tap replaces its row but keeps its picture.
+	tap.Name = "Imperial Stout"
+	if err := s.SaveTap(tap); err != nil {
+		t.Fatalf("SaveTap: %v", err)
+	}
+	if _, err := s.GetTapImage("t1"); err != nil {
+		t.Errorf("GetTapImage after SaveTap = %v, want the picture kept", err)
+	}
+
+	if err := s.DeleteTapImage("t1"); err != nil {
+		t.Fatalf("DeleteTapImage: %v", err)
+	}
+	if got, _ := s.GetTap("t1"); got.Image != "" {
+		t.Errorf("Image = %q after delete, want empty", got.Image)
+	}
+
+	// Deleting a tap takes its picture with it, so a new tap reusing the id
+	// does not inherit it.
+	if err := s.SetTapImage("t1", "image/png", []byte("three")); err != nil {
+		t.Fatalf("SetTapImage: %v", err)
+	}
+	if err := s.DeleteTap("t1"); err != nil {
+		t.Fatalf("DeleteTap: %v", err)
+	}
+	if _, err := s.GetTapImage("t1"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("GetTapImage after DeleteTap = %v, want ErrNotFound", err)
 	}
 }

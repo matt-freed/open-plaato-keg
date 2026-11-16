@@ -616,6 +616,63 @@ func TestTapCRUDOverHTTP(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 }
 
+// putImage sends raw bytes as a tap's picture.
+func (a *testAPI) putImage(id string, data []byte) *httptest.ResponseRecorder {
+	a.t.Helper()
+	req := httptest.NewRequest(http.MethodPut, "/api/taps/"+id+"/image", bytes.NewReader(data))
+	req.Header.Set("Content-Type", "image/png")
+	rec := httptest.NewRecorder()
+	a.handler.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestTapImageOverHTTP(t *testing.T) {
+	a := newTestAPI(t)
+	var created map[string]any
+	a.decode(a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Porter"}), &created)
+	id := created["id"].(string)
+
+	png := append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{0}, 32)...)
+
+	assertStatus(t, a.do(http.MethodGet, "/api/taps/"+id+"/image", nil), http.StatusNotFound)
+	assertStatus(t, a.putImage("nope", png), http.StatusNotFound)
+	assertStatus(t, a.putImage(id, []byte("<svg onload=alert(1)>")), http.StatusBadRequest)
+	assertStatus(t, a.putImage(id, append(png, make([]byte, maxTapImageBytes)...)), http.StatusRequestEntityTooLarge)
+
+	rec := a.putImage(id, png)
+	assertStatus(t, rec, http.StatusOK)
+	var saved struct{ Tap store.Tap }
+	a.decode(rec, &saved)
+	if !strings.HasPrefix(saved.Tap.Image, "/api/taps/"+id+"/image?v=") {
+		t.Fatalf("image = %q, want the versioned image URL", saved.Tap.Image)
+	}
+
+	rec = a.do(http.MethodGet, saved.Tap.Image, nil)
+	assertStatus(t, rec, http.StatusOK)
+	if ct := rec.Header().Get("Content-Type"); ct != "image/png" {
+		t.Errorf("Content-Type = %q, want image/png", ct)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), png) {
+		t.Errorf("served %d bytes, want the %d uploaded", rec.Body.Len(), len(png))
+	}
+
+	// A tap PUT carrying an image field neither sets nor clears the picture.
+	assertStatus(t, a.do(http.MethodPut, "/api/taps/"+id, map[string]any{"name": "Porter", "image": ""}), http.StatusOK)
+	var tap store.Tap
+	a.decode(a.do(http.MethodGet, "/api/taps/"+id, nil), &tap)
+	if tap.Image != saved.Tap.Image {
+		t.Errorf("image = %q after a tap PUT, want %q kept", tap.Image, saved.Tap.Image)
+	}
+
+	assertStatus(t, a.do(http.MethodDelete, "/api/taps/"+id+"/image", nil), http.StatusOK)
+	a.decode(a.do(http.MethodGet, "/api/taps/"+id, nil), &tap)
+	if tap.Image != "" {
+		t.Errorf("image = %q after delete, want empty", tap.Image)
+	}
+	assertStatus(t, a.do(http.MethodDelete, "/api/taps/"+id+"/image", nil), http.StatusOK)
+	assertStatus(t, a.do(http.MethodDelete, "/api/taps/nope/image", nil), http.StatusNotFound)
+}
+
 func TestTapSRM(t *testing.T) {
 	a := newTestAPI(t)
 
@@ -901,15 +958,15 @@ func TestTapListHiddenFields(t *testing.T) {
 		t.Errorf("default config = %s, want an empty taplist_hidden_fields array", rec.Body.String())
 	}
 
-	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu"})
+	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu", "image"})
 	assertStatus(t, rec, http.StatusOK)
 	cfg, _ := a.store.GetAppConfig()
-	if want := []string{"description", "ibu"}; !slices.Equal(cfg.TapListHidden, want) {
+	if want := []string{"description", "ibu", "image"}; !slices.Equal(cfg.TapListHidden, want) {
 		t.Errorf("TapListHidden = %q, want %q", cfg.TapListHidden, want)
 	}
 
 	assertStatus(t, a.patchConfig("taplist_hidden_fields", "ibu"), http.StatusBadRequest)
-	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 2 {
+	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 3 {
 		t.Errorf("TapListHidden = %q after a rejected change, want it unchanged", cfg.TapListHidden)
 	}
 

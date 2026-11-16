@@ -114,6 +114,9 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/{id}", s.handleGetTap)
 			r.Put("/{id}", s.handleReplaceTap)
 			r.Delete("/{id}", s.handleDeleteTap)
+			r.Get("/{id}/image", s.handleGetTapImage)
+			r.Put("/{id}/image", s.handlePutTapImage)
+			r.Delete("/{id}/image", s.handleDeleteTapImage)
 		})
 
 		r.Route("/config", func(r chi.Router) {

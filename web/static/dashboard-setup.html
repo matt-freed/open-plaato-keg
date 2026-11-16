@@ -80,6 +80,7 @@
         <div class="box section-box preview-box">
           <h2 class="title is-4">Live Preview</h2>
           <article class="tile" id="pvTile">
+            <div class="tile-image"><img alt=""></div>
             <div class="tile-info">
               <div class="tile-meta"><span class="keg-name">Kegerator 1</span></div>
               <h2 class="beer">Pale Ale</h2>
@@ -205,6 +206,7 @@
         <div class="box section-box">
           <h2 class="title is-4">Tap list fields</h2>
           <div class="field-grid" id="tapListFields">
+            <label id="imageFieldLabel"><input type="checkbox" value="image" checked> <span>Beer image</span></label>
             <label><input type="checkbox" value="keg_name" checked> Keg scale name</label>
             <label><input type="checkbox" value="style" checked> Style</label>
             <label><input type="checkbox" value="abv" checked> ABV</label>
@@ -218,6 +220,8 @@
           </div>
           <p class="help">
             What each tap list tile shows. The beer name and keg graphic always show.
+            Beer images are added in Tap Setup; while they show, the tap list is at
+            most two tiles across, and a tap without one gets a panel in its colour.
             The pouring indicator is the Pouring badge and the tile&rsquo;s glow while
             beer flows. Neither it nor the Empty badge is in the preview; a keg that runs
             empty still moves to the Empty section with its badge hidden.
@@ -482,11 +486,36 @@
       // ── Tap list fields ────────────────────────────────
       // Stored as the fields to hide, so a field added later shows by default.
       const fieldBoxes = () => [...$('tapListFields').querySelectorAll('input[type="checkbox"]')];
-      const hiddenFields = () => fieldBoxes().filter(b => !b.checked).map(b => b.value);
+      // The image box is disabled while no tap has a picture. It then shows
+      // as off, but the stored choice is kept, so the first picture added
+      // shows if images were left on.
+      const imageBox = () => $('tapListFields').querySelector('input[value="image"]');
+      let imageHiddenStored = false;
+      const hiddenFields = () => fieldBoxes()
+        .filter(b => b.disabled ? b === imageBox() && imageHiddenStored : !b.checked)
+        .map(b => b.value);
       const shows = field => !hiddenFields().includes(field);
 
       function setHiddenFields(hidden) {
-        for (const box of fieldBoxes()) box.checked = !hidden.includes(box.value);
+        imageHiddenStored = hidden.includes('image');
+        for (const box of fieldBoxes()) box.checked = !box.disabled && !hidden.includes(box.value);
+        applyFields();
+      }
+
+      // The first tap with a picture, which the preview shows; null when no
+      // tap has one and the image field is unavailable.
+      let sampleImage = null;
+      function setImageAvailable(url) {
+        sampleImage = url;
+        const box = imageBox();
+        box.disabled = !url;
+        if (!url) box.checked = false;
+        else box.checked = !imageHiddenStored;
+        $('imageFieldLabel').title = url ? '' : 'No tap has an image yet. Add one in Tap Setup.';
+        $('imageFieldLabel').querySelector('span').textContent =
+          url ? 'Beer image' : 'Beer image (none yet)';
+        $('imageFieldLabel').style.opacity = url ? '' : '0.55';
+        $('imageFieldLabel').style.cursor = url ? '' : 'not-allowed';
         applyFields();
       }
 
@@ -494,6 +523,10 @@
       // builds them, from fixed sample values.
       function applyFields() {
         const tile = $('pvTile');
+        const imagesOn = Boolean(sampleImage) && imageBox().checked;
+        tile.parentElement.classList.toggle('has-images', imagesOn);
+        const img = tile.querySelector('.tile-image img');
+        if (imagesOn && img.getAttribute('src') !== sampleImage) img.src = sampleImage;
         tile.querySelector('.keg-name').textContent = shows('keg_name') ? 'Kegerator 1' : '';
         tile.classList.toggle('hide-meta', !shows('keg_name'));
         tile.querySelector('.specs').innerHTML = [
@@ -517,6 +550,7 @@
       }
 
       $('tapListFields').addEventListener('change', () => {
+        imageHiddenStored = imageBox().disabled ? imageHiddenStored : !imageBox().checked;
         applyFields();
         saveConfig({ taplist_hidden_fields: hiddenFields() });
       });
@@ -663,6 +697,8 @@
           $('minPourSeconds').value = savedMinPourSeconds = cfg.min_pour_seconds ?? MIN_POUR_SECONDS_DEFAULT;
 
           setHiddenFields(cfg.taplist_hidden_fields || []);
+          const taps = await api('GET', '/api/taps').catch(() => []);
+          setImageAvailable(taps.find(t => t.image)?.image ?? null);
 
           const t = cfg.theme || {};
           for (const [key] of COLORS) if (HEX.test(t[key] || '')) setColor(key, t[key]);
