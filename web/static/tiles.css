@@ -2,30 +2,54 @@
    heading, specs and readings, and the keg graphic from keg-graphic.js.
    Uses the tokens from tokens.css. */
 
+/* ─── Tile size ──────────────────────────────── */
+/* The tile size chosen on Dashboard Setup, set as data-tile-size on any
+   ancestor of the grid; only the tap list and Dashboard Setup's preview set
+   it. --ts scales the tile's type, spacing, keg and picture. The column
+   variables are the most tiles across: --cols-wide from 1200px, --cols-narrow
+   below that, --cols-img with tap pictures shown. --min-col is the narrowest a
+   tile may get before the row drops a column. Size 3, or no size at all, is
+   the fallbacks used below. The smallest labels have a floor, so the
+   compact sizes stay legible. */
+[data-tile-size="1"] {
+  --ts: 0.72;
+  --cols-wide: 5; --cols-narrow: 3; --cols-img: 3; --min-col: 200px;
+}
+[data-tile-size="2"] {
+  --ts: 0.86;
+  --cols-wide: 4; --cols-narrow: 3; --cols-img: 3; --min-col: 260px;
+}
+[data-tile-size="4"] {
+  --ts: 1.18;
+  --cols-wide: 2; --cols-narrow: 2; --cols-img: 2; --min-col: 420px;
+}
+[data-tile-size="5"] {
+  --ts: 1.4;
+  --cols-wide: 2; --cols-narrow: 2; --cols-img: 2; --min-col: 520px;
+}
+
 .grid {
   position: relative;
   display: grid;
-  --gap: clamp(0.9rem, 1.6vw, 1.4rem);
-  /* Never more than three across: each column is at least a third of the
-     row, and narrower screens drop to two and then one. */
+  --gap: calc(clamp(0.9rem, 1.6vw, 1.4rem) * var(--ts, 1));
+  /* Never more than --cols across: each column is at least that fraction of
+     the row, and narrower screens drop columns from there. At the default
+     size that is three across. */
+  --cols: var(--cols-wide, 3);
   grid-template-columns: repeat(auto-fill,
-    minmax(max(min(100%, 340px), calc((100% - 2 * var(--gap)) / 3)), 1fr));
+    minmax(max(min(100%, var(--min-col, 340px)),
+               calc((100% - (var(--cols) - 1) * var(--gap)) / var(--cols))), 1fr));
   gap: var(--gap);
 }
-/* Two across below 1200px, before three columns get cramped. */
+/* Fewer across below 1200px, before the columns get cramped: two at the
+   default size. */
 @media (max-width: 1199px) {
-  .grid {
-    grid-template-columns: repeat(auto-fill,
-      minmax(max(min(100%, 340px), calc((100% - var(--gap)) / 2)), 1fr));
-  }
+  .grid { --cols: var(--cols-narrow, 2); }
 }
 
-/* With tap pictures shown the tiles are wider, so never more than two
-   across. Only the tap list sets has-images. */
-.grid.has-images {
-  grid-template-columns: repeat(auto-fill,
-    minmax(max(min(100%, 340px), calc((100% - var(--gap)) / 2)), 1fr));
-}
+/* With tap pictures shown the tiles are wider, so fewer across: never more
+   than two at the default size. Only the tap list sets has-images. */
+.grid.has-images { --cols: var(--cols-img, 2); }
 
 /* ─── Tile ───────────────────────────────────── */
 .tile {
@@ -34,9 +58,10 @@
   display: grid;
   grid-template-columns: 1fr auto;
   line-height: normal;
-  gap: 1.25rem;
-  min-height: 220px;
-  padding: 1.4rem 1.25rem 1.3rem 1.5rem;
+  gap: calc(1.25rem * var(--ts, 1));
+  min-height: calc(220px * var(--ts, 1));
+  padding: calc(1.4rem * var(--ts, 1)) calc(1.25rem * var(--ts, 1))
+           calc(1.3rem * var(--ts, 1)) calc(1.5rem * var(--ts, 1));
   background: var(--tile);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -57,10 +82,10 @@
 .has-images .tile-image {
   display: block;
   align-self: center;
-  width: clamp(110px, 10vw, 150px);
+  width: calc(clamp(110px, 10vw, 150px) * var(--ts, 1));
   aspect-ratio: 3 / 4;
   /* Pulled toward the tile's left edge, as the keg is on the right. */
-  margin-left: -0.35rem;
+  margin-left: calc(-0.35rem * var(--ts, 1));
   overflow: hidden;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent) 22%, var(--tile));
@@ -82,9 +107,9 @@
 .tile-meta {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  min-height: 1.2rem;
-  font-size: 0.72rem;
+  gap: calc(0.6rem * var(--ts, 1));
+  min-height: calc(1.2rem * var(--ts, 1));
+  font-size: max(0.62rem, calc(0.72rem * var(--ts, 1)));
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -192,9 +217,9 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
 .tile-menu-item[aria-disabled] { color: var(--faint); cursor: default; }
 
 .beer {
-  margin: 0.35rem 0 0;
+  margin: calc(0.35rem * var(--ts, 1)) 0 0;
   font-family: var(--taplist-title-font, var(--sans));
-  font-size: clamp(1.5rem, 2.2vw, 1.95rem);
+  font-size: clamp(calc(1.5rem * var(--ts, 1)), calc(2.2vw * var(--ts, 1)), calc(1.95rem * var(--ts, 1)));
   font-weight: 700;
   line-height: 1.12;
   letter-spacing: -0.015em;
@@ -205,15 +230,15 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem 0.5rem;
-  margin-top: 0.6rem;
-  font-size: 0.92rem;
+  gap: calc(0.35rem * var(--ts, 1)) calc(0.5rem * var(--ts, 1));
+  margin-top: calc(0.6rem * var(--ts, 1));
+  font-size: calc(0.92rem * var(--ts, 1));
   color: var(--muted);
 }
 .specs:empty { display: none; }
 /* A second line of specs, such as the Kegs page's last pour, sits close
    under the first. */
-.specs + .specs { margin-top: 0.25rem; }
+.specs + .specs { margin-top: calc(0.25rem * var(--ts, 1)); }
 /* Kept to two lines so one long description cannot stretch its whole row;
    the full text is in the tooltip. */
 .desc {
@@ -222,8 +247,8 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
-  margin: 0.45rem 0 0;
-  font-size: 0.88rem;
+  margin: calc(0.45rem * var(--ts, 1)) 0 0;
+  font-size: calc(0.88rem * var(--ts, 1));
   line-height: 1.4;
   color: var(--muted);
 }
@@ -244,16 +269,16 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.7rem 1.4rem;
+  gap: calc(0.7rem * var(--ts, 1)) calc(1.4rem * var(--ts, 1));
   margin-top: auto;
-  padding-top: 1.1rem;
+  padding-top: calc(1.1rem * var(--ts, 1));
 }
 /* Nothing to read, as when Dashboard Setup hides both readings. */
 .readings:empty { display: none; }
-.reading { display: flex; flex-direction: column; gap: 0.15rem; }
+.reading { display: flex; flex-direction: column; gap: calc(0.15rem * var(--ts, 1)); }
 /* Secondary to the beer and the amount left, so kept small and soft. */
 .reading-value {
-  font-size: 1.05rem;
+  font-size: calc(1.05rem * var(--ts, 1));
   font-weight: 600;
   line-height: 1.1;
   color: var(--soft);
@@ -262,20 +287,20 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
 }
 .reading-value small {
   margin-left: 0.15rem;
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--ts, 1));
   font-weight: 500;
   color: var(--muted);
   letter-spacing: 0;
 }
 .reading.age .reading-value { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; }
 .reading-label {
-  font-size: 0.65rem;
+  font-size: max(0.58rem, calc(0.65rem * var(--ts, 1)));
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--faint);
 }
-.no-keg { color: var(--faint); font-size: 0.9rem; }
+.no-keg { color: var(--faint); font-size: calc(0.9rem * var(--ts, 1)); }
 
 /* ─── Keg graphic ────────────────────────────── */
 .tile-keg {
@@ -283,8 +308,8 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  width: 92px;
+  gap: calc(0.45rem * var(--ts, 1));
+  width: calc(92px * var(--ts, 1));
 }
 .tile-keg svg { display: block; width: 100%; height: auto; overflow: visible; }
 .liquid { transition: transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
@@ -296,7 +321,7 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
 .keg-amount {
   /* Held open with no keg linked, so kegs in a row stay level. */
   min-height: 1.2em;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--ts, 1));
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -305,18 +330,22 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
 }
 .keg-amount small {
   margin-left: 0.15rem;
-  font-size: 0.8rem;
+  font-size: calc(0.8rem * var(--ts, 1));
   font-weight: 500;
   color: var(--muted);
 }
 
 @media (max-width: 640px) {
-  .tile { padding: 1.2rem 1rem 1.1rem 1.2rem; min-height: 190px; }
-  .tile-keg { width: 68px; }
-  .has-images .tile { gap: 0.9rem; }
-  .has-images .tile-image { width: 84px; margin-left: -0.2rem; }
-  .reading-value { font-size: 1rem; }
-  .keg-amount { font-size: 1rem; }
+  .tile {
+    padding: calc(1.2rem * var(--ts, 1)) calc(1rem * var(--ts, 1))
+             calc(1.1rem * var(--ts, 1)) calc(1.2rem * var(--ts, 1));
+    min-height: calc(190px * var(--ts, 1));
+  }
+  .tile-keg { width: calc(68px * var(--ts, 1)); }
+  .has-images .tile { gap: calc(0.9rem * var(--ts, 1)); }
+  .has-images .tile-image { width: calc(84px * var(--ts, 1)); margin-left: calc(-0.2rem * var(--ts, 1)); }
+  .reading-value { font-size: calc(1rem * var(--ts, 1)); }
+  .keg-amount { font-size: calc(1rem * var(--ts, 1)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

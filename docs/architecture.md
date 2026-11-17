@@ -454,7 +454,8 @@ The pages are styled as one application, in the tap list's look:
   page: the heading, specs, readings and the keg graphic. A `has-images` class
   on the grid, which only the tap list sets, adds each tap's picture on the
   left of its tile (a panel in the beer's colour for a tap without one) and
-  caps the grid at two across instead of three. The tap list sets it when the
+  caps the grid at two across instead of three (at the standard tile size;
+  see Tile size below). The tap list sets it when the
   `image` field is not hidden and at least one tap has a picture, so with no
   pictures the tap list is unchanged. Tap Setup shrinks a chosen picture to at
   most 900×1200 as a JPEG in the browser and uploads it after the tap is saved,
@@ -736,6 +737,26 @@ hidden field out. Hiding `pouring` keeps `is-pouring` off the tile, which
 removes the badge and the glow together. Hiding `empty` hides only the badge,
 since `is-empty` also decides which section the tile is in. Presentation only:
 nothing is sent to the device.
+
+### Tile size
+
+`tile_size` is a whole number from 1 (compact) to 5 (large), set with the
+slider on Dashboard Setup; 3, the default, is the standard size.
+`store.NormalizeTileSize` turns anything outside 1 to 5 into 3. It applies to
+the tap list only: `loadSettings` sets it as `data-tile-size` on the root
+element, on load and on the minute reload. Dashboard Setup sets it on the
+preview's box instead, so the preview tile resizes as the slider moves; the
+slider saves when it is let go.
+
+`tiles.css` does the rest with inherited custom properties that each
+`[data-tile-size]` rule sets. `--ts` multiplies every size in the tile: type,
+padding, gaps, the keg graphic and the tap picture. `--cols-wide`,
+`--cols-narrow` (below 1200px) and `--cols-img` (with pictures) cap the tiles
+across, and `--min-col` is the narrowest a column may get before the row drops
+one. Every use falls back to the standard size's value, so size 3 has no rule
+of its own and looks as the tap list always has. The Keg Scales page sets no
+size and so always draws standard tiles. Presentation only: nothing is sent to
+the device.
 
 ## BarHelper — `internal/barhelper`
 

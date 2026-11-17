@@ -56,6 +56,8 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 			dst = &patch.Theme
 		case "taplist_hidden_fields":
 			dst = &patch.TapListHidden
+		case "tile_size":
+			dst = &patch.TileSize
 		default:
 			writeError(w, http.StatusBadRequest, "invalid_value", name+" is not a setting")
 			return
@@ -85,6 +87,8 @@ func (s *Server) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
 				c.Theme = patch.Theme
 			case "taplist_hidden_fields":
 				c.TapListHidden = patch.TapListHidden
+			case "tile_size":
+				c.TileSize = patch.TileSize
 			}
 		}
 	})

@@ -360,6 +360,8 @@
         const cfg = await api('GET', '/api/config');
         amountDisplay = cfg.amount_display || 'amount';
         hidden = new Set(cfg.taplist_hidden_fields || []);
+        // tiles.css sizes the tiles and their columns from this.
+        document.documentElement.dataset.tileSize = cfg.tile_size || 3;
       } catch (_) {}
     }
 
