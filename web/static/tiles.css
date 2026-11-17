@@ -89,15 +89,20 @@
    beer's colour, so the tiles still line up. */
 .tile-image { display: none; }
 .has-images .tile { grid-template-columns: auto 1fr auto; }
-/* At its top, so it lines up with the beer name however tall the row is. Its
-   narrowest is just tall enough to match the keg beside it (92px wide, so
-   about 192px with its amount), so the two also end level; a narrower one
-   left the row's height to the keg. */
+/* The picture runs the full height of the row, from the beer name to the
+   readings, cropped to fit. It is at least 3:4, and its narrowest is just tall
+   enough to match the keg beside it (92px wide, so about 192px with its
+   amount). Where wrapped text makes the row far taller, as on a narrow phone,
+   it stops at 1.6 times its width and keeps to the top rather than becoming a
+   sliver. --img-w is its width; the rules below change only that. */
+.has-images .tile { min-height: 0; }
 .has-images .tile-image {
+  --img-w: calc(clamp(144px, 10vw, 150px) * var(--ts, 1));
   display: block;
-  align-self: start;
-  width: calc(clamp(144px, 10vw, 150px) * var(--ts, 1));
+  align-self: stretch;
+  width: var(--img-w);
   aspect-ratio: 3 / 4;
+  max-height: calc(var(--img-w) * 1.6);
   /* Pulled toward the tile's left edge, as the keg is on the right. */
   margin-left: calc(-0.35rem * var(--ts, 1));
   overflow: hidden;
@@ -356,7 +361,7 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
    and more fit on a screen. */
 .tile.no-desc { min-height: 0; }
 .tile.no-desc .tile-keg { width: calc(56px * var(--ts, 1)); }
-.has-images .tile.no-desc .tile-image { width: calc(96px * var(--ts, 1)); }
+.has-images .tile.no-desc .tile-image { --img-w: calc(96px * var(--ts, 1)); }
 
 @media (max-width: 640px) {
   /* A phone has no room for the large sizes' keg and picture beside the
@@ -369,11 +374,15 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   }
   .tile-keg { width: calc(68px * var(--ts, 1)); }
   .has-images .tile { gap: calc(0.9rem * var(--ts, 1)); }
-  .has-images .tile-image { width: calc(84px * var(--ts, 1)); margin-left: calc(-0.2rem * var(--ts, 1)); }
+  /* The picture and keg are matched in height, as on a larger screen, so
+     the picture ends level with the readings: a 96px picture is 128px tall,
+     as is a 57px keg with its amount. */
+  .has-images .tile-image { --img-w: calc(96px * var(--ts, 1)); margin-left: calc(-0.2rem * var(--ts, 1)); }
+  .has-images .tile-keg { width: calc(57px * var(--ts, 1)); }
   .reading-value { font-size: calc(1rem * var(--ts, 1)); }
   .keg-amount { font-size: calc(1rem * var(--ts, 1)); }
-  .tile.no-desc .tile-keg { width: calc(50px * var(--ts, 1)); }
-  .has-images .tile.no-desc .tile-image { width: calc(72px * var(--ts, 1)); }
+  .tile.no-desc .tile-keg { width: calc(48px * var(--ts, 1)); }
+  .has-images .tile.no-desc .tile-image { --img-w: calc(84px * var(--ts, 1)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
