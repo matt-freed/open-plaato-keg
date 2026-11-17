@@ -71,6 +71,23 @@ func NormalizeMinPourSeconds(seconds int) int {
 	return max(seconds, 0)
 }
 
+// Tile sizes run from the most compact, TileSizeMin, to the largest,
+// TileSizeMax. DefaultTileSize is the tap list's original look.
+const (
+	TileSizeMin     = 1
+	TileSizeMax     = 5
+	DefaultTileSize = 3
+)
+
+// NormalizeTileSize maps any input onto a supported tile size; anything out
+// of range falls back to the default.
+func NormalizeTileSize(size int) int {
+	if size < TileSizeMin || size > TileSizeMax {
+		return DefaultTileSize
+	}
+	return size
+}
+
 // In returns the minimum in a remaining-beer unit such as "lbs" or "litre".
 // Weight units pick up the same litre-per-kilogram assumption as every other
 // conversion in package units.
@@ -126,8 +143,9 @@ type Theme struct {
 	TapListBodyFont  string `json:"taplist_body_font,omitempty"`
 }
 
-// Tap list tile fields that can be hidden. The beer name and the keg graphic
-// always show, so they have no key.
+// Tap list fields that can be hidden: the tile's, and the page's header while
+// it is a kiosk. The beer name and the keg graphic always show, so they have
+// no key.
 const (
 	TapListFieldKegName     = "keg_name"
 	TapListFieldPouring     = "pouring" // the badge and the tile's pouring highlight
@@ -140,14 +158,16 @@ const (
 	TapListFieldKegged      = "kegged"
 	TapListFieldAmount      = "amount" // the figure under the keg graphic
 	TapListFieldImage       = "image"  // the tap's picture, when any tap has one
+	// The header bar while the tap list is full screen or at ?kiosk.
+	TapListFieldKioskHeader = "kiosk_header"
 )
 
-// TapListFields lists every field a tap list tile can hide.
+// TapListFields lists every field the tap list can hide.
 var TapListFields = []string{
 	TapListFieldKegName, TapListFieldPouring, TapListFieldEmpty,
 	TapListFieldStyle, TapListFieldABV, TapListFieldIBU,
 	TapListFieldDescription, TapListFieldTemperature, TapListFieldKegged,
-	TapListFieldAmount, TapListFieldImage,
+	TapListFieldAmount, TapListFieldImage, TapListFieldKioskHeader,
 }
 
 // NormalizeTapListHidden keeps only known field keys, once each and sorted.
@@ -180,6 +200,9 @@ type AppConfig struct {
 	// the hidden ones, not the shown ones, means a field added later shows
 	// by default.
 	TapListHidden []string `json:"taplist_hidden_fields"`
+	// TileSize scales the tap list's tiles, from 1 (compact, more across) to
+	// 5 (large, fewer across). 3 is the original size. Display only.
+	TileSize int `json:"tile_size"`
 }
 
 // DefaultAppConfig is what a fresh installation starts with.
@@ -195,6 +218,7 @@ func DefaultAppConfig() AppConfig {
 		MinPour:        DefaultMinPour,
 		MinPourSeconds: DefaultMinPourSeconds,
 		TapListHidden:  []string{},
+		TileSize:       DefaultTileSize,
 	}
 }
 
@@ -216,6 +240,8 @@ const (
 
 	// One JSON row, like the theme: a list of keys from a closed set.
 	configKeyTapListHidden = "taplist_hidden_fields"
+
+	configKeyTileSize = "tile_size"
 )
 
 // GetAppConfig returns the stored configuration, filling in defaults.
@@ -262,6 +288,10 @@ func getAppConfig(q querier) (AppConfig, error) {
 			var theme Theme
 			if err := json.Unmarshal([]byte(value), &theme); err == nil {
 				cfg.Theme = theme
+			}
+		case configKeyTileSize:
+			if v, err := strconv.Atoi(value); err == nil {
+				cfg.TileSize = NormalizeTileSize(v)
 			}
 		case configKeyTapListHidden:
 			var hidden []string
@@ -351,6 +381,7 @@ func (s *Store) UpdateAppConfig(mutate func(*AppConfig)) (AppConfig, error) {
 		configKeyMinPourSeconds:     strconv.Itoa(cfg.MinPourSeconds),
 		configKeyTheme:              string(theme),
 		configKeyTapListHidden:      string(hidden),
+		configKeyTileSize:           strconv.Itoa(cfg.TileSize),
 	} {
 		if _, err := tx.Exec("INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?)", key, value); err != nil {
 			return AppConfig{}, err
@@ -370,6 +401,7 @@ func normalizeAppConfig(cfg AppConfig) AppConfig {
 	cfg.MinPour = NormalizeMinPour(cfg.MinPour)
 	cfg.MinPourSeconds = NormalizeMinPourSeconds(cfg.MinPourSeconds)
 	cfg.TapListHidden = NormalizeTapListHidden(cfg.TapListHidden)
+	cfg.TileSize = NormalizeTileSize(cfg.TileSize)
 	return cfg
 }
 

@@ -949,6 +949,38 @@ func TestAmountDisplay(t *testing.T) {
 	}
 }
 
+// The tile size defaults to 3, the original look. Sizes 1 to 5 are kept,
+// anything outside them falls back to the default, and a non-number is a 400
+// that changes nothing.
+func TestTileSize(t *testing.T) {
+	a := newTestAPI(t)
+
+	if got := a.getConfig().TileSize; got != store.DefaultTileSize {
+		t.Errorf("default = %d, want %d", got, store.DefaultTileSize)
+	}
+
+	for _, size := range []int{1, 5} {
+		assertStatus(t, a.patchConfig("tile_size", size), http.StatusOK)
+		if cfg, _ := a.store.GetAppConfig(); cfg.TileSize != size {
+			t.Errorf("TileSize = %d after saving %d", cfg.TileSize, size)
+		}
+	}
+
+	for _, size := range []int{0, 9, -1} {
+		a.patchConfig("tile_size", 5)
+		assertStatus(t, a.patchConfig("tile_size", size), http.StatusOK)
+		if cfg, _ := a.store.GetAppConfig(); cfg.TileSize != store.DefaultTileSize {
+			t.Errorf("TileSize = %d after saving %d, want the default", cfg.TileSize, size)
+		}
+	}
+
+	a.patchConfig("tile_size", 2)
+	assertStatus(t, a.patchConfig("tile_size", "big"), http.StatusBadRequest)
+	if cfg, _ := a.store.GetAppConfig(); cfg.TileSize != 2 {
+		t.Errorf("TileSize = %d after a rejected change, want it unchanged", cfg.TileSize)
+	}
+}
+
 // The hidden tap list fields default to none. Unknown keys and repeats are
 // dropped, and an empty list shows every field again.
 func TestTapListHiddenFields(t *testing.T) {
@@ -958,15 +990,15 @@ func TestTapListHiddenFields(t *testing.T) {
 		t.Errorf("default config = %s, want an empty taplist_hidden_fields array", rec.Body.String())
 	}
 
-	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu", "image"})
+	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu", "image", "kiosk_header"})
 	assertStatus(t, rec, http.StatusOK)
 	cfg, _ := a.store.GetAppConfig()
-	if want := []string{"description", "ibu", "image"}; !slices.Equal(cfg.TapListHidden, want) {
+	if want := []string{"description", "ibu", "image", "kiosk_header"}; !slices.Equal(cfg.TapListHidden, want) {
 		t.Errorf("TapListHidden = %q, want %q", cfg.TapListHidden, want)
 	}
 
 	assertStatus(t, a.patchConfig("taplist_hidden_fields", "ibu"), http.StatusBadRequest)
-	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 3 {
+	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 4 {
 		t.Errorf("TapListHidden = %q after a rejected change, want it unchanged", cfg.TapListHidden)
 	}
 

@@ -50,7 +50,16 @@
          screen tall enough to spare the room. */
       .preview-box { padding: 1.1rem; }
       .preview-box .tile { cursor: default; min-height: 0; --accent: #c9a849; }
-      .preview-box .tile-keg { width: 72px; }
+      .preview-box .tile-keg { width: calc(72px * var(--ts, 1)); }
+
+      /* The tile size slider, with its end labels beneath it. */
+      .size-slider { max-width: 28rem; }
+      .size-slider input[type="range"] { display: block; width: 100%; accent-color: var(--action); cursor: pointer; }
+      .size-scale {
+        display: flex; justify-content: space-between;
+        margin-top: 0.3rem; font-size: 0.82rem; color: var(--muted);
+      }
+      .size-scale output { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
       @media (min-width: 700px) and (min-height: 760px) {
         .preview-box {
           position: sticky; top: 0.75rem; z-index: 5;
@@ -77,14 +86,14 @@
           <button class="button is-small" type="button" id="resetAppearance">Restore defaults</button>
         </div>
 
-        <div class="box section-box preview-box">
+        <div class="box section-box preview-box" id="previewBox">
           <h2 class="title is-4">Live Preview</h2>
           <article class="tile" id="pvTile">
             <div class="tile-image"><img alt=""></div>
             <div class="tile-info">
               <div class="tile-meta"><span class="keg-name">Kegerator 1</span></div>
               <h2 class="beer">Pale Ale</h2>
-              <div class="specs"></div>
+              <div class="specs beer-specs"></div>
               <p class="desc"></p>
               <div class="readings"></div>
             </div>
@@ -217,14 +226,25 @@
             <label><input type="checkbox" value="amount" checked> Amount under the keg</label>
             <label><input type="checkbox" value="pouring" checked> Pouring indicator</label>
             <label><input type="checkbox" value="empty" checked> Empty badge</label>
+            <label><input type="checkbox" value="kiosk_header" checked> Header in full screen</label>
+          </div>
+        </div>
+
+        <div class="box section-box">
+          <h2 class="title is-4">Tile size</h2>
+          <div class="field size-slider">
+            <label class="label" for="tileSize">Tap list tile size</label>
+            <input type="range" id="tileSize" min="1" max="5" step="1" value="3">
+            <div class="size-scale" aria-hidden="true">
+              <span>Compact</span>
+              <output id="tileSizeValue" for="tileSize">3</output>
+              <span>Large</span>
+            </div>
           </div>
           <p class="help">
-            What each tap list tile shows. The beer name and keg graphic always show.
-            Beer images are added in Tap Setup; while they show, the tap list is at
-            most two tiles across, and a tap without one gets a panel in its colour.
-            The pouring indicator is the Pouring badge and the tile&rsquo;s glow while
-            beer flows. Neither it nor the Empty badge is in the preview; a keg that runs
-            empty still moves to the Empty section with its badge hidden.
+            Smaller tiles fit more taps on the screen; larger ones
+            are easier to read from a distance and fill the screen when only a few taps
+            are pouring.
           </p>
         </div>
 
@@ -255,6 +275,7 @@
             </div>
             <p class="help">For every time shown: last pours, History and All Pours, connection times on Keg Scale Setup, and the System logs.</p>
           </div>
+
         </div>
 
         <div class="box section-box">
@@ -353,6 +374,7 @@
       };
       const MIN_POUR_DEFAULT = 4;
       const MIN_POUR_SECONDS_DEFAULT = 5;
+      const TILE_SIZE_DEFAULT = 3;
 
       const $ = id => document.getElementById(id);
       // The colour fields: theme key, colour picker, hex text box.
@@ -473,15 +495,28 @@
       }
 
       $('resetAppearance').addEventListener('click', () => {
-        if (!confirm('Restore the default colors, fonts and tap list fields?')) return;
+        if (!confirm('Restore the default colors, fonts, tap list fields and tile size?')) return;
         for (const [key] of COLORS) setColor(key, DEFAULTS[key]);
         for (const [key, id] of FONTS) $(id).value = DEFAULTS[key];
         setHiddenFields([]);
+        setTileSize(TILE_SIZE_DEFAULT);
         applyAppearance();
         clearTimeout(themeTimer);
         // An empty theme is the defaults, so nothing is pinned to today's.
-        saveConfig({ theme: {}, taplist_hidden_fields: [] });
+        saveConfig({ theme: {}, taplist_hidden_fields: [], tile_size: TILE_SIZE_DEFAULT });
       });
+
+      // ── Tile size ──────────────────────────────────────
+      // The preview resizes as the slider moves, and the size saves once it
+      // is let go. tiles.css reads data-tile-size, on the tap list from the
+      // root element and here from the preview's box.
+      function setTileSize(size) {
+        $('tileSize').value = size;
+        $('tileSizeValue').textContent = size;
+        $('previewBox').dataset.tileSize = size;
+      }
+      $('tileSize').addEventListener('input', () => setTileSize(Number($('tileSize').value)));
+      $('tileSize').addEventListener('change', () => saveConfig({ tile_size: Number($('tileSize').value) }));
 
       // ── Tap list fields ────────────────────────────────
       // Stored as the fields to hide, so a field added later shows by default.
@@ -528,7 +563,9 @@
         const img = tile.querySelector('.tile-image img');
         if (imagesOn && img.getAttribute('src') !== sampleImage) img.src = sampleImage;
         tile.querySelector('.keg-name').textContent = shows('keg_name') ? 'Kegerator 1' : '';
-        tile.classList.toggle('hide-meta', !shows('keg_name'));
+        tile.classList.toggle('no-desc', !shows('description'));
+        // As on the tap list, for a keg that is not empty.
+        tile.classList.toggle('hide-meta', !shows('keg_name') && !shows('pouring'));
         tile.querySelector('.specs').innerHTML = [
           shows('style') && '<span class="style">American Pale Ale</span>',
           shows('abv') && '<span>5.4% ABV</span>',
@@ -697,6 +734,7 @@
           $('minPourSeconds').value = savedMinPourSeconds = cfg.min_pour_seconds ?? MIN_POUR_SECONDS_DEFAULT;
 
           setHiddenFields(cfg.taplist_hidden_fields || []);
+          setTileSize(cfg.tile_size || TILE_SIZE_DEFAULT);
           const taps = await api('GET', '/api/taps').catch(() => []);
           setImageAvailable(taps.find(t => t.image)?.image ?? null);
 

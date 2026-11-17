@@ -97,6 +97,29 @@ site-header { display: block; }
 .kiosk .site-nav { display: none; }
 .kiosk.cursor-idle, .kiosk.cursor-idle * { cursor: none !important; }
 
+/* With kiosk-hide-header, which Dashboard Setup sets, a kiosk gives the
+   header's room to the page. Moving the mouse or touching the screen brings
+   it back over the page, so full screen can still be left without a key, and
+   it goes again with the cursor. */
+.kiosk.kiosk-hide-header site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.3s, transform 0.3s;
+}
+.kiosk.kiosk-hide-header.cursor-idle site-header {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kiosk.kiosk-hide-header site-header { transition: none; }
+}
+
 @media (max-width: 640px) {
   .site-header { flex-wrap: wrap; }
 }

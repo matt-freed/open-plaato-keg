@@ -444,6 +444,16 @@ list fails in a kiosk, so tiles cannot be dragged or opened; `render` leaves
 the Empty section out; and `holdWakeLock` holds a screen wake lock, asked for
 again on `visibilitychange` and released when the kiosk ends.
 
+Hiding the `kiosk_header` tap list field on Dashboard Setup hides the whole
+header in a kiosk to give its room to the tiles. The tap list's
+`loadSettings` then puts a `kiosk-hide-header` class on `<html>`, and
+`site-header.css` then fixes the header over the page and slides it away
+while `cursor-idle` is set. Moving the mouse or touching the screen clears
+`cursor-idle`, so the header, with its button to leave full screen, comes back
+for three seconds; a touch counts through `pointerdown`, since a tap may not
+move a pointer. Without that, a touch screen with no Esc key could not leave
+full screen. Display only; the header shows by default.
+
 The pages are styled as one application, in the tap list's look:
 
 - `tokens.css` holds the design tokens every page loads first: the page, tile
@@ -454,7 +464,8 @@ The pages are styled as one application, in the tap list's look:
   page: the heading, specs, readings and the keg graphic. A `has-images` class
   on the grid, which only the tap list sets, adds each tap's picture on the
   left of its tile (a panel in the beer's colour for a tap without one) and
-  caps the grid at two across instead of three. The tap list sets it when the
+  caps the grid at two across instead of three (at the standard tile size;
+  see Tile size below). The tap list sets it when the
   `image` field is not hidden and at least one tap has a picture, so with no
   pictures the tap list is unchanged. Tap Setup shrinks a chosen picture to at
   most 900×1200 as a JPEG in the browser and uploads it after the tap is saved,
@@ -734,8 +745,43 @@ repeats. The tap list reads the setting with `amount_display` in
 `loadSettings`, on load and on the minute reload, and `updateTile` leaves each
 hidden field out. Hiding `pouring` keeps `is-pouring` off the tile, which
 removes the badge and the glow together. Hiding `empty` hides only the badge,
-since `is-empty` also decides which section the tile is in. Presentation only:
+since `is-empty` also decides which section the tile is in. With both the
+keg name and `pouring` hidden, `hide-meta` drops the tile's top row and the
+beer name moves up, unless the tile is showing its Empty badge; while
+`pouring` shows, the row stays, so the name does not jump when a pour starts.
+Hiding `description` adds `no-desc` to every tile, which draws the keg and
+picture smaller and drops the tile's minimum height. The keg graphic, not the
+text, would otherwise set the height, and the tile could not shrink. `kiosk_header` is
+the page's header rather than a tile's, hidden only in a kiosk (see Kiosk mode
+above). Presentation only:
 nothing is sent to the device.
+
+### Tile size
+
+`tile_size` is a whole number from 1 (compact) to 5 (large), set with the
+slider on Dashboard Setup; 3, the default, is the standard size.
+`store.NormalizeTileSize` turns anything outside 1 to 5 into 3. It applies to
+the tap list only: `loadSettings` sets it as `data-tile-size` on the root
+element, on load and on the minute reload. Dashboard Setup sets it on the
+preview's box instead, so the preview tile resizes as the slider moves; the
+slider saves when it is let go.
+
+`tiles.css` does the rest with inherited custom properties that each
+`[data-tile-size]` rule sets. `--ts` multiplies every size in the tile: type,
+padding, gaps, the keg graphic and the tap picture. `--cols-wide`,
+`--cols-narrow` (below 1200px) and `--cols-img` (with pictures) cap the tiles
+across. `--min-col`, the narrowest a column may get before the row drops one,
+is 340px scaled by `--ts`. With pictures it also adds the picture's largest
+width and its gap, so the picture never takes its room from the text; without
+that, the text was squeezed between picture and keg just above each
+breakpoint and the tile grew tall. Every use falls back to the standard size's
+value, so size 3 has no rule of its own. Without pictures it looks as the tap
+list always has; with them it drops to fewer columns sooner as the window
+narrows. Below 640px sizes 4 and 5 are drawn at the standard size, as a
+phone has no room for their keg and picture beside the text. The Keg Scales
+page sets no
+size and so always draws standard tiles. Presentation only: nothing is sent to
+the device.
 
 ## BarHelper — `internal/barhelper`
 
