@@ -143,8 +143,9 @@ type Theme struct {
 	TapListBodyFont  string `json:"taplist_body_font,omitempty"`
 }
 
-// Tap list tile fields that can be hidden. The beer name and the keg graphic
-// always show, so they have no key.
+// Tap list fields that can be hidden: the tile's, and the page's header while
+// it is a kiosk. The beer name and the keg graphic always show, so they have
+// no key.
 const (
 	TapListFieldKegName     = "keg_name"
 	TapListFieldPouring     = "pouring" // the badge and the tile's pouring highlight
@@ -157,14 +158,16 @@ const (
 	TapListFieldKegged      = "kegged"
 	TapListFieldAmount      = "amount" // the figure under the keg graphic
 	TapListFieldImage       = "image"  // the tap's picture, when any tap has one
+	// The header bar while the tap list is full screen or at ?kiosk.
+	TapListFieldKioskHeader = "kiosk_header"
 )
 
-// TapListFields lists every field a tap list tile can hide.
+// TapListFields lists every field the tap list can hide.
 var TapListFields = []string{
 	TapListFieldKegName, TapListFieldPouring, TapListFieldEmpty,
 	TapListFieldStyle, TapListFieldABV, TapListFieldIBU,
 	TapListFieldDescription, TapListFieldTemperature, TapListFieldKegged,
-	TapListFieldAmount, TapListFieldImage,
+	TapListFieldAmount, TapListFieldImage, TapListFieldKioskHeader,
 }
 
 // NormalizeTapListHidden keeps only known field keys, once each and sorted.

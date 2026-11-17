@@ -990,15 +990,15 @@ func TestTapListHiddenFields(t *testing.T) {
 		t.Errorf("default config = %s, want an empty taplist_hidden_fields array", rec.Body.String())
 	}
 
-	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu", "image"})
+	rec := a.patchConfig("taplist_hidden_fields", []string{"ibu", "description", "bogus", "ibu", "image", "kiosk_header"})
 	assertStatus(t, rec, http.StatusOK)
 	cfg, _ := a.store.GetAppConfig()
-	if want := []string{"description", "ibu", "image"}; !slices.Equal(cfg.TapListHidden, want) {
+	if want := []string{"description", "ibu", "image", "kiosk_header"}; !slices.Equal(cfg.TapListHidden, want) {
 		t.Errorf("TapListHidden = %q, want %q", cfg.TapListHidden, want)
 	}
 
 	assertStatus(t, a.patchConfig("taplist_hidden_fields", "ibu"), http.StatusBadRequest)
-	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 3 {
+	if cfg, _ := a.store.GetAppConfig(); len(cfg.TapListHidden) != 4 {
 		t.Errorf("TapListHidden = %q after a rejected change, want it unchanged", cfg.TapListHidden)
 	}
 

@@ -444,6 +444,16 @@ list fails in a kiosk, so tiles cannot be dragged or opened; `render` leaves
 the Empty section out; and `holdWakeLock` holds a screen wake lock, asked for
 again on `visibilitychange` and released when the kiosk ends.
 
+Hiding the `kiosk_header` tap list field on Dashboard Setup hides the whole
+header in a kiosk to give its room to the tiles. The tap list's
+`loadSettings` then puts a `kiosk-hide-header` class on `<html>`, and
+`site-header.css` then fixes the header over the page and slides it away
+while `cursor-idle` is set. Moving the mouse or touching the screen clears
+`cursor-idle`, so the header, with its button to leave full screen, comes back
+for three seconds; a touch counts through `pointerdown`, since a tap may not
+move a pointer. Without that, a touch screen with no Esc key could not leave
+full screen. Display only; the header shows by default.
+
 The pages are styled as one application, in the tap list's look:
 
 - `tokens.css` holds the design tokens every page loads first: the page, tile
@@ -735,7 +745,9 @@ repeats. The tap list reads the setting with `amount_display` in
 `loadSettings`, on load and on the minute reload, and `updateTile` leaves each
 hidden field out. Hiding `pouring` keeps `is-pouring` off the tile, which
 removes the badge and the glow together. Hiding `empty` hides only the badge,
-since `is-empty` also decides which section the tile is in. Presentation only:
+since `is-empty` also decides which section the tile is in. `kiosk_header` is
+the page's header rather than a tile's, hidden only in a kiosk (see Kiosk mode
+above). Presentation only:
 nothing is sent to the device.
 
 ### Tile size

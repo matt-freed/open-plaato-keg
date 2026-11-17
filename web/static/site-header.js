@@ -15,7 +15,9 @@
 // pages, such as Safari on an iPhone, the button is left out.
 //
 // On a page whose <html> carries the `kiosk` class, site-header.css hides the
-// navigation and leaves the title, the count and the full-screen button.
+// navigation and leaves the title, the count and the full-screen button. With
+// `kiosk-hide-header` as well, the whole bar is hidden until the page's
+// `cursor-idle` class comes off.
 (() => {
   const LINKS = [
     ['/taplist.html', 'Tap List'],

@@ -45,6 +45,9 @@
     .status a { color: var(--text); }
     .status:empty { display: none; }
 
+    /* A kiosk without its header starts the tiles a gutter from the top. */
+    .kiosk.kiosk-hide-header main { padding-top: clamp(1rem, 3vw, 2.5rem); }
+
   </style>
 </head>
 <body>
@@ -362,6 +365,8 @@
         hidden = new Set(cfg.taplist_hidden_fields || []);
         // tiles.css sizes the tiles and their columns from this.
         document.documentElement.dataset.tileSize = cfg.tile_size || 3;
+        // site-header.css hides the header in a kiosk while this is on.
+        document.documentElement.classList.toggle('kiosk-hide-header', !shows('kiosk_header'));
       } catch (_) {}
     }
 
@@ -420,7 +425,9 @@
     if (KIOSK_URL) holdWakeLock(true);
 
     // The cursor hides once the mouse has been still for a few seconds and
-    // comes back as soon as it moves. site-header.css only hides it in a kiosk.
+    // comes back as soon as it moves. site-header.css only hides it in a kiosk,
+    // where a hidden header follows it; a touch, which may not move a pointer
+    // at all, counts as a move so a touch screen can bring the header back.
     const CURSOR_IDLE_MS = 3000;
     let idleTimer;
     function cursorMoved() {
@@ -429,6 +436,7 @@
       idleTimer = setTimeout(() => document.documentElement.classList.add('cursor-idle'), CURSOR_IDLE_MS);
     }
     document.addEventListener('pointermove', cursorMoved);
+    document.addEventListener('pointerdown', cursorMoved);
     cursorMoved();
 
     loadAll();
