@@ -89,10 +89,14 @@
    beer's colour, so the tiles still line up. */
 .tile-image { display: none; }
 .has-images .tile { grid-template-columns: auto 1fr auto; }
+/* At its top, so it lines up with the beer name however tall the row is. Its
+   narrowest is just tall enough to match the keg beside it (92px wide, so
+   about 192px with its amount), so the two also end level; a narrower one
+   left the row's height to the keg. */
 .has-images .tile-image {
   display: block;
-  align-self: center;
-  width: calc(clamp(110px, 10vw, 150px) * var(--ts, 1));
+  align-self: start;
+  width: calc(clamp(144px, 10vw, 150px) * var(--ts, 1));
   aspect-ratio: 3 / 4;
   /* Pulled toward the tile's left edge, as the keg is on the right. */
   margin-left: calc(-0.35rem * var(--ts, 1));
