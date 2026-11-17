@@ -160,7 +160,8 @@
 }
 .tile.is-empty .empty { display: inline-flex; }
 /* Fields hidden on Dashboard Setup. A hidden Empty badge leaves the tile in
-   the Empty section, and a top row with nothing left to show goes. */
+   the Empty section, and a top row with nothing to show goes, moving the
+   beer name up; the tap list's updateTile decides when. */
 .tile.hide-empty .empty { display: none; }
 .tile.hide-meta .tile-meta { display: none; }
 /* The tile recedes so the taps still pouring stand out, but the top row with

@@ -575,7 +575,8 @@
         const img = tile.querySelector('.tile-image img');
         if (imagesOn && img.getAttribute('src') !== sampleImage) img.src = sampleImage;
         tile.querySelector('.keg-name').textContent = shows('keg_name') ? 'Kegerator 1' : '';
-        tile.classList.toggle('hide-meta', !shows('keg_name'));
+        // As on the tap list, for a keg that is not empty.
+        tile.classList.toggle('hide-meta', !shows('keg_name') && !shows('pouring'));
         tile.querySelector('.specs').innerHTML = [
           shows('style') && '<span class="style">American Pale Ale</span>',
           shows('abv') && '<span>5.4% ABV</span>',

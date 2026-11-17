@@ -201,7 +201,12 @@
       tile.classList.toggle('is-pouring', keg?.is_pouring === true && shows('pouring'));
       tile.classList.toggle('is-empty', isKegEmpty(keg));
       tile.classList.toggle('hide-empty', !shows('empty'));
-      tile.classList.toggle('hide-meta', !['keg_name', 'pouring', 'empty'].some(shows));
+      // The top row goes when it has nothing to show, so the beer name moves
+      // up into its place. A shown pouring badge keeps the row, so the name
+      // does not jump each time a pour starts; the Empty badge needs it only
+      // on an empty keg, which sits in its own section.
+      tile.classList.toggle('hide-meta', !shows('keg_name') && !shows('pouring') &&
+        !(tile.classList.contains('is-empty') && shows('empty')));
 
       tile.querySelector('.keg-name').textContent =
         keg && shows('keg_name') ? kegName(keg, Object.keys(kegs).indexOf(keg.id)) : '';

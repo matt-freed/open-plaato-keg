@@ -745,7 +745,10 @@ repeats. The tap list reads the setting with `amount_display` in
 `loadSettings`, on load and on the minute reload, and `updateTile` leaves each
 hidden field out. Hiding `pouring` keeps `is-pouring` off the tile, which
 removes the badge and the glow together. Hiding `empty` hides only the badge,
-since `is-empty` also decides which section the tile is in. `kiosk_header` is
+since `is-empty` also decides which section the tile is in. With both the
+keg name and `pouring` hidden, `hide-meta` drops the tile's top row and the
+beer name moves up, unless the tile is showing its Empty badge; while
+`pouring` shows, the row stays, so the name does not jump when a pour starts. `kiosk_header` is
 the page's header rather than a tile's, hidden only in a kiosk (see Kiosk mode
 above). Presentation only:
 nothing is sent to the device.
