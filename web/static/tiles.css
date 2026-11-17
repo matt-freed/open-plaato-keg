@@ -273,7 +273,10 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   color: var(--muted);
 }
 .desc:empty { display: none; }
-.specs .style { color: var(--text); opacity: 0.85; }
+/* The tap list's style, ABV, IBU and description share one colour, near
+   the text's, for contrast against the tile. The Keg Scales page's own
+   specs lines stay muted. */
+.beer-specs span, .desc { color: var(--text); opacity: 0.85; }
 .specs span + span::before {
   content: "";
   display: inline-block;
