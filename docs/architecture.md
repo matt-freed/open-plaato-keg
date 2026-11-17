@@ -752,9 +752,16 @@ slider saves when it is let go.
 `[data-tile-size]` rule sets. `--ts` multiplies every size in the tile: type,
 padding, gaps, the keg graphic and the tap picture. `--cols-wide`,
 `--cols-narrow` (below 1200px) and `--cols-img` (with pictures) cap the tiles
-across, and `--min-col` is the narrowest a column may get before the row drops
-one. Every use falls back to the standard size's value, so size 3 has no rule
-of its own and looks as the tap list always has. The Keg Scales page sets no
+across. `--min-col`, the narrowest a column may get before the row drops one,
+is 340px scaled by `--ts`. With pictures it also adds the picture's largest
+width and its gap, so the picture never takes its room from the text; without
+that, the text was squeezed between picture and keg just above each
+breakpoint and the tile grew tall. Every use falls back to the standard size's
+value, so size 3 has no rule of its own. Without pictures it looks as the tap
+list always has; with them it drops to fewer columns sooner as the window
+narrows. Below 640px sizes 4 and 5 are drawn at the standard size, as a
+phone has no room for their keg and picture beside the text. The Keg Scales
+page sets no
 size and so always draws standard tiles. Presentation only: nothing is sent to
 the device.
 

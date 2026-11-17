@@ -7,25 +7,24 @@
    ancestor of the grid; only the tap list and Dashboard Setup's preview set
    it. --ts scales the tile's type, spacing, keg and picture. The column
    variables are the most tiles across: --cols-wide from 1200px, --cols-narrow
-   below that, --cols-img with tap pictures shown. --min-col is the narrowest a
-   tile may get before the row drops a column. Size 3, or no size at all, is
-   the fallbacks used below. The smallest labels have a floor, so the
+   below that, --cols-img with tap pictures shown. Size 3, or no size at all,
+   is the fallbacks used below. The smallest labels have a floor, so the
    compact sizes stay legible. */
 [data-tile-size="1"] {
   --ts: 0.72;
-  --cols-wide: 5; --cols-narrow: 3; --cols-img: 3; --min-col: 200px;
+  --cols-wide: 5; --cols-narrow: 3; --cols-img: 3;
 }
 [data-tile-size="2"] {
   --ts: 0.86;
-  --cols-wide: 4; --cols-narrow: 3; --cols-img: 3; --min-col: 260px;
+  --cols-wide: 4; --cols-narrow: 3; --cols-img: 3;
 }
 [data-tile-size="4"] {
   --ts: 1.18;
-  --cols-wide: 2; --cols-narrow: 2; --cols-img: 2; --min-col: 420px;
+  --cols-wide: 2; --cols-narrow: 2; --cols-img: 2;
 }
 [data-tile-size="5"] {
   --ts: 1.4;
-  --cols-wide: 2; --cols-narrow: 2; --cols-img: 2; --min-col: 520px;
+  --cols-wide: 2; --cols-narrow: 2; --cols-img: 2;
 }
 
 .grid {
@@ -36,8 +35,12 @@
      the row, and narrower screens drop columns from there. At the default
      size that is three across. */
   --cols: var(--cols-wide, 3);
+  /* The narrowest a tile may get before the row drops a column. It scales
+     with the tile, so every size keeps the same room for its text beside
+     the keg. */
+  --min-col: calc(340px * var(--ts, 1));
   grid-template-columns: repeat(auto-fill,
-    minmax(max(min(100%, var(--min-col, 340px)),
+    minmax(max(min(100%, var(--min-col)),
                calc((100% - (var(--cols) - 1) * var(--gap)) / var(--cols))), 1fr));
   gap: var(--gap);
 }
@@ -48,8 +51,15 @@
 }
 
 /* With tap pictures shown the tiles are wider, so fewer across: never more
-   than two at the default size. Only the tap list sets has-images. */
-.grid.has-images { --cols: var(--cols-img, 2); }
+   than two at the default size. The narrowest tile also widens by the
+   picture's largest width and its gap, so the picture never takes its room
+   from the text; otherwise, just above a breakpoint, the text was squeezed
+   between picture and keg and the tile grew tall. Only the tap list sets
+   has-images. */
+.grid.has-images {
+  --cols: var(--cols-img, 2);
+  --min-col: calc((340px + 150px + 1.25rem) * var(--ts, 1));
+}
 
 /* ─── Tile ───────────────────────────────────── */
 .tile {
@@ -336,6 +346,9 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
 }
 
 @media (max-width: 640px) {
+  /* A phone has no room for the large sizes' keg and picture beside the
+     text, so they are drawn at the standard size. */
+  [data-tile-size="4"], [data-tile-size="5"] { --ts: 1; }
   .tile {
     padding: calc(1.2rem * var(--ts, 1)) calc(1rem * var(--ts, 1))
              calc(1.1rem * var(--ts, 1)) calc(1.2rem * var(--ts, 1));
