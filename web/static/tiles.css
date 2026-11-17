@@ -346,6 +346,14 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   color: var(--muted);
 }
 
+/* With descriptions hidden on Dashboard Setup the text is short, and the keg
+   graphic, not the text, would set the tile's height. The keg and picture are
+   drawn smaller and the minimum height goes, so the tile shrinks to its text
+   and more fit on a screen. */
+.tile.no-desc { min-height: 0; }
+.tile.no-desc .tile-keg { width: calc(56px * var(--ts, 1)); }
+.has-images .tile.no-desc .tile-image { width: calc(96px * var(--ts, 1)); }
+
 @media (max-width: 640px) {
   /* A phone has no room for the large sizes' keg and picture beside the
      text, so they are drawn at the standard size. */
@@ -360,6 +368,8 @@ a.tile-menu-item:focus-visible { background: var(--line-strong); color: var(--te
   .has-images .tile-image { width: calc(84px * var(--ts, 1)); margin-left: calc(-0.2rem * var(--ts, 1)); }
   .reading-value { font-size: calc(1rem * var(--ts, 1)); }
   .keg-amount { font-size: calc(1rem * var(--ts, 1)); }
+  .tile.no-desc .tile-keg { width: calc(50px * var(--ts, 1)); }
+  .has-images .tile.no-desc .tile-image { width: calc(72px * var(--ts, 1)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

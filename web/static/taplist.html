@@ -201,6 +201,8 @@
       tile.classList.toggle('is-pouring', keg?.is_pouring === true && shows('pouring'));
       tile.classList.toggle('is-empty', isKegEmpty(keg));
       tile.classList.toggle('hide-empty', !shows('empty'));
+      // Hidden descriptions shrink the keg and picture, so the tile can too.
+      tile.classList.toggle('no-desc', !shows('description'));
       // The top row goes when it has nothing to show, so the beer name moves
       // up into its place. A shown pouring badge keeps the row, so the name
       // does not jump each time a pour starts; the Empty badge needs it only
