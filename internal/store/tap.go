@@ -34,6 +34,9 @@ type Tap struct {
 	KeggedDate string `json:"kegged_date"`
 	// KegID links the tap to a keg, so the tap list can show what is left.
 	KegID string `json:"keg_id"`
+	// Glass is the glass the tap list draws in place of a picture, one of
+	// GlassStyles, or "" for the default pint.
+	Glass string `json:"glass"`
 	// Image is the URL of the tap's picture, or "" when it has none. It is
 	// read from tap_images and never written through SaveTap; the version in
 	// the query string changes whenever the picture does, so it can be cached.
@@ -55,15 +58,30 @@ func IsColorPreset(name string) bool {
 	return false
 }
 
+// GlassStyles are the glasses a tap can show when it has no picture. The UI
+// draws each; "" means the default, a pint.
+var GlassStyles = []string{"pint", "nonic", "boston", "tulip", "snifter", "pilsner", "weizen", "goblet", "mug", "dimpled", "flute"}
+
+// IsGlassStyle reports whether name is one of GlassStyles. The empty string
+// means the default and is not one.
+func IsGlassStyle(name string) bool {
+	for _, g := range GlassStyles {
+		if g == name {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultTapColor is the accent used when a tap has no colour set.
 const DefaultTapColor = "#c9a849"
 
 const tapColumns = `id, tap_number, name, brewery, style, abv, ibu, srm, color_preset, color,
-	description, tasting_notes, kegged_date, keg_id`
+	description, tasting_notes, kegged_date, keg_id, glass`
 
 // tapSelect reads a tap with its picture's version, which scanTap expects.
 const tapSelect = `SELECT t.id, t.tap_number, t.name, t.brewery, t.style, t.abv, t.ibu, t.srm,
-	t.color_preset, t.color, t.description, t.tasting_notes, t.kegged_date, t.keg_id,
+	t.color_preset, t.color, t.description, t.tasting_notes, t.kegged_date, t.keg_id, t.glass,
 	i.updated_at
 	FROM taps t LEFT JOIN tap_images i ON i.tap_id = t.id`
 
@@ -72,7 +90,7 @@ func scanTap(row interface{ Scan(...any) error }) (*Tap, error) {
 	var imageVersion *int64
 	err := row.Scan(&t.ID, &t.TapNumber, &t.Name, &t.Brewery, &t.Style, &t.ABV, &t.IBU,
 		&t.SRM, &t.ColorPreset, &t.Color, &t.Description, &t.TastingNotes, &t.KeggedDate, &t.KegID,
-		&imageVersion)
+		&t.Glass, &imageVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -152,9 +170,9 @@ func (s *Store) SaveTap(t *Tap) error {
 	}
 
 	if _, err := tx.Exec(`INSERT OR REPLACE INTO taps (`+tapColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.TapNumber, t.Name, t.Brewery, t.Style, t.ABV, t.IBU, t.SRM, t.ColorPreset, t.Color,
-		t.Description, t.TastingNotes, t.KeggedDate, t.KegID); err != nil {
+		t.Description, t.TastingNotes, t.KeggedDate, t.KegID, t.Glass); err != nil {
 		return err
 	}
 	return tx.Commit()

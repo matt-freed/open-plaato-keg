@@ -710,6 +710,34 @@ func TestColorPresetValidation(t *testing.T) {
 	assertStatus(t, rec, http.StatusBadRequest)
 }
 
+// A tap's glass is one of the known styles, or "" for the default pint.
+func TestTapGlass(t *testing.T) {
+	a := newTestAPI(t)
+	type saved struct {
+		Tap store.Tap `json:"tap"`
+	}
+
+	rec := a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Stout", "glass": " snifter "})
+	assertStatus(t, a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Lager", "glass": "boston"}), http.StatusCreated)
+	assertStatus(t, a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Märzen", "glass": "dimpled"}), http.StatusCreated)
+	assertStatus(t, rec, http.StatusCreated)
+	var created saved
+	a.decode(rec, &created)
+	if got, _ := a.store.GetTap(created.Tap.ID); got.Glass != "snifter" {
+		t.Errorf("Glass = %q, want snifter", got.Glass)
+	}
+
+	// A replace without a glass goes back to the default.
+	rec = a.do(http.MethodPut, "/api/taps/"+created.Tap.ID, map[string]any{"name": "Stout"})
+	assertStatus(t, rec, http.StatusOK)
+	if got, _ := a.store.GetTap(created.Tap.ID); got.Glass != "" {
+		t.Errorf("Glass = %q after a save without one, want the default", got.Glass)
+	}
+
+	rec = a.do(http.MethodPost, "/api/taps", map[string]any{"name": "Oops", "glass": "boot"})
+	assertStatus(t, rec, http.StatusBadRequest)
+}
+
 func TestTapKeggedDate(t *testing.T) {
 	a := newTestAPI(t)
 

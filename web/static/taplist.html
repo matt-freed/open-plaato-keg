@@ -65,6 +65,7 @@
 
   <script src="/beer-color.js"></script>
   <script src="/keg-graphic.js"></script>
+  <script src="/glass-graphic.js"></script>
   <script src="/tile-menu.js"></script>
   <script src="/tile-gestures.js"></script>
   <script src="/live.js"></script>
@@ -148,7 +149,7 @@
       tile.className = 'tile';
       tile.dataset.tapId = tap.id;
       tile.innerHTML = `
-        <div class="tile-image"><img alt="" draggable="false"></div>
+        <div class="tile-image"><img alt="" draggable="false"><div class="tile-glass"></div></div>
         <div class="tile-info">
           <div class="tile-meta">
             <span class="keg-name"></span>
@@ -181,6 +182,13 @@
         else img.removeAttribute('src');
       }
       tile.classList.toggle('no-image', !tap.image);
+      // A tap without a picture shows its glass, redrawn only when the glass
+      // changes.
+      const glass = tap.image ? '' : tap.glass || 'pint';
+      if ((tile.dataset.glass ?? '') !== glass) {
+        tile.dataset.glass = glass;
+        tile.querySelector('.tile-glass').innerHTML = glass ? glassSvg(glass) : '';
+      }
 
       // Readings arrive converted into the chosen display units; the raw
       // fields are only a fallback for a keg that has no display block.
@@ -273,9 +281,10 @@
         return;
       }
 
-      // Pictures take a column, so the grid narrows to two across; with none
-      // to show the tap list is exactly as it was without them.
-      const imagesOn = shows('image') && taps.some(t => t.image);
+      // Pictures take a column, so the grid narrows to two across. Every tap
+      // has one to show, its upload or its glass, unless Dashboard Setup
+      // hides them.
+      const imagesOn = shows('image');
       grid.classList.toggle('has-images', imagesOn);
       emptyGrid.classList.toggle('has-images', imagesOn);
 

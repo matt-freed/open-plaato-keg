@@ -268,6 +268,7 @@ A tap body takes these fields, all optional:
 | `description`, `tasting_notes` | string | |
 | `kegged_date` | string | When the beer was kegged, as `YYYY-MM-DD` or `DD.MM.YYYY`; stored as `YYYY-MM-DD`. Anything that is not a real date is a 400; empty means none |
 | `keg_id` | string | The keg this tap draws from, so the card can show what is left. A keg feeds at most one tap |
+| `glass` | string | The glass the tap list draws, in the beer's colour, when the tap has no picture: `pint`, `nonic`, `boston` (a shaker that bulges below a flared lip), `tulip`, `snifter`, `pilsner`, `weizen`, `goblet`, `mug`, `dimpled` (a German dimpled mug) or `flute`. Empty, the default, draws a pint; anything else is a 400 |
 
 A tap read back also has `image`: the URL of its picture, or `""` when it has
 none. It changes whenever the picture does. It is set through
@@ -291,7 +292,7 @@ none. It changes whenever the picture does. It is set through
 | `min_pour` | `{"value": 4, "unit": "oz"\|"ml"}` | The smallest pouring window recorded as a pour; default 4 oz. Changing it only affects future pours |
 | `min_pour_seconds` | A whole number, e.g. `5` | The shortest pouring window recorded as a pour, in seconds; default 5, and 0 turns it off. Windows are timed to the whole second. Changing it only affects future pours |
 | `theme` | A theme object | Colours and fonts |
-| `taplist_hidden_fields` | An array, e.g. `["ibu", "temperature"]` | Tap list tile fields to hide, from `keg_name`, `pouring` (the badge and the tile's glow), `empty` (the badge only; the tile still moves to Empty), `style`, `abv`, `ibu`, `description`, `temperature`, `kegged`, `amount` (the figure under the keg), `kiosk_header` (the header bar while the tap list is full screen or at `?kiosk`; moving the mouse or touching the screen brings it back for a few seconds) and `image` (the tap's picture; while shown, and at least one tap has one, the tap list fits fewer tiles across: two at the standard `tile_size`). Unknown keys and repeats are dropped; default `[]` shows everything. Display only |
+| `taplist_hidden_fields` | An array, e.g. `["ibu", "temperature"]` | Tap list tile fields to hide, from `keg_name`, `pouring` (the badge and the tile's glow), `empty` (the badge only; the tile still moves to Empty), `style`, `abv`, `ibu`, `description`, `temperature`, `kegged`, `amount` (the figure under the keg), `kiosk_header` (the header bar while the tap list is full screen or at `?kiosk`; moving the mouse or touching the screen brings it back for a few seconds) and `image` (the tap's picture, or its `glass` when it has none; while shown, the tap list fits fewer tiles across: two at the standard `tile_size`). Unknown keys and repeats are dropped; default `[]` shows everything. Display only |
 | `tile_size` | A whole number, `1` to `5` | How large the tap list's tiles are: 1 is the most compact, up to five across; 5 is the largest, at most two across. Default 3, the standard size; anything outside 1 to 5 falls back to it. Display only |
 
 An unrecognised value of a known key, such as a `home_page` of `"garage"`,

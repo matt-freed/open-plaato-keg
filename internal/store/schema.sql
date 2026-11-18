@@ -129,7 +129,10 @@ CREATE TABLE IF NOT EXISTS taps (
     -- When the beer was kegged, as YYYY-MM-DD, or ''. Held on the tap; the
     -- keg's own keg_date is not used for it.
     kegged_date     TEXT NOT NULL DEFAULT '',
-    keg_id          TEXT NOT NULL DEFAULT ''
+    keg_id          TEXT NOT NULL DEFAULT '',
+    -- The glass (see GlassStyles) the tap list draws when the tap has no
+    -- picture, or '' for the default pint.
+    glass           TEXT NOT NULL DEFAULT ''
 );
 
 -- A tap's picture for the tap list, at most one per tap. Kept out of taps
