@@ -463,17 +463,25 @@ The pages are styled as one application, in the tap list's look:
 - `tiles.css` is the tile grid and tile shared by the tap list and the Keg Scales
   page: the heading, specs, readings and the keg graphic. A `has-images` class
   on the grid, which only the tap list sets, adds each tap's picture on the
-  left of its tile (a panel in the beer's colour for a tap without one) and
-  caps the grid at two across instead of three (at the standard tile size;
-  see Tile size below). The tap list sets it when the
-  `image` field is not hidden and at least one tap has a picture, so with no
-  pictures the tap list is unchanged. Tap Setup shrinks a chosen picture to at
+  left of its tile and caps the grid at two across instead of three (at the
+  standard tile size; see Tile size below). A tap without a picture shows its
+  glass instead, on a panel in the beer's colour, so every tap has something
+  there. The tap list sets `has-images` whenever the `image` field is not
+  hidden, whether or not any tap has an uploaded picture. Tap Setup shrinks a chosen picture to at
   most 900×1200 as a JPEG in the browser and uploads it after the tap is saved,
   since a new tap has no id until then.
 - `keg-graphic.js` draws that graphic, `kegSvg()`, and `kegLevelTransform(pct)`
   sets its level. The tap list, the Keg Scales page and the Dashboard Setup preview
   use it. It also holds `isKegEmpty` and `keepEmptyInPlace`, which the tap
   list and the Keg Scales page share.
+- `glass-graphic.js` draws the glass a tap without a picture shows,
+  `glassSvg(key)`, and lists the styles in `GLASSES`, whose keys match
+  `store.GlassStyles`. A tap's `glass` is chosen in Tap Setup; `""`, the
+  default for every tap, draws a pint. The beer uses the keg graphic's
+  `liquid-fill` and `liquid-surface` classes and `--accent`, so the tile's
+  rules for clear drinks and empty kegs apply to it too, and a clear drink is
+  drawn without a head. The tap list, Tap Setup and the Dashboard Setup preview
+  use it.
 - `common.js` holds the helpers every page loads before its own script:
   `esc` for HTML, `kegName` and `kegNameWithBeer` for naming a scale
   ("Keg Scale n" when it has no label), `api` for JSON requests, which throws

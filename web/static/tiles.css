@@ -84,9 +84,9 @@
 .tile:hover { border-color: var(--line-strong); }
 
 /* ─── Tap picture ────────────────────────────── */
-/* Drawn only inside has-images: on the tap list when Dashboard Setup shows
-   pictures and at least one tap has one. A tap with none gets a panel in its
-   beer's colour, so the tiles still line up. */
+/* Drawn only inside has-images: on the tap list unless Dashboard Setup
+   hides pictures. A tap with none gets the glass chosen in Tap Setup, from
+   glass-graphic.js, on a panel in its beer's colour. */
 .tile-image { display: none; }
 .has-images .tile { grid-template-columns: auto 1fr auto; }
 /* The picture runs the full height of the row, from the beer name to the
@@ -111,6 +111,16 @@
 }
 .tile-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .tile.no-image .tile-image img { display: none; }
+.tile-glass { display: none; }
+.tile.no-image .tile-glass {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+.tile-glass svg { display: block; width: 84%; max-height: 84%; overflow: visible; }
+/* A clear drink, such as sparkling water, has no head. */
+.is-clear .glass-foam { display: none; }
 .tile.is-pouring {
   border-color: color-mix(in srgb, var(--pour) 55%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--pour) 35%, transparent),

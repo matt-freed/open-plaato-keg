@@ -131,14 +131,14 @@ func TestMigrateOldTaps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTap: %v", err)
 	}
-	if got.Name != "Pale Ale" || got.Color != "#e8b33a" || got.SRM != nil || got.ColorPreset != "" {
+	if got.Name != "Pale Ale" || got.Color != "#e8b33a" || got.SRM != nil || got.ColorPreset != "" || got.Glass != "" {
 		t.Errorf("migrated tap = %+v", got)
 	}
-	if err := s.SaveTap(&Tap{ID: "old", ColorPreset: "clear"}); err != nil {
+	if err := s.SaveTap(&Tap{ID: "old", ColorPreset: "clear", Glass: "tulip"}); err != nil {
 		t.Fatalf("SaveTap after migration: %v", err)
 	}
-	if got, _ := s.GetTap("old"); got.ColorPreset != "clear" {
-		t.Errorf("ColorPreset = %q after migration, want clear", got.ColorPreset)
+	if got, _ := s.GetTap("old"); got.ColorPreset != "clear" || got.Glass != "tulip" {
+		t.Errorf("ColorPreset, Glass = %q, %q after migration, want clear, tulip", got.ColorPreset, got.Glass)
 	}
 }
 

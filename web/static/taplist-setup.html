@@ -22,10 +22,27 @@
       border-radius: var(--radius-sm);
       background: var(--tile) center / cover no-repeat;
     }
+    /* With no picture the preview shows the tap's glass, on a panel in its
+       colour, as the tap list draws it. */
     .image-preview.is-empty {
       display: flex; align-items: center; justify-content: center;
-      color: var(--faint); font-size: 0.8rem;
+      background: color-mix(in srgb, var(--accent, #c9a849) 22%, var(--tile));
     }
+    .image-preview.is-empty svg { display: block; width: 84%; max-height: 84%; overflow: visible; }
+    .glass-picker { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .glass-option {
+      display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+      width: 3.55rem; padding: 0.45rem 0.15rem 0.35rem;
+      font: inherit; font-size: 0.78rem; color: var(--text); cursor: pointer;
+      border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+      background: var(--overlay-faint);
+    }
+    .glass-option svg { display: block; width: 36px; height: 48px; overflow: visible; }
+    .glass-option[aria-pressed="true"] { border-color: var(--text); background: var(--overlay-strong); }
+    /* A clear drink is a faint tint with no head, as on the tap list. */
+    .is-clear .liquid-fill { opacity: 0.2; }
+    .is-clear .liquid-surface { fill-opacity: 0.85; }
+    .is-clear .glass-foam { display: none; }
     .image-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
   </style>
 </head>
@@ -135,7 +152,7 @@
           <div class="field">
             <label class="label">Image</label>
             <div class="image-field">
-              <div class="image-preview is-empty" id="imagePreview">No image</div>
+              <div class="image-preview is-empty" id="imagePreview"></div>
               <div class="image-actions">
                 <label class="button is-small">
                   Choose image…
@@ -145,6 +162,12 @@
                 <p class="help">Portrait, about 3:4. Shown on the left of the tap list tile, cropped to fit.</p>
               </div>
             </div>
+          </div>
+
+          <div class="field">
+            <label class="label">Glass</label>
+            <div class="glass-picker" id="glassPicker" aria-label="Glass"></div>
+            <p class="help">Shown on the tap list in the beer&rsquo;s colour when the tap has no image.</p>
           </div>
 
           <div class="field">
@@ -192,6 +215,7 @@
   <div id="toast" class="notification toast is-hidden"></div>
 
   <script src="/beer-color.js"></script>
+  <script src="/glass-graphic.js"></script>
   <script src="/tap-board.js"></script>
   <script>
     let currentTapId = null;
@@ -380,7 +404,7 @@
         tap_number: maxNum + 1,
         name: '', brewery: '', style: '', abv: '', ibu: '',
         srm: null, color_preset: '', description: '', tasting_notes: '',
-        keg_id: '', kegged_date: ''
+        keg_id: '', kegged_date: '', glass: ''
       });
     }
 
@@ -406,6 +430,8 @@
       document.getElementById('kegDate').value      = tap.kegged_date || '';
 
       color.set(tap);
+      glass.set(tap.glass);
+      paintGlass();
       image.set(tap.image);
     }
 
@@ -431,6 +457,7 @@
         tasting_notes: document.getElementById('tastingNotes').value.trim(),
         kegged_date:   document.getElementById('kegDate').value,
         keg_id:        document.getElementById('linkedKeg').value || null,
+        glass:         glass.value(),
       };
 
       try {
@@ -489,7 +516,8 @@
         // the browser's, so neither can carry a quote out of url("…").
         preview.style.backgroundImage = src ? `url("${src}")` : '';
         preview.classList.toggle('is-empty', !src);
-        preview.textContent = src ? '' : 'No image';
+        // With no picture the tap list shows the glass, so the preview does.
+        preview.innerHTML = src ? '' : glassSvg(glass.value());
         removeBtn.hidden = !src;
       }
 
@@ -533,6 +561,10 @@
           hasStored = Boolean(url);
           show(url || '');
         },
+        // refresh redraws the glass, when the preview is showing one.
+        refresh() {
+          if (preview.classList.contains('is-empty')) show('');
+        },
         // save sends the unsaved change, if any, for the tap with this id.
         async save(id) {
           const path = `/api/taps/${encodeURIComponent(id)}/image`;
@@ -543,7 +575,53 @@
       };
     })();
 
+    // ── Glass ─────────────────────────────────────
+    // The glass the tap list draws when the tap has no picture. A tap that
+    // has never had one picked saves '', which shows as a pint.
+    const glass = (() => {
+      const picker = document.getElementById('glassPicker');
+      let current = '';
+      picker.innerHTML = GLASSES.map(g => `
+        <button type="button" class="glass-option" data-key="${g.key}" aria-pressed="false">
+          ${glassSvg(g.key)}<span>${g.label}</span>
+        </button>`).join('');
+
+      function render() {
+        picker.querySelectorAll('.glass-option').forEach(b =>
+          b.setAttribute('aria-pressed', String(b.dataset.key === (current || 'pint'))));
+      }
+
+      picker.addEventListener('click', e => {
+        const button = e.target.closest('.glass-option');
+        if (!button) return;
+        current = button.dataset.key;
+        render();
+        image.refresh();
+      });
+
+      return {
+        set(key) { current = key || ''; render(); },
+        value: () => current,
+      };
+    })();
+
+    // paintGlass colours the preview and the glass buttons with the colour
+    // being edited. The colour control has no change event, so it is called
+    // on any click or input inside it, after the control has updated.
+    function paintGlass() {
+      const drink = {
+        ...color.value(),
+        color: allTaps.find(t => t.id === currentTapId)?.color || '',
+      };
+      for (const el of [document.getElementById('imagePreview'), document.getElementById('glassPicker')]) {
+        el.style.setProperty('--accent', beerColor(drink));
+        el.classList.toggle('is-clear', isClear(drink));
+      }
+    }
+
     const color = colorPicker(document.getElementById('colorField'));
+    document.getElementById('colorField').addEventListener('click', paintGlass);
+    document.getElementById('colorField').addEventListener('input', paintGlass);
     const board = attachTapBoard({ root: document.getElementById('tapListContainer'), onDrop: dropTap });
     showReturnLinks();
     window.addEventListener('hashchange', showView);

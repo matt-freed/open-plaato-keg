@@ -26,6 +26,7 @@ type tapRequest struct {
 	TastingNotes string         `json:"tasting_notes"`
 	KeggedDate   string         `json:"kegged_date"`
 	KegID        string         `json:"keg_id"`
+	Glass        string         `json:"glass"`
 }
 
 func (s *Server) handleListTaps(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +72,12 @@ func (s *Server) saveTap(w http.ResponseWriter, r *http.Request, id string, stat
 	if !validBeerColor(w, req.SRM, preset) {
 		return
 	}
+	glass := strings.TrimSpace(req.Glass)
+	if glass != "" && !store.IsGlassStyle(glass) {
+		writeError(w, http.StatusBadRequest, "invalid_value",
+			"glass must be one of "+strings.Join(store.GlassStyles, ", "))
+		return
+	}
 	keggedDate, err := store.NormalizeDate(req.KeggedDate, store.DateLayout)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_value", "kegged_date: "+err.Error())
@@ -92,6 +99,7 @@ func (s *Server) saveTap(w http.ResponseWriter, r *http.Request, id string, stat
 		TastingNotes: strings.TrimSpace(req.TastingNotes),
 		KeggedDate:   keggedDate,
 		KegID:        strings.TrimSpace(req.KegID),
+		Glass:        glass,
 	}
 	if err := s.store.SaveTap(tap); err != nil {
 		var inUse *store.KegInUseError
